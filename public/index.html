@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mijn RSS-lezer</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #fbfaf8;
+        --card: #ffffff;
+        --text: #1c1b19;
+        --muted: #6b6862;
+        --line: #e5e2dc;
+        --accent: #b8543a;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #171614;
+          --card: #201f1c;
+          --text: #f0eee9;
+          --muted: #a09c94;
+          --line: #33312d;
+          --accent: #e08a6f;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 2rem 1rem 4rem;
+        background: var(--bg);
+        color: var(--text);
+        font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      main { max-width: 44rem; margin: 0 auto; }
+      h1 { font-size: 1.6rem; margin: 0 0 1.25rem; }
+      form { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+      input {
+        flex: 1 1 18rem; padding: .6rem .75rem; font-size: 1rem;
+        border: 1px solid var(--line); border-radius: .5rem;
+        background: var(--card); color: var(--text);
+      }
+      button {
+        padding: .6rem 1.1rem; font-size: 1rem; cursor: pointer;
+        border: 0; border-radius: .5rem; background: var(--accent); color: #fff;
+      }
+      .presets { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+      .presets button { background: transparent; color: var(--accent); border: 1px solid var(--line); padding: .3rem .7rem; font-size: .85rem; }
+      article {
+        background: var(--card); border: 1px solid var(--line);
+        border-radius: .75rem; padding: 1rem 1.15rem; margin-bottom: .75rem;
+      }
+      article h2 { font-size: 1.05rem; margin: 0 0 .35rem; }
+      article a { color: inherit; text-decoration: none; }
+      article a:hover { color: var(--accent); }
+      .meta { color: var(--muted); font-size: .8rem; margin: 0 0 .5rem; }
+      .summary { color: var(--muted); font-size: .92rem; margin: 0; }
+      #status { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Mijn RSS-lezer</h1>
+
+      <form id="feed-form">
+        <input id="feed-url" type="url" placeholder="https://feeds.nos.nl/nosnieuwsalgemeen" required />
+        <button type="submit">Ophalen</button>
+      </form>
+
+      <div class="presets">
+        <button type="button" data-url="https://feeds.nos.nl/nosnieuwsalgemeen">NOS Nieuws</button>
+        <button type="button" data-url="https://feeds.feedburner.com/tweakers/mixed">Tweakers</button>
+        <button type="button" data-url="https://hnrss.org/frontpage">Hacker News</button>
+      </div>
+
+      <p id="status"></p>
+      <div id="items"></div>
+    </main>
+
+    <script>
+      const form = document.querySelector('#feed-form');
+      const input = document.querySelector('#feed-url');
+      const status = document.querySelector('#status');
+      const list = document.querySelector('#items');
+
+      async function load(url) {
+        status.textContent = 'Bezig met ophalen…';
+        list.innerHTML = '';
+        try {
+          const response = await fetch('/api/feed?url=' + encodeURIComponent(url));
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          status.textContent = `${data.title} — ${data.items.length} berichten`;
+          for (const item of data.items) {
+            const article = document.createElement('article');
+            const heading = document.createElement('h2');
+            const link = document.createElement('a');
+            link.href = item.link;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.textContent = item.title;
+            heading.append(link);
+
+            const meta = document.createElement('p');
+            meta.className = 'meta';
+            meta.textContent = item.date;
+
+            const summary = document.createElement('p');
+            summary.className = 'summary';
+            summary.textContent = item.summary;
+
+            article.append(heading, meta, summary);
+            list.append(article);
+          }
+        } catch (error) {
+          status.textContent = error.message;
+        }
+      }
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        load(input.value);
+      });
+
+      for (const button of document.querySelectorAll('.presets button')) {
+        button.addEventListener('click', () => {
+          input.value = button.dataset.url;
+          load(button.dataset.url);
+        });
+      }
+
+      input.value = 'https://feeds.nos.nl/nosnieuwsalgemeen';
+      load(input.value);
+    </script>
+  </body>
+</html>
