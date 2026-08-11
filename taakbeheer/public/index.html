@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Transafe Taakbeheer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23002944'/%3E%3Cg fill='%235B869F'%3E%3Crect x='7' y='7' width='7' height='7' rx='1.5'/%3E%3Crect x='18' y='7' width='7' height='7' rx='1.5'/%3E%3Crect x='7' y='18' width='7' height='7' rx='1.5'/%3E%3Crect x='18' y='18' width='7' height='7' rx='1.5' fill='%23fff'/%3E%3C/g%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/stijl.css" />
+</head>
+<body>
+
+<div class="app">
+  <!-- ── ZIJBALK ── -->
+  <aside class="zijbalk">
+    <div class="zijbalk-logo"><span>Trans</span>afe</div>
+
+    <div class="zijbalk-kop">
+      Borden
+      <button id="nieuwBordKnop" title="Nieuw bord">+</button>
+    </div>
+    <nav id="bordenLijst"></nav>
+
+    <div class="zijbalk-kop">Beheer</div>
+    <nav>
+      <a id="teamKnop"><span>Team</span></a>
+    </nav>
+
+    <div class="zijbalk-voet">
+      <span id="wieBenIk"></span>
+      <a id="uitlogKnop" title="Uitloggen">Uitloggen</a>
+    </div>
+  </aside>
+
+  <!-- ── HOOFD ── -->
+  <div class="hoofd">
+    <header class="kop">
+      <h1 id="paginaTitel">Takenbord</h1>
+      <div class="zoekbalk">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="zoek" placeholder="Zoeken..." />
+      </div>
+    </header>
+
+    <div class="balk" id="werkbalk">
+      <button class="btn btn-primary" id="nieuwTaakKnop">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nieuw item
+      </button>
+
+      <div class="weergave-knoppen">
+        <button data-weergave="tabel" class="actief">Tabel</button>
+        <button data-weergave="kanban">Kanban</button>
+      </div>
+
+      <button class="btn btn-secondary" id="exportKnop">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exporteer CSV
+      </button>
+
+      <div class="filters">
+        <label for="filterUitvoerend">Uitvoerend:</label>
+        <select id="filterUitvoerend"><option value="">Iedereen</option></select>
+        <label for="filterStatus">Status:</label>
+        <select id="filterStatus"><option value="">Alle statussen</option></select>
+      </div>
+    </div>
+
+    <div class="inhoud" id="inhoud"></div>
+  </div>
+</div>
+
+<!-- ── VENSTER: taak toevoegen/bewerken ── -->
+<div class="overlay" id="taakVenster">
+  <div class="venster">
+    <div class="venster-kop">
+      <h2 id="taakVensterTitel">Nieuw item</h2>
+      <button class="venster-sluit" data-sluit>&times;</button>
+    </div>
+    <div class="venster-lijf">
+      <div class="raster">
+        <div class="veld breed">
+          <label for="vOpdracht">Opdracht</label>
+          <input type="text" id="vOpdracht" placeholder="Naam van de opdracht" />
+        </div>
+        <div class="veld">
+          <label for="vUitvoerend">Uitvoerend</label>
+          <select id="vUitvoerend"></select>
+        </div>
+        <div class="veld">
+          <label for="vStatus">Status</label>
+          <select id="vStatus"></select>
+        </div>
+        <div class="veld">
+          <label for="vDeadline">Deadline</label>
+          <input type="date" id="vDeadline" />
+        </div>
+        <div class="veld breed">
+          <label for="vOmschrijving">Omschrijving</label>
+          <textarea id="vOmschrijving" placeholder="Typ hier een uitgebreide omschrijving..."></textarea>
+        </div>
+      </div>
+      <div class="melding" id="taakMelding" style="margin-top:14px"></div>
+    </div>
+    <div class="venster-voet">
+      <button class="btn btn-secondary" data-sluit>Annuleren</button>
+      <button class="btn btn-primary" id="taakOpslaan">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── VENSTER: taakdetail met opmerkingen en historie ── -->
+<div class="overlay" id="detailVenster">
+  <div class="venster">
+    <div class="venster-kop">
+      <h2 id="detailTitel">Taak</h2>
+      <button class="venster-sluit" data-sluit>&times;</button>
+    </div>
+    <div class="venster-lijf">
+      <div class="detail-meta" id="detailMeta"></div>
+      <div class="detail-tekst" id="detailTekst"></div>
+
+      <div class="blok-kop">Opmerkingen</div>
+      <div id="opmerkingenLijst"></div>
+      <div class="nieuwe-opmerking">
+        <textarea id="nieuweOpmerking" placeholder="Schrijf een opmerking..."></textarea>
+        <button class="btn btn-primary" id="plaatsOpmerking">Plaats</button>
+      </div>
+
+      <div class="blok-kop" style="margin-top:24px">Historie</div>
+      <ul class="historie" id="historieLijst"></ul>
+    </div>
+    <div class="venster-voet">
+      <button class="btn btn-danger links" id="detailVerwijder">Verwijderen</button>
+      <button class="btn btn-secondary" data-sluit>Sluiten</button>
+      <button class="btn btn-primary" id="detailBewerk">Bewerken</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

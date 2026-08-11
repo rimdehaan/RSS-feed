@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inloggen — Transafe Taakbeheer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23002944'/%3E%3Cg fill='%235B869F'%3E%3Crect x='7' y='7' width='7' height='7' rx='1.5'/%3E%3Crect x='18' y='7' width='7' height='7' rx='1.5'/%3E%3Crect x='7' y='18' width='7' height='7' rx='1.5'/%3E%3Crect x='18' y='18' width='7' height='7' rx='1.5' fill='%23fff'/%3E%3C/g%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/stijl.css" />
+</head>
+<body>
+  <div class="inlog-scherm">
+    <div class="inlog-kaart">
+      <div class="inlog-logo"><span>Trans</span>afe</div>
+      <h1 id="titel">Inloggen</h1>
+
+      <form id="formulier">
+        <div class="veld" id="naamVeld" hidden>
+          <label for="naam">Naam</label>
+          <input type="text" id="naam" autocomplete="name" />
+        </div>
+        <div class="veld" id="emailVeld">
+          <label for="email">E-mailadres</label>
+          <input type="email" id="email" autocomplete="username" required />
+        </div>
+        <div class="veld">
+          <label for="wachtwoord">Wachtwoord</label>
+          <input type="password" id="wachtwoord" autocomplete="current-password" required />
+        </div>
+        <div class="melding" id="melding"></div>
+        <button type="submit" class="btn btn-primary" id="verstuur">Inloggen</button>
+      </form>
+
+      <p class="inlog-uitleg" id="uitleg">
+        Nog geen account? Een beheerder van Transafe kan je uitnodigen.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const uitnodigingToken = params.get('uitnodiging');
+    const herstelToken = params.get('herstel');
+
+    const el = (id) => document.getElementById(id);
+    const melding = el('melding');
+    let modus = 'inloggen';   // 'inloggen' | 'setup' | 'registreren'
+
+    function toon(tekst, goed = false) {
+      melding.textContent = tekst;
+      melding.classList.toggle('goed', goed);
+    }
+
+    async function verstuurNaar(adres, gegevens) {
+      const antwoord = await fetch(adres, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(gegevens),
+      });
+      const data = await antwoord.json().catch(() => ({}));
+      if (!antwoord.ok) throw new Error(data.fout || 'Er ging iets mis.');
+      return data;
+    }
+
+    async function bepaalModus() {
+      if (herstelToken) {
+        try {
+          const antwoord = await fetch('/api/herstel/' + encodeURIComponent(herstelToken));
+          const data = await antwoord.json();
+          if (!antwoord.ok) throw new Error(data.fout);
+
+          modus = 'herstel';
+          el('titel').textContent = 'Nieuw wachtwoord kiezen';
+          el('email').value = data.email;
+          el('email').readOnly = true;
+          el('wachtwoord').autocomplete = 'new-password';
+          el('verstuur').textContent = 'Wachtwoord instellen';
+          el('uitleg').textContent =
+            'Kies een nieuw wachtwoord van minstens 10 tekens. Je wordt daarna meteen ingelogd.';
+        } catch (fout) {
+          toon(fout.message);
+          el('formulier').hidden = true;
+        }
+        return;
+      }
+
+      if (uitnodigingToken) {
+        try {
+          const antwoord = await fetch('/api/uitnodiging/' + encodeURIComponent(uitnodigingToken));
+          const data = await antwoord.json();
+          if (!antwoord.ok) throw new Error(data.fout);
+
+          modus = 'registreren';
+          el('titel').textContent = 'Account aanmaken';
+          el('naamVeld').hidden = false;
+          el('email').value = data.email;
+          el('email').readOnly = true;
+          el('wachtwoord').autocomplete = 'new-password';
+          el('verstuur').textContent = 'Account aanmaken';
+          el('uitleg').textContent = 'Kies een wachtwoord van minstens 10 tekens.';
+        } catch (fout) {
+          toon(fout.message);
+          el('formulier').hidden = true;
+        }
+        return;
+      }
+
+      const { nodig } = await fetch('/api/setup-nodig').then(r => r.json());
+      if (nodig) {
+        modus = 'setup';
+        el('titel').textContent = 'Eerste beheerder aanmaken';
+        el('naamVeld').hidden = false;
+        el('wachtwoord').autocomplete = 'new-password';
+        el('verstuur').textContent = 'Aanmaken en starten';
+        el('uitleg').textContent =
+          'Dit scherm verschijnt alleen zolang er nog geen enkel account bestaat. ' +
+          'Daarna nodig je collega’s uit vanuit het Team-scherm.';
+      }
+    }
+
+    el('formulier').addEventListener('submit', async (gebeurtenis) => {
+      gebeurtenis.preventDefault();
+      toon('');
+      el('verstuur').disabled = true;
+
+      try {
+        const naam = el('naam').value.trim();
+        const email = el('email').value.trim();
+        const wachtwoord = el('wachtwoord').value;
+
+        if (modus === 'setup') {
+          await verstuurNaar('/api/setup', { naam, email, wachtwoord });
+        } else if (modus === 'registreren') {
+          await verstuurNaar('/api/registreren', { token: uitnodigingToken, naam, wachtwoord });
+        } else if (modus === 'herstel') {
+          await verstuurNaar('/api/herstel', { token: herstelToken, wachtwoord });
+        } else {
+          await verstuurNaar('/api/inloggen', { email, wachtwoord });
+        }
+        location.href = '/';
+      } catch (fout) {
+        toon(fout.message);
+        el('verstuur').disabled = false;
+      }
+    });
+
+    bepaalModus();
+  </script>
+</body>
+</html>
