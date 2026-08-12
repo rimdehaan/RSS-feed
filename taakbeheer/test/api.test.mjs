@@ -271,6 +271,97 @@ try {
   check('taak verwijderd', (await rim('/taken/' + taak1, { method: 'DELETE' })).status === 200);
   check('taak is echt weg', (await rim('/taken/' + taak1)).status === 404);
 
+  // ── Persoonlijk bord en afgeschermde borden ─────────────────────────────
+  // Vanaf hier werken we met een verse tweede gebruiker, want Anna is hierboven
+  // uitgeschakeld.
+  groep('Persoonlijk bord');
+
+  const carlaUitnodiging = (await rim('/uitnodigingen', { method: 'POST', body: { email: 'carla@transafe.nl' } })).data.token;
+  const carla = client();
+  await carla('/registreren', { method: 'POST', body: { token: carlaUitnodiging, naam: 'Carla Smit', wachtwoord: 'CarlaHaarWachtwoord' } });
+  const carlaId = (await rim('/gebruikers')).data.find((g) => g.email === 'carla@transafe.nl').id;
+
+  const projectA = (await rim('/borden', { method: 'POST', body: { naam: 'Project A' } })).data.id;
+  const projectB = (await rim('/borden', { method: 'POST', body: { naam: 'Project B' } })).data.id;
+
+  await rim(`/borden/${projectA}/taken`, { method: 'POST', body: { opdracht: 'A voor Carla', uitvoerend_id: carlaId, status: 'Working on it' } });
+  await rim(`/borden/${projectA}/taken`, { method: 'POST', body: { opdracht: 'A voor Carla, klaar', uitvoerend_id: carlaId, status: 'Done' } });
+  await rim(`/borden/${projectB}/taken`, { method: 'POST', body: { opdracht: 'B voor Carla', uitvoerend_id: carlaId } });
+  await rim(`/borden/${projectA}/taken`, { method: 'POST', body: { opdracht: 'A voor niemand' } });
+
+  let mijn = (await carla('/mijn-taken')).data;
+  check('Carla ziet alleen haar eigen taken', mijn.length === 3, mijn.map((t) => t.opdracht).join(', '));
+  check('met de projectnaam erbij', mijn.every((t) => t.bord_naam), JSON.stringify(mijn[0]));
+  check('uit meerdere projecten', new Set(mijn.map((t) => t.bord_naam)).size === 2);
+  check('inclusief de status om op te groeperen', mijn.some((t) => t.status === 'Done') && mijn.some((t) => t.status === 'Working on it'));
+
+  check('Rim ziet niet Carlas taken op zijn persoonlijke bord',
+    (await rim('/mijn-taken')).data.every((t) => t.uitvoerend_naam === 'Rim de Haan'));
+
+  groep('Bord afschermen');
+  // Een bord waar Carla géén taak op heeft, anders houdt ze toegang (zie hierna).
+  const projectD = (await rim('/borden', { method: 'POST', body: { naam: 'Project D' } })).data.id;
+  await rim(`/borden/${projectD}/taken`, { method: 'POST', body: { opdracht: 'Alleen voor Rim' } });
+
+  check('standaard ziet Carla het nieuwe bord', (await carla('/borden')).data.some((b) => b.id === projectD));
+
+  r = await rim(`/borden/${projectD}`, { method: 'PATCH', body: { zichtbaar_voor_iedereen: false, leden: [1] } });
+  check('bord afgeschermd', r.status === 200, JSON.stringify(r.data));
+
+  const bordenVanCarla = (await carla('/borden')).data;
+  check('Project D is uit haar lijst verdwenen', !bordenVanCarla.some((b) => b.id === projectD),
+    bordenVanCarla.map((b) => b.naam).join(', '));
+  check('Project A ziet ze nog wel', bordenVanCarla.some((b) => b.id === projectA));
+  check('taken van dat bord zijn niet op te vragen', (await carla(`/borden/${projectD}/taken`)).status === 404);
+  check('instellingen ook niet', (await carla(`/borden/${projectD}/instellingen`)).status === 404);
+  check('Rim ziet het bord nog wel', (await rim('/borden')).data.some((b) => b.id === projectD));
+
+  groep('Wie een taak heeft, houdt toegang');
+  // Carla heeft een taak op Project B, dus afschermen mag haar er niet uit gooien.
+  r = await rim(`/borden/${projectB}`, { method: 'PATCH', body: { zichtbaar_voor_iedereen: false, leden: [1] } });
+  check('afschermen lukt', r.status === 200);
+
+  const instellingenB = (await rim(`/borden/${projectB}/instellingen`)).data;
+  check('Carla is automatisch op de lijst gezet', instellingenB.leden.includes(carlaId),
+    JSON.stringify(instellingenB.leden));
+  check('en ze ziet het bord dus toch', (await carla('/borden')).data.some((b) => b.id === projectB));
+  check('haar taak blijft op haar persoonlijke bord staan',
+    (await carla('/mijn-taken')).data.some((t) => t.bord_id === projectB));
+
+  groep('Toewijzen aan wie niets mag zien');
+  const projectC = (await rim('/borden', { method: 'POST', body: { naam: 'Project C' } })).data.id;
+  await rim(`/borden/${projectC}`, { method: 'PATCH', body: { zichtbaar_voor_iedereen: false, leden: [1] } });
+
+  r = await rim(`/borden/${projectC}/taken`, { method: 'POST', body: { opdracht: 'Geheim', uitvoerend_id: carlaId } });
+  check('toewijzen aan iemand zonder toegang wordt geweigerd', r.status === 400, JSON.stringify(r.data));
+  check('met uitleg wat je moet doen', /toegang/i.test(r.data.fout ?? ''), r.data.fout);
+
+  const geheim = (await rim(`/borden/${projectC}/taken`, { method: 'POST', body: { opdracht: 'Geheime taak' } })).data.id;
+  check('taak zonder uitvoerende mag wel', !!geheim);
+  check('ook wijzigen naar zo iemand wordt geweigerd',
+    (await rim(`/taken/${geheim}`, { method: 'PATCH', body: { uitvoerend_id: carlaId } })).status === 400);
+
+  groep('Afgeschermde taken zijn echt dicht');
+  check('taak niet op te vragen', (await carla('/taken/' + geheim)).status === 404);
+  check('niet te wijzigen', (await carla(`/taken/${geheim}`, { method: 'PATCH', body: { status: 'Done' } })).status === 404);
+  check('niet te verplaatsen', (await carla(`/taken/${geheim}/verplaats`, { method: 'POST', body: { status: 'Done' } })).status === 404);
+  check('niet te verwijderen', (await carla('/taken/' + geheim, { method: 'DELETE' })).status === 404);
+  check('geen opmerking te plaatsen',
+    (await carla(`/taken/${geheim}/opmerkingen`, { method: 'POST', body: { tekst: 'hallo' } })).status === 404);
+  check('de taak staat er na die pogingen nog',
+    (await rim('/taken/' + geheim)).data.status === 'Not Started');
+
+  groep('Wie mag bordinstellingen wijzigen');
+  const bordVanCarla = (await carla('/borden', { method: 'POST', body: { naam: 'Bord van Carla' } })).data.id;
+  check('lid mag zijn eigen bord afschermen',
+    (await carla(`/borden/${bordVanCarla}`, { method: 'PATCH', body: { zichtbaar_voor_iedereen: false, leden: [carlaId] } })).status === 200);
+  check('maar niet dat van een ander',
+    (await carla(`/borden/${projectA}`, { method: 'PATCH', body: { naam: 'Gekaapt' } })).status === 403);
+  check('beheerder mag dat wel',
+    (await rim(`/borden/${bordVanCarla}`, { method: 'PATCH', body: { naam: 'Bord van Carla' } })).status === 200);
+  check('lid kan andermans bord niet verwijderen',
+    (await carla('/borden/' + projectA, { method: 'DELETE' })).status === 403);
+
   groep('Uitloggen');
   await rim('/uitloggen', { method: 'POST' });
   check('na uitloggen geen toegang', (await rim('/borden')).status === 401);

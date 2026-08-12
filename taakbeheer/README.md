@@ -36,7 +36,9 @@ administratie — zie *Back-ups* verderop.
 | Uitnodigen | Alleen een beheerder voegt mensen toe. Je krijgt een link die je zelf doorstuurt |
 | Rollen | *Beheerder* mag uitnodigen en accounts beheren, *lid* werkt gewoon mee |
 | Wachtwoord kwijt | Een beheerder maakt een eenmalige herstellink, twee dagen geldig |
-| Borden | Meerdere borden naast elkaar, bijvoorbeeld per project of per klant |
+| Mijn taken | Je persoonlijke bord: alles wat aan jou is toegewezen, uit alle projecten, gegroepeerd per project en daarbinnen per status. Alleen jij ziet het |
+| Projecten | Meerdere borden naast elkaar, bijvoorbeeld per project of per klant |
+| Wie ziet wat | Per project in te stellen: iedereen, of alleen gekozen mensen |
 | Tabelweergave | Zoals je prototype: opdracht, uitvoerend, status, deadline, omschrijving |
 | Kanban | De zes statussen als kolommen, kaarten ertussen slepen |
 | Opmerkingen | Een gesprek per taak, met naam en tijdstip |
@@ -45,6 +47,27 @@ administratie — zie *Back-ups* verderop.
 
 De zes statussen zijn ongewijzigd: Not Started, Working on it, Validating, Done,
 On Hold, Cancelled.
+
+### Hoe borden en zichtbaarheid werken
+
+**Mijn taken** is geen echt bord: het is een overzicht dat wordt samengesteld uit
+alle projecten waar werk op jouw naam staat. Je kunt er dus geen taak in aanmaken,
+alleen bijwerken. Het bord van een ander is nergens op te vragen.
+
+**Projecten** zijn de gewone borden. Standaard ziet iedereen ze. Bij
+**Instellingen** beperk je dat tot gekozen mensen.
+
+Drie regels voorkomen dat een bord onbereikbaar wordt of dat iemand werk krijgt
+dat hij niet kan openen:
+
+1. **Beheerders zien elk bord.** Anders zou een bord verdwijnen zodra de laatste
+   deelnemer het bedrijf verlaat, en kan niemand dat meer rechtzetten.
+2. **Wie een taak op een bord heeft, houdt toegang.** Bij het afschermen worden
+   die mensen automatisch op de lijst gezet.
+3. **Je kunt alleen toewijzen aan wie het bord mag zien.** De keuzelijst toont de
+   rest niet, en de server weigert het ook als je het toch probeert.
+
+Instellingen wijzigen mag een beheerder, en degene die het bord heeft aangemaakt.
 
 ---
 
@@ -97,9 +120,6 @@ volume maken. Een back-up die je nooit hebt teruggezet is geen back-up: probeer
 Bewust weggelaten, zodat het overzichtelijk blijft:
 
 - **Geen mail vanuit de app.** Zie hieronder — dit is een besluit, geen omissie.
-- **Iedereen ziet alle borden.** Er is nog geen instelling per bord voor wie
-  erbij mag. Voor een team van 2 tot 10 mensen is dat meestal prima; zodra er
-  klanten of externen bij komen is dit het eerste wat je nodig hebt.
 - **Geen live bijwerken.** Zie je een wijziging van een collega niet, dan is
   verversen genoeg. Automatisch bijwerken kan later.
 - **Geen bijlagen, geen tijdlijn, geen automatiseringen.**

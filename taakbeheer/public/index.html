@@ -14,9 +14,11 @@
   <aside class="zijbalk">
     <div class="zijbalk-logo"><span>Trans</span>afe</div>
 
+    <nav id="persoonlijkLijst"></nav>
+
     <div class="zijbalk-kop">
-      Borden
-      <button id="nieuwBordKnop" title="Nieuw bord">+</button>
+      Projecten
+      <button id="nieuwBordKnop" title="Nieuw project">+</button>
     </div>
     <nav id="bordenLijst"></nav>
 
@@ -52,20 +54,63 @@
         <button data-weergave="kanban">Kanban</button>
       </div>
 
+      <button class="btn btn-secondary" id="bordInstellingenKnop">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Instellingen
+      </button>
+
       <button class="btn btn-secondary" id="exportKnop">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Exporteer CSV
       </button>
 
       <div class="filters">
-        <label for="filterUitvoerend">Uitvoerend:</label>
-        <select id="filterUitvoerend"><option value="">Iedereen</option></select>
+        <span id="uitvoerendFilter" style="display:flex;align-items:center;gap:8px">
+          <label for="filterUitvoerend">Uitvoerend:</label>
+          <select id="filterUitvoerend"><option value="">Iedereen</option></select>
+        </span>
         <label for="filterStatus">Status:</label>
         <select id="filterStatus"><option value="">Alle statussen</option></select>
       </div>
     </div>
 
     <div class="inhoud" id="inhoud"></div>
+  </div>
+</div>
+
+<!-- ── VENSTER: bordinstellingen ── -->
+<div class="overlay" id="bordVenster">
+  <div class="venster">
+    <div class="venster-kop">
+      <h2>Bordinstellingen</h2>
+      <button class="venster-sluit" data-sluit>&times;</button>
+    </div>
+    <div class="venster-lijf">
+      <div class="veld" style="margin-bottom:20px">
+        <label for="bNaam">Naam van het bord</label>
+        <input type="text" id="bNaam" />
+      </div>
+
+      <div class="blok-kop">Wie kan dit bord zien</div>
+      <label class="keuze">
+        <input type="radio" name="zichtbaar" value="iedereen" id="bIedereen" />
+        <span><strong>Iedereen</strong><br><small>Alle teamleden zien dit bord. Dit is de standaard.</small></span>
+      </label>
+      <label class="keuze">
+        <input type="radio" name="zichtbaar" value="gekozen" id="bGekozen" />
+        <span><strong>Alleen de mensen die ik kies</strong><br><small>Beheerders zien het bord altijd, zodat het nooit onbereikbaar wordt.</small></span>
+      </label>
+
+      <div id="bLeden" class="ledenlijst"></div>
+
+      <p class="hint" id="bHint"></p>
+      <div class="melding" id="bMelding" style="margin-top:14px"></div>
+    </div>
+    <div class="venster-voet">
+      <button class="btn btn-danger links" id="bVerwijder">Bord verwijderen</button>
+      <button class="btn btn-secondary" data-sluit>Annuleren</button>
+      <button class="btn btn-primary" id="bOpslaan">Opslaan</button>
+    </div>
   </div>
 </div>
 

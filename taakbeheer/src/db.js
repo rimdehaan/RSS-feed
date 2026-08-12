@@ -58,6 +58,13 @@ db.exec(`
     aangemaakt_op TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Wie mag een bord zien dat niet voor iedereen zichtbaar is.
+  CREATE TABLE IF NOT EXISTS bord_leden (
+    bord_id      INTEGER NOT NULL REFERENCES borden(id) ON DELETE CASCADE,
+    gebruiker_id INTEGER NOT NULL REFERENCES gebruikers(id) ON DELETE CASCADE,
+    PRIMARY KEY (bord_id, gebruiker_id)
+  );
+
   CREATE TABLE IF NOT EXISTS taken (
     id              INTEGER PRIMARY KEY,
     bord_id         INTEGER NOT NULL REFERENCES borden(id) ON DELETE CASCADE,
@@ -94,6 +101,20 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_opmerkingen_taak ON opmerkingen(taak_id);
   CREATE INDEX IF NOT EXISTS idx_historie_taak   ON historie(taak_id);
 `);
+
+// ── Meegroeien met bestaande databases ───────────────────────────────────
+// CREATE TABLE IF NOT EXISTS raakt een tabel die er al staat niet meer aan.
+// Nieuwe kolommen moeten er dus apart bij, anders werkt een nieuwe versie wel
+// op een lege database maar niet op die van de server.
+
+function voegKolomToe(tabel, kolom, definitie) {
+  const bestaat = db.prepare(`PRAGMA table_info(${tabel})`).all().some((k) => k.name === kolom);
+  if (!bestaat) db.exec(`ALTER TABLE ${tabel} ADD COLUMN ${kolom} ${definitie}`);
+}
+
+// Bestaande borden blijven zichtbaar voor iedereen — dat was immers hoe ze werkten.
+voegKolomToe('borden', 'zichtbaar_voor_iedereen', 'INTEGER NOT NULL DEFAULT 1');
+voegKolomToe('borden', 'aangemaakt_door', 'INTEGER REFERENCES gebruikers(id)');
 
 export const STATUSSEN = [
   'Not Started',

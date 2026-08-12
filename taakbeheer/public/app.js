@@ -6,11 +6,12 @@ const staat = {
   statussen: [],
   gebruikers: [],
   borden: [],
-  bordId: null,
+  bordId: null,        // null = het persoonlijke bord
   taken: [],
   weergave: 'tabel',   // 'tabel' | 'kanban' | 'team'
   bewerktId: null,
   detailId: null,
+  toegestaneUitvoerders: null,   // null = iedereen mag; anders een Set met ids
 };
 
 const KLEUREN = {
@@ -94,13 +95,13 @@ async function start() {
   vulGebruikerKeuzes();
 
   staat.borden = await api('/borden');
-  if (staat.borden.length === 0) {
+  if (staat.borden.length === 0 && gebruiker.rol === 'beheerder') {
     await api('/borden', { method: 'POST', body: { naam: 'Takenbord' } });
     staat.borden = await api('/borden');
   }
 
   tekenZijbalk();
-  await kiesBord(staat.borden[0].id);
+  await kiesBord(null);   // begin op je eigen taken
 }
 
 function vulStatusKeuzes() {
@@ -110,19 +111,49 @@ function vulStatusKeuzes() {
 }
 
 function vulGebruikerKeuzes() {
-  const actief = staat.gebruikers.filter(g => g.actief);
-  const opties = actief.map(g => `<option value="${g.id}">${esc(g.naam)}</option>`).join('');
-  el('vUitvoerend').innerHTML = '<option value="">— niemand —</option>' + opties;
+  const opties = staat.gebruikers.filter(g => g.actief)
+    .map(g => `<option value="${g.id}">${esc(g.naam)}</option>`).join('');
   el('filterUitvoerend').innerHTML = '<option value="">Iedereen</option>' + opties;
 }
 
+/**
+ * De keuzelijst voor "uitvoerend" toont alleen mensen die dit bord kunnen zien.
+ * Anders wijs je werk toe dat de ontvanger niet kan openen — de server weigert
+ * dat, maar het is prettiger om die keuze niet eens aan te bieden.
+ */
+function vulUitvoerendKeuze() {
+  const mag = (g) => !staat.toegestaneUitvoerders
+    || g.rol === 'beheerder'
+    || staat.toegestaneUitvoerders.has(g.id);
+
+  el('vUitvoerend').innerHTML = '<option value="">— niemand —</option>' +
+    staat.gebruikers.filter(g => g.actief && mag(g))
+      .map(g => `<option value="${g.id}">${esc(g.naam)}</option>`).join('');
+}
+
+const isPersoonlijk = () => staat.bordId === null;
+
 function tekenZijbalk() {
-  el('bordenLijst').innerHTML = staat.borden.map(bord => `
-    <a data-bord="${bord.id}" class="${bord.id === staat.bordId && staat.weergave !== 'team' ? 'actief' : ''}">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-      <span>${esc(bord.naam)}</span>
-      <span class="telling">${bord.aantal_taken}</span>
-    </a>`).join('');
+  const opMijnBord = isPersoonlijk() && staat.weergave !== 'team';
+
+  el('persoonlijkLijst').innerHTML = `
+    <a data-mijn class="${opMijnBord ? 'actief' : ''}">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>Mijn taken</span>
+    </a>`;
+
+  el('persoonlijkLijst').querySelector('[data-mijn]')
+    .addEventListener('click', () => kiesBord(null));
+
+  el('bordenLijst').innerHTML = staat.borden.length === 0
+    ? '<p style="padding:6px 20px;font-size:.8rem;color:rgba(255,255,255,.35)">Nog geen projecten.</p>'
+    : staat.borden.map(bord => `
+        <a data-bord="${bord.id}" class="${bord.id === staat.bordId && staat.weergave !== 'team' ? 'actief' : ''}">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <span>${esc(bord.naam)}</span>
+          ${bord.zichtbaar_voor_iedereen ? '' : '<span class="telling" title="Alleen zichtbaar voor gekozen mensen">🔒</span>'}
+          <span class="telling">${bord.aantal_taken}</span>
+        </a>`).join('');
 
   el('bordenLijst').querySelectorAll('[data-bord]').forEach(link => {
     link.addEventListener('click', () => kiesBord(Number(link.dataset.bord)));
@@ -134,19 +165,42 @@ function tekenZijbalk() {
 async function kiesBord(id) {
   staat.bordId = id;
   if (staat.weergave === 'team') staat.weergave = 'tabel';
-  staat.taken = await api(`/borden/${id}/taken`);
 
-  const bord = staat.borden.find(b => b.id === id);
-  el('paginaTitel').textContent = bord ? bord.naam : 'Takenbord';
+  if (isPersoonlijk()) {
+    staat.taken = await api('/mijn-taken');
+    staat.toegestaneUitvoerders = null;
+    el('paginaTitel').textContent = 'Mijn taken';
+  } else {
+    staat.taken = await api(`/borden/${id}/taken`);
+    const bord = staat.borden.find(b => b.id === id);
+    el('paginaTitel').textContent = bord?.naam ?? 'Project';
+
+    staat.toegestaneUitvoerders = bord?.zichtbaar_voor_iedereen
+      ? null
+      : new Set((await api(`/borden/${id}/instellingen`)).leden);
+  }
+
   el('werkbalk').hidden = false;
-
+  werkbalkBijwerken();
   tekenZijbalk();
   teken();
 }
 
+/** Op het persoonlijke bord kun je geen taak aanmaken of instellingen wijzigen. */
+function werkbalkBijwerken() {
+  const bord = staat.borden.find(b => b.id === staat.bordId);
+  el('nieuwTaakKnop').hidden = isPersoonlijk();
+  el('bordInstellingenKnop').hidden = isPersoonlijk() || !bord?.mag_beheren;
+
+  // Op je eigen bord staat overal jouw naam, dus dat filter heeft geen zin.
+  el('uitvoerendFilter').hidden = isPersoonlijk();
+  if (isPersoonlijk()) el('filterUitvoerend').value = '';
+}
+
 async function herlaadTaken() {
-  staat.taken = await api(`/borden/${staat.bordId}/taken`);
+  staat.taken = isPersoonlijk() ? await api('/mijn-taken') : await api(`/borden/${staat.bordId}/taken`);
   staat.borden = await api('/borden');
+  werkbalkBijwerken();
   tekenZijbalk();
   teken();
 }
@@ -169,14 +223,55 @@ function gefilterdeTaken() {
 // ── Tekenen ──────────────────────────────────────────────────────────────
 function teken() {
   if (staat.weergave === 'team') return tekenTeam();
+  if (isPersoonlijk()) return tekenMijnTaken();
   if (staat.weergave === 'kanban') return tekenKanban();
   tekenTabel();
 }
 
-function tekenTabel() {
+/**
+ * Het persoonlijke bord. Eerst per project, daarbinnen per status — zodat je
+ * per project ziet waar je nog niet aan begonnen bent en wat al klaar is.
+ */
+function tekenMijnTaken() {
   const taken = gefilterdeTaken();
 
-  el('inhoud').innerHTML = `
+  if (taken.length === 0) {
+    el('inhoud').innerHTML = `<div class="mijn-leeg">
+      ${staat.taken.length === 0
+        ? 'Er staan geen taken op jouw naam. Zodra iemand je een taak toewijst in een project, verschijnt hij hier.'
+        : 'Geen taken die aan je filter voldoen.'}
+    </div>`;
+    return;
+  }
+
+  // Op volgorde van binnenkomst groeperen: de server sorteert al op project.
+  const perProject = new Map();
+  for (const taak of taken) {
+    if (!perProject.has(taak.bord_id)) perProject.set(taak.bord_id, { naam: taak.bord_naam, taken: [] });
+    perProject.get(taak.bord_id).taken.push(taak);
+  }
+
+  el('inhoud').innerHTML = [...perProject].map(([bordId, project]) => `
+    <div class="project-blok">
+      <div class="project-kop">
+        <h2>${esc(project.naam)}</h2>
+        <span class="telling">${project.taken.length} ${project.taken.length === 1 ? 'taak' : 'taken'}</span>
+        <a data-open-bord="${bordId}">Open project →</a>
+      </div>
+      ${staat.weergave === 'kanban' ? kolommenHtml(project.taken) : tabelHtml(project.taken)}
+    </div>`).join('');
+
+  el('inhoud').querySelectorAll('[data-open-bord]').forEach(link => {
+    link.addEventListener('click', () => kiesBord(Number(link.dataset.openBord)));
+  });
+
+  if (staat.weergave === 'kanban') koppelSlepen();
+  koppelStatusKeuzes(el('inhoud'));
+  koppelTaakKnoppen(el('inhoud'));
+}
+
+function tabelHtml(taken) {
+  return `
     <div class="tabel-omhulsel">
       <table>
         <thead><tr>
@@ -188,13 +283,20 @@ function tekenTabel() {
           : taken.map(rijHtml).join('')}</tbody>
       </table>
     </div>`;
+}
 
-  el('inhoud').querySelectorAll('.status-select').forEach(keuze => {
+function koppelStatusKeuzes(wortel) {
+  wortel.querySelectorAll('.status-select[data-taak]').forEach(keuze => {
     keuze.addEventListener('change', async () => {
       await api(`/taken/${keuze.dataset.taak}`, { method: 'PATCH', body: { status: keuze.value } });
       herlaadTaken();
     });
   });
+}
+
+function tekenTabel() {
+  el('inhoud').innerHTML = tabelHtml(gefilterdeTaken());
+  koppelStatusKeuzes(el('inhoud'));
   koppelTaakKnoppen(el('inhoud'));
 }
 
@@ -223,13 +325,11 @@ function rijHtml(taak) {
     </tr>`;
 }
 
-function tekenKanban() {
-  const taken = gefilterdeTaken();
-
-  el('inhoud').innerHTML = `<div class="kanban">${staat.statussen.map(status => {
+function kolommenHtml(taken) {
+  return `<div class="kanban">${staat.statussen.map(status => {
     const inKolom = taken.filter(t => t.status === status);
     return `
-      <div class="kolom" data-status="${esc(status)}">
+      <div class="kolom" data-status="${esc(status)}" data-bord="${taken[0]?.bord_id ?? staat.bordId}">
         <div class="kolom-kop">
           <span class="kolom-stip" style="background:${KLEUREN[status]}"></span>
           ${esc(status)}
@@ -240,17 +340,20 @@ function tekenKanban() {
         </div>
       </div>`;
   }).join('')}</div>`;
+}
 
+function tekenKanban() {
+  el('inhoud').innerHTML = kolommenHtml(gefilterdeTaken());
   koppelSlepen();
   koppelTaakKnoppen(el('inhoud'));
 }
 
 function kaartHtml(taak) {
   return `
-    <div class="kaart" draggable="true" data-taak="${taak.id}" data-detail="${taak.id}">
+    <div class="kaart" draggable="true" data-taak="${taak.id}" data-detail="${taak.id}" data-bord="${taak.bord_id}">
       <div class="kaart-titel">${esc(taak.opdracht)}</div>
       <div class="kaart-voet">
-        ${taak.uitvoerend_naam
+        ${taak.uitvoerend_naam && !isPersoonlijk()
           ? `<span class="bolletje" title="${esc(taak.uitvoerend_naam)}">${esc(initialen(taak.uitvoerend_naam))}</span>`
           : ''}
         ${taak.deadline ? `<span class="${isVerlopen(taak) ? 'verlopen' : ''}">${datumNL(taak.deadline)}</span>` : ''}
@@ -280,8 +383,13 @@ function koppelSlepen() {
     const lijst = kolom.querySelector('.kolom-lijst');
 
     kolom.addEventListener('dragover', (e) => {
-      e.preventDefault();
       if (!gesleept) return;
+      // Op het persoonlijke bord staan meerdere projecten onder elkaar. Een taak
+      // naar een ander project slepen zou hem verhuizen, en dat is niet wat een
+      // statuskolom hoort te doen.
+      if (gesleept.dataset.bord !== kolom.dataset.bord) return;
+
+      e.preventDefault();
       kolom.classList.add('sleep-over');
 
       // Zoek de kaart waar de muis boven zit en zet de gesleepte kaart ervoor.
@@ -301,7 +409,7 @@ function koppelSlepen() {
       e.preventDefault();
       kolom.classList.remove('sleep-over');
       const kaart = gesleept;
-      if (!kaart) return;
+      if (!kaart || kaart.dataset.bord !== kolom.dataset.bord) return;
 
       try {
         await api(`/taken/${kaart.dataset.taak}/verplaats`, {
@@ -344,11 +452,16 @@ function koppelTaakKnoppen(wortel) {
 }
 
 // ── Taak toevoegen of bewerken ───────────────────────────────────────────
-function openTaakVenster(id = null) {
+async function openTaakVenster(id = null) {
   staat.bewerktId = id;
   el('taakMelding').textContent = '';
   el('taakVensterTitel').textContent = id ? 'Taak bewerken' : 'Nieuw item';
 
+  // Even de teamlijst verversen: een collega die net is aangemaakt moet je
+  // meteen een taak kunnen geven, zonder de pagina te herladen.
+  staat.gebruikers = await api('/gebruikers');
+  vulGebruikerKeuzes();
+  vulUitvoerendKeuze();
   const taak = id ? staat.taken.find(t => t.id === id) : null;
   el('vOpdracht').value     = taak?.opdracht ?? '';
   el('vUitvoerend').value   = taak?.uitvoerend_id ?? '';
@@ -466,6 +579,87 @@ el('detailVerwijder').addEventListener('click', async () => {
   sluitVenster('detailVenster');
   herlaadTaken();
 });
+
+// ── Bordinstellingen ─────────────────────────────────────────────────────
+let instellingenBordId = null;
+
+async function openBordVenster() {
+  instellingenBordId = staat.bordId;
+  const bord = await api(`/borden/${staat.bordId}/instellingen`);
+  const taken = staat.taken;
+
+  el('bNaam').value = bord.naam;
+  el('bIedereen').checked = bord.zichtbaar_voor_iedereen;
+  el('bGekozen').checked = !bord.zichtbaar_voor_iedereen;
+  el('bMelding').textContent = '';
+
+  // Wie een taak op dit bord heeft, kan er niet uit: die zou anders werk
+  // toegewezen krijgen dat hij niet kan openen.
+  const metTaak = new Set(taken.map(t => t.uitvoerend_id).filter(Boolean));
+
+  el('bLeden').innerHTML = staat.gebruikers.filter(g => g.actief).map(g => {
+    const beheerder = g.rol === 'beheerder';
+    const vast = beheerder || metTaak.has(g.id);
+    const reden = beheerder ? 'beheerder' : metTaak.has(g.id) ? 'heeft hier een taak' : '';
+
+    return `<label class="${vast ? 'vast' : ''}">
+      <input type="checkbox" value="${g.id}"
+             ${vast || bord.leden.includes(g.id) ? 'checked' : ''} ${vast ? 'disabled' : ''} />
+      ${esc(g.naam)}
+      ${reden ? `<span class="reden">${reden}</span>` : ''}
+    </label>`;
+  }).join('');
+
+  el('bHint').textContent = 'Mensen die hier al een taak hebben staan houden altijd toegang, ' +
+    'en beheerders zien elk bord. Zo kan een bord nooit onbereikbaar worden.';
+
+  el('bVerwijder').hidden = !bord.mag_beheren;
+  ledenlijstBijwerken();
+  openVenster('bordVenster');
+}
+
+function ledenlijstBijwerken() {
+  el('bLeden').classList.toggle('open', el('bGekozen').checked);
+}
+
+el('bIedereen').addEventListener('change', ledenlijstBijwerken);
+el('bGekozen').addEventListener('change', ledenlijstBijwerken);
+
+el('bOpslaan').addEventListener('click', async () => {
+  const leden = [...el('bLeden').querySelectorAll('input:checked')].map(i => Number(i.value));
+
+  try {
+    await api('/borden/' + instellingenBordId, {
+      method: 'PATCH',
+      body: {
+        naam: el('bNaam').value.trim(),
+        zichtbaar_voor_iedereen: el('bIedereen').checked,
+        leden,
+      },
+    });
+    sluitVenster('bordVenster');
+    staat.borden = await api('/borden');
+    kiesBord(instellingenBordId);
+  } catch (fout) {
+    el('bMelding').textContent = fout.message;
+  }
+});
+
+el('bVerwijder').addEventListener('click', async () => {
+  const bord = staat.borden.find(b => b.id === instellingenBordId);
+  if (!confirm(`"${bord?.naam}" verwijderen? Alle taken, opmerkingen en historie erop gaan mee.`)) return;
+
+  try {
+    await api('/borden/' + instellingenBordId, { method: 'DELETE' });
+    sluitVenster('bordVenster');
+    staat.borden = await api('/borden');
+    kiesBord(null);
+  } catch (fout) {
+    el('bMelding').textContent = fout.message;
+  }
+});
+
+el('bordInstellingenKnop').addEventListener('click', openBordVenster);
 
 // ── Teamscherm ───────────────────────────────────────────────────────────
 // `bericht` blijft staan nadat het scherm opnieuw is getekend — anders zou een
@@ -681,11 +875,18 @@ el('uitlogKnop').addEventListener('click', async () => {
 });
 
 el('exportKnop').addEventListener('click', () => {
-  const kolommen = ['Opdracht', 'Uitvoerend', 'Status', 'Deadline', 'Omschrijving'];
+  // Op het persoonlijke bord staan taken uit meerdere projecten door elkaar,
+  // dus dan hoort het project er in de export bij.
+  const kolommen = isPersoonlijk()
+    ? ['Project', 'Opdracht', 'Uitvoerend', 'Status', 'Deadline', 'Omschrijving']
+    : ['Opdracht', 'Uitvoerend', 'Status', 'Deadline', 'Omschrijving'];
+
   const veld = (waarde) => `"${String(waarde ?? '').replace(/"/g, '""')}"`;
 
-  const regels = gefilterdeTaken().map(t =>
-    [t.opdracht, t.uitvoerend_naam, t.status, t.deadline, t.omschrijving].map(veld).join(','));
+  const regels = gefilterdeTaken().map(t => {
+    const waarden = [t.opdracht, t.uitvoerend_naam, t.status, t.deadline, t.omschrijving];
+    return (isPersoonlijk() ? [t.bord_naam, ...waarden] : waarden).map(veld).join(',');
+  });
 
   const blob = new Blob(['﻿' + [kolommen.join(','), ...regels].join('\r\n')],
     { type: 'text/csv;charset=utf-8;' });

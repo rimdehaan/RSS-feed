@@ -27,6 +27,46 @@ function datumOfNull(waarde) {
   return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
 }
 
+// ── Toegang tot borden ───────────────────────────────────────────────────
+// Een bord is voor iedereen zichtbaar, of alleen voor de mensen op zijn lijst.
+// Beheerders zien alles: anders kan een bord onbereikbaar raken zodra de laatste
+// deelnemer vertrekt, en kan niemand dat meer rechtzetten.
+
+/** Geeft het bord terug als de gebruiker het mag zien, anders null. */
+function zichtbaarBord(gebruiker, bordId) {
+  const bord = db.prepare('SELECT * FROM borden WHERE id = ?').get(Number(bordId));
+  if (!bord) return null;
+  if (gebruiker.rol === 'beheerder' || bord.zichtbaar_voor_iedereen) return bord;
+
+  const lid = db.prepare('SELECT 1 FROM bord_leden WHERE bord_id = ? AND gebruiker_id = ?')
+    .get(bord.id, gebruiker.id);
+  return lid ? bord : null;
+}
+
+/** Instellingen wijzigen mag een beheerder, en wie het bord heeft aangemaakt. */
+function magBeheren(gebruiker, bord) {
+  return gebruiker.rol === 'beheerder' || bord.aangemaakt_door === gebruiker.id;
+}
+
+/** Mag deze persoon een taak op dit bord toegewezen krijgen? */
+function magToegewezenWorden(bord, gebruikerId) {
+  if (!gebruikerId) return true;   // niemand toewijzen mag altijd
+
+  const gebruiker = db.prepare('SELECT rol FROM gebruikers WHERE id = ? AND actief = 1').get(gebruikerId);
+  if (!gebruiker) return false;
+  if (bord.zichtbaar_voor_iedereen || gebruiker.rol === 'beheerder') return true;
+
+  return Boolean(db.prepare('SELECT 1 FROM bord_leden WHERE bord_id = ? AND gebruiker_id = ?')
+    .get(bord.id, gebruikerId));
+}
+
+/** Zoekt een taak op en controleert meteen of je het bord eronder mag zien. */
+function zichtbareTaak(gebruiker, taakId) {
+  const taak = db.prepare('SELECT * FROM taken WHERE id = ?').get(Number(taakId));
+  if (!taak) return null;
+  return zichtbaarBord(gebruiker, taak.bord_id) ? taak : null;
+}
+
 // ── Eerste installatie ───────────────────────────────────────────────────
 // Zolang er nog geen enkele gebruiker is, mag iedereen de eerste beheerder
 // aanmaken. Daarna sluit deze route zichzelf af.
@@ -281,35 +321,100 @@ api.post('/wachtwoord', vereistLogin, (req, res) => {
 // ── Borden ───────────────────────────────────────────────────────────────
 
 api.get('/borden', vereistLogin, (req, res) => {
-  res.json(db.prepare(
-    `SELECT b.id, b.naam, b.gearchiveerd,
+  const borden = db.prepare(
+    `SELECT b.id, b.naam, b.gearchiveerd, b.zichtbaar_voor_iedereen, b.aangemaakt_door,
             (SELECT COUNT(*) FROM taken t WHERE t.bord_id = b.id) AS aantal_taken
        FROM borden b
+      WHERE ? = 1
+         OR b.zichtbaar_voor_iedereen = 1
+         OR EXISTS (SELECT 1 FROM bord_leden bl WHERE bl.bord_id = b.id AND bl.gebruiker_id = ?)
       ORDER BY b.gearchiveerd, b.positie, b.id`
-  ).all());
+  ).all(req.gebruiker.rol === 'beheerder' ? 1 : 0, req.gebruiker.id);
+
+  res.json(borden.map((bord) => ({ ...bord, mag_beheren: magBeheren(req.gebruiker, bord) })));
 });
 
 api.post('/borden', vereistLogin, (req, res) => {
   const naam = tekst(req.body.naam, 80);
   if (!naam) return res.status(400).json({ fout: 'Geef het bord een naam.' });
 
-  const r = db.prepare('INSERT INTO borden (naam) VALUES (?)').run(naam);
+  // Standaard voor iedereen zichtbaar; beperken doe je daarna bij de instellingen.
+  const r = db.prepare('INSERT INTO borden (naam, aangemaakt_door) VALUES (?, ?)')
+    .run(naam, req.gebruiker.id);
+
   res.json({ id: r.lastInsertRowid, naam });
 });
 
-api.patch('/borden/:id', vereistLogin, (req, res) => {
-  const bord = db.prepare('SELECT * FROM borden WHERE id = ?').get(Number(req.params.id));
+/** Instellingen van één bord, inclusief wie het mag zien. */
+api.get('/borden/:id/instellingen', vereistLogin, (req, res) => {
+  const bord = zichtbaarBord(req.gebruiker, req.params.id);
   if (!bord) return res.status(404).json({ fout: 'Bord niet gevonden.' });
+
+  res.json({
+    id: bord.id,
+    naam: bord.naam,
+    zichtbaar_voor_iedereen: Boolean(bord.zichtbaar_voor_iedereen),
+    leden: db.prepare('SELECT gebruiker_id FROM bord_leden WHERE bord_id = ?').all(bord.id)
+      .map((r) => r.gebruiker_id),
+    mag_beheren: magBeheren(req.gebruiker, bord),
+  });
+});
+
+api.patch('/borden/:id', vereistLogin, (req, res) => {
+  const bord = zichtbaarBord(req.gebruiker, req.params.id);
+  if (!bord) return res.status(404).json({ fout: 'Bord niet gevonden.' });
+  if (!magBeheren(req.gebruiker, bord)) {
+    return res.status(403).json({ fout: 'Alleen een beheerder of de maker van dit bord kan dit wijzigen.' });
+  }
 
   const naam = req.body.naam === undefined ? bord.naam : tekst(req.body.naam, 80) || bord.naam;
   const gearchiveerd = req.body.gearchiveerd === undefined ? bord.gearchiveerd : (req.body.gearchiveerd ? 1 : 0);
+  const voorIedereen = req.body.zichtbaar_voor_iedereen === undefined
+    ? bord.zichtbaar_voor_iedereen
+    : (req.body.zichtbaar_voor_iedereen ? 1 : 0);
 
-  db.prepare('UPDATE borden SET naam = ?, gearchiveerd = ? WHERE id = ?').run(naam, gearchiveerd, bord.id);
+  db.transaction(() => {
+    db.prepare('UPDATE borden SET naam = ?, gearchiveerd = ?, zichtbaar_voor_iedereen = ? WHERE id = ?')
+      .run(naam, gearchiveerd, voorIedereen, bord.id);
+
+    if (voorIedereen) {
+      // Zichtbaar voor iedereen: dan doet de lijst er niet meer toe.
+      db.prepare('DELETE FROM bord_leden WHERE bord_id = ?').run(bord.id);
+      return;
+    }
+
+    if (req.body.leden === undefined) return;
+
+    const gekozen = new Set((req.body.leden ?? []).map(Number).filter(Boolean));
+
+    // Wie hier een taak heeft staan, houdt toegang. Anders zou iemand werk
+    // toegewezen krijgen op een bord dat hij niet meer kan openen.
+    for (const rij of db.prepare(
+      'SELECT DISTINCT uitvoerend_id FROM taken WHERE bord_id = ? AND uitvoerend_id IS NOT NULL'
+    ).all(bord.id)) gekozen.add(rij.uitvoerend_id);
+
+    // En wie het bord beheert, raakt zijn eigen bord niet kwijt.
+    gekozen.add(req.gebruiker.id);
+    if (bord.aangemaakt_door) gekozen.add(bord.aangemaakt_door);
+
+    db.prepare('DELETE FROM bord_leden WHERE bord_id = ?').run(bord.id);
+    const voegToe = db.prepare('INSERT OR IGNORE INTO bord_leden (bord_id, gebruiker_id) VALUES (?, ?)');
+    for (const id of gekozen) {
+      if (db.prepare('SELECT 1 FROM gebruikers WHERE id = ?').get(id)) voegToe.run(bord.id, id);
+    }
+  })();
+
   res.json({ ok: true });
 });
 
-api.delete('/borden/:id', vereistBeheerder, (req, res) => {
-  db.prepare('DELETE FROM borden WHERE id = ?').run(Number(req.params.id));
+api.delete('/borden/:id', vereistLogin, (req, res) => {
+  const bord = zichtbaarBord(req.gebruiker, req.params.id);
+  if (!bord) return res.status(404).json({ fout: 'Bord niet gevonden.' });
+  if (!magBeheren(req.gebruiker, bord)) {
+    return res.status(403).json({ fout: 'Alleen een beheerder of de maker van dit bord kan het verwijderen.' });
+  }
+
+  db.prepare('DELETE FROM borden WHERE id = ?').run(bord.id);
   res.json({ ok: true });
 });
 
@@ -325,21 +430,47 @@ const TAAK_SELECT = `
 `;
 
 api.get('/borden/:id/taken', vereistLogin, (req, res) => {
-  res.json(db.prepare(`${TAAK_SELECT} WHERE t.bord_id = ? ORDER BY t.positie, t.id`)
-    .all(Number(req.params.id)));
+  const bord = zichtbaarBord(req.gebruiker, req.params.id);
+  if (!bord) return res.status(404).json({ fout: 'Bord niet gevonden.' });
+
+  res.json(db.prepare(`${TAAK_SELECT} WHERE t.bord_id = ? ORDER BY t.positie, t.id`).all(bord.id));
+});
+
+/**
+ * Het persoonlijke bord: alle taken die aan jou zijn toegewezen, uit alle
+ * projecten bij elkaar. Alleen van jezelf — niemand kan het bord van een ander
+ * opvragen, want er is geen adres om dat mee te vragen.
+ */
+api.get('/mijn-taken', vereistLogin, (req, res) => {
+  res.json(db.prepare(
+    `SELECT t.id, t.bord_id, t.opdracht, t.uitvoerend_id, t.status, t.deadline,
+            t.omschrijving, t.positie, t.aangemaakt_op, t.gewijzigd_op,
+            g.naam AS uitvoerend_naam,
+            b.naam AS bord_naam,
+            (SELECT COUNT(*) FROM opmerkingen o WHERE o.taak_id = t.id) AS aantal_opmerkingen
+       FROM taken t
+       JOIN borden b ON b.id = t.bord_id
+       LEFT JOIN gebruikers g ON g.id = t.uitvoerend_id
+      WHERE t.uitvoerend_id = ?
+      ORDER BY b.gearchiveerd, b.positie, b.id, t.positie, t.id`
+  ).all(req.gebruiker.id));
 });
 
 api.post('/borden/:id/taken', vereistLogin, (req, res) => {
-  const bordId = Number(req.params.id);
-  if (!db.prepare('SELECT 1 FROM borden WHERE id = ?').get(bordId)) {
-    return res.status(404).json({ fout: 'Bord niet gevonden.' });
-  }
+  const bord = zichtbaarBord(req.gebruiker, req.params.id);
+  if (!bord) return res.status(404).json({ fout: 'Bord niet gevonden.' });
+  const bordId = bord.id;
 
   const opdracht = tekst(req.body.opdracht, 200);
   if (!opdracht) return res.status(400).json({ fout: 'Geef de opdracht een naam.' });
 
   const status = STATUSSEN.includes(req.body.status) ? req.body.status : 'Not Started';
   const uitvoerendId = req.body.uitvoerend_id ? Number(req.body.uitvoerend_id) : null;
+
+  if (!magToegewezenWorden(bord, uitvoerendId)) {
+    return res.status(400).json({ fout: 'Die persoon kan dit bord niet zien. Geef hem eerst toegang bij de bordinstellingen.' });
+  }
+
   const onderaan = db.prepare('SELECT COALESCE(MAX(positie), 0) + 1 AS p FROM taken WHERE bord_id = ?').get(bordId).p;
 
   const r = db.prepare(
@@ -353,9 +484,12 @@ api.post('/borden/:id/taken', vereistLogin, (req, res) => {
 });
 
 api.get('/taken/:id', vereistLogin, (req, res) => {
+  if (!zichtbareTaak(req.gebruiker, req.params.id)) {
+    return res.status(404).json({ fout: 'Taak niet gevonden.' });
+  }
+
   const id = Number(req.params.id);
   const taak = db.prepare(`${TAAK_SELECT} WHERE t.id = ?`).get(id);
-  if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
 
   taak.opmerkingen = db.prepare(
     `SELECT o.id, o.tekst, o.aangemaakt_op, o.gebruiker_id, g.naam AS gebruiker_naam
@@ -373,8 +507,16 @@ api.get('/taken/:id', vereistLogin, (req, res) => {
 });
 
 api.patch('/taken/:id', vereistLogin, (req, res) => {
-  const taak = db.prepare('SELECT * FROM taken WHERE id = ?').get(Number(req.params.id));
+  const taak = zichtbareTaak(req.gebruiker, req.params.id);
   if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
+
+  if (req.body.uitvoerend_id !== undefined) {
+    const bord = db.prepare('SELECT * FROM borden WHERE id = ?').get(taak.bord_id);
+    const nieuweUitvoerder = req.body.uitvoerend_id ? Number(req.body.uitvoerend_id) : null;
+    if (!magToegewezenWorden(bord, nieuweUitvoerder)) {
+      return res.status(400).json({ fout: 'Die persoon kan dit bord niet zien. Geef hem eerst toegang bij de bordinstellingen.' });
+    }
+  }
 
   const nieuw = {
     opdracht: req.body.opdracht === undefined ? taak.opdracht : (tekst(req.body.opdracht, 200) || taak.opdracht),
@@ -413,7 +555,7 @@ api.patch('/taken/:id', vereistLogin, (req, res) => {
  * de taak is losgelaten; hier rekenen we de nieuwe positie uit.
  */
 api.post('/taken/:id/verplaats', vereistLogin, (req, res) => {
-  const taak = db.prepare('SELECT * FROM taken WHERE id = ?').get(Number(req.params.id));
+  const taak = zichtbareTaak(req.gebruiker, req.params.id);
   if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
 
   const status = STATUSSEN.includes(req.body.status) ? req.body.status : taak.status;
@@ -449,17 +591,19 @@ api.post('/taken/:id/verplaats', vereistLogin, (req, res) => {
 });
 
 api.delete('/taken/:id', vereistLogin, (req, res) => {
-  db.prepare('DELETE FROM taken WHERE id = ?').run(Number(req.params.id));
+  const taak = zichtbareTaak(req.gebruiker, req.params.id);
+  if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
+
+  db.prepare('DELETE FROM taken WHERE id = ?').run(taak.id);
   res.json({ ok: true });
 });
 
 // ── Opmerkingen ──────────────────────────────────────────────────────────
 
 api.post('/taken/:id/opmerkingen', vereistLogin, (req, res) => {
-  const taakId = Number(req.params.id);
-  if (!db.prepare('SELECT 1 FROM taken WHERE id = ?').get(taakId)) {
-    return res.status(404).json({ fout: 'Taak niet gevonden.' });
-  }
+  const taak = zichtbareTaak(req.gebruiker, req.params.id);
+  if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
+  const taakId = taak.id;
 
   const tekstInhoud = tekst(req.body.tekst, 5000);
   if (!tekstInhoud) return res.status(400).json({ fout: 'Typ eerst een opmerking.' });
@@ -476,6 +620,9 @@ api.post('/taken/:id/opmerkingen', vereistLogin, (req, res) => {
 api.delete('/opmerkingen/:id', vereistLogin, (req, res) => {
   const opmerking = db.prepare('SELECT * FROM opmerkingen WHERE id = ?').get(Number(req.params.id));
   if (!opmerking) return res.json({ ok: true });
+  if (!zichtbareTaak(req.gebruiker, opmerking.taak_id)) {
+    return res.status(404).json({ fout: 'Opmerking niet gevonden.' });
+  }
 
   if (opmerking.gebruiker_id !== req.gebruiker.id && req.gebruiker.rol !== 'beheerder') {
     return res.status(403).json({ fout: 'Je kunt alleen je eigen opmerkingen verwijderen.' });

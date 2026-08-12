@@ -12,6 +12,10 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Zonder dit wint een eigen display-regel (zoals .btn) van het hidden-attribuut,
+   en blijft een verborgen knop gewoon staan. */
+[hidden] { display: none !important; }
+
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
   background: var(--achtergrond);
@@ -239,6 +243,50 @@ tbody td { padding: 10px 16px; font-size: 0.87rem; color: var(--donker); vertica
   display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 .bolletje.leeg { background: var(--lijn); color: var(--grijs); }
+
+/* ── Persoonlijk bord: per project een blok met statuskolommen ── */
+.project-blok { margin-bottom: 26px; }
+.project-kop {
+  display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px;
+  padding-bottom: 8px; border-bottom: 2px solid var(--lijn);
+}
+.project-kop h2 { font-size: 0.95rem; font-weight: 700; color: var(--donker); }
+.project-kop .telling { font-size: 0.78rem; color: var(--grijs); }
+.project-kop a {
+  margin-left: auto; font-size: 0.78rem; color: var(--blauw);
+  text-decoration: none; cursor: pointer; font-weight: 600;
+}
+.project-kop a:hover { color: var(--donker); }
+
+.mijn-leeg {
+  background: #fff; border: 1px solid var(--lijn); border-radius: 10px;
+  padding: 44px; text-align: center; color: var(--grijs); font-size: 0.9rem;
+}
+
+/* ── Bordinstellingen ── */
+.keuze {
+  display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px;
+  border: 1px solid var(--lijn); border-radius: 8px; margin-bottom: 8px;
+  cursor: pointer; font-size: 0.87rem; color: var(--donker);
+}
+.keuze:hover { border-color: var(--blauw); }
+.keuze input { margin-top: 3px; flex-shrink: 0; }
+.keuze small { color: var(--blauw); font-size: 0.78rem; line-height: 1.5; }
+
+.ledenlijst {
+  margin: 4px 0 0 26px; padding: 10px 0 0; display: none;
+  border-top: 1px solid var(--lijn);
+}
+.ledenlijst.open { display: block; }
+.ledenlijst label {
+  display: flex; align-items: center; gap: 9px; padding: 6px 0;
+  font-size: 0.87rem; color: var(--donker); cursor: pointer;
+}
+.ledenlijst .vast { color: var(--grijs); cursor: default; }
+.ledenlijst .reden { font-size: 0.75rem; color: var(--grijs); margin-left: auto; }
+
+.hint { font-size: 0.8rem; color: var(--blauw); line-height: 1.6; margin-top: 14px; }
+.hint:empty { display: none; }
 
 /* ── Vensters (modals) ── */
 .overlay {
