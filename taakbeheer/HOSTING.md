@@ -164,6 +164,7 @@ zoekt staat meestal onderaan.
 | `Service not found` | De servicenaam in Railway wijkt af — zie de opmerking bij stap 8 |
 | `Project token not found` | Het token is ingetrokken of hoort bij een ander project. Maak een nieuwe (stap 7) |
 | Uitrol slaagt, app doet niets | Kijk in Railway onder **Deploy Logs**. Daar staat wat de server zelf zegt |
+| Blijft hangen op *Taking a snapshot of the code* | Railway is blijven steken. Klik op de drie puntjes bij die uitrol → **Remove**, en start de workflow opnieuw. Je oude versie blijft ondertussen gewoon draaien |
 | Alles leeg na een nieuwe versie | Volume of `DATABASE_PAD` klopt niet (stap 4 en 5) |
 | Bouwen mislukt op `better-sqlite3` | Meestal tijdelijk. Draai de workflow opnieuw |
 
