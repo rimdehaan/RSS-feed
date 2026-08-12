@@ -36,6 +36,7 @@ administratie — zie *Back-ups* verderop.
 | Uitnodigen | Alleen een beheerder voegt mensen toe. Je krijgt een link die je zelf doorstuurt |
 | Rollen | *Beheerder* mag uitnodigen en accounts beheren, *lid* werkt gewoon mee |
 | Wachtwoord kwijt | Een beheerder maakt een eenmalige herstellink, twee dagen geldig |
+| Mail | Uitnodigingen en herstellinks worden gemaild zodra je dat aanzet — zie [MAIL.md](MAIL.md). Zonder instelling krijg je de link op je scherm om zelf door te sturen |
 | Borden | Meerdere borden naast elkaar, bijvoorbeeld per project of per klant |
 | Tabelweergave | Zoals je prototype: opdracht, uitvoerend, status, deadline, omschrijving |
 | Kanban | De zes statussen als kolommen, kaarten ertussen slepen |
@@ -96,9 +97,6 @@ volume maken. Een back-up die je nooit hebt teruggezet is geen back-up: probeer
 
 Bewust weggelaten, zodat het overzichtelijk blijft:
 
-- **Geen e-mail.** Uitnodigingen en herstellinks krijg je als link te zien; die
-  stuur je zelf door via mail of Teams. Wil je automatische mail, dan komt daar
-  een dienst als Resend of Postmark bij kijken.
 - **Iedereen ziet alle borden.** Er is nog geen instelling per bord voor wie
   erbij mag. Voor een team van 2 tot 10 mensen is dat meestal prima; zodra er
   klanten of externen bij komen is dit het eerste wat je nodig hebt.
@@ -136,6 +134,9 @@ Twee pakketten van buiten, verder niets:
 | `PORT` | Poort waarop de server luistert | `3000` |
 | `DATABASE_PAD` | Waar het databasebestand staat | `./data/taakbeheer.db` |
 | `NODE_ENV` | Zet op `production` zodra je live staat | leeg |
+| `RESEND_API_KEY` | Sleutel om mail te versturen. Leeg = geen mail, wel links | leeg |
+| `MAIL_AFZENDER` | Van wie de mail komt | testadres van Resend |
+| `APP_URL` | Adres in maillinks. Leeg = het adres waarop je binnenkwam | leeg |
 
 ---
 

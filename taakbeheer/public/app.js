@@ -556,12 +556,18 @@ function koppelTeamKnoppen() {
     const melding = el('uitMelding');
     melding.classList.remove('goed');
     try {
+      const adres = el('uitEmail').value.trim();
       const uitnodiging = await api('/uitnodigingen', {
         method: 'POST',
-        body: { email: el('uitEmail').value.trim(), rol: el('uitRol').value },
+        body: { email: adres, rol: el('uitRol').value },
       });
-      melding.textContent = 'Uitnodiging gemaakt. Stuur onderstaande link naar je collega.';
+
+      melding.textContent = uitnodiging.gemaild
+        ? `Uitnodiging gemaild naar ${adres}.`
+        : `Uitnodiging gemaakt. Er is geen mail verstuurd (${uitnodiging.mailfout ?? 'onbekende reden'}), ` +
+          'dus stuur de link hieronder zelf door.';
       melding.classList.add('goed');
+
       el('uitEmail').value = '';
       tekenTeam();
     } catch (fout) {
@@ -597,12 +603,15 @@ function koppelTeamKnoppen() {
     knop.addEventListener('click', async () => {
       const melding = el('herstelMelding');
       try {
-        const { token } = await api(`/gebruikers/${knop.dataset.herstel}/herstel`, { method: 'POST' });
-        const link = `${location.origin}/inloggen.html?herstel=${token}`;
-        melding.innerHTML = `Geef deze link persoonlijk door — hij is twee dagen geldig en werkt één keer:
-          <div class="uitnodig-link"><code>${esc(link)}</code></div>`;
+        const antwoord = await api(`/gebruikers/${knop.dataset.herstel}/herstel`, { method: 'POST' });
+        const link = `${location.origin}/inloggen.html?herstel=${antwoord.token}`;
+
+        melding.innerHTML = antwoord.gemaild
+          ? 'De herstellink is gemaild. Hij is twee dagen geldig en werkt één keer.'
+          : `Geef deze link persoonlijk door — hij is twee dagen geldig en werkt één keer:
+             <div class="uitnodig-link"><code>${esc(link)}</code></div>`;
         melding.classList.add('goed');
-        navigator.clipboard?.writeText(link);
+        if (!antwoord.gemaild) navigator.clipboard?.writeText(link);
       } catch (fout) {
         melding.textContent = fout.message;
         melding.classList.remove('goed');
