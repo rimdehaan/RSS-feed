@@ -8,6 +8,7 @@ const staat = {
   borden: [],
   bordId: null,
   taken: [],
+  mailAan: false,
   weergave: 'tabel',   // 'tabel' | 'kanban' | 'team'
   bewerktId: null,
   detailId: null,
@@ -82,11 +83,12 @@ document.addEventListener('keydown', (e) => {
 
 // ── Opstarten ────────────────────────────────────────────────────────────
 async function start() {
-  const { gebruiker, statussen } = await api('/ik');
+  const { gebruiker, statussen, mail } = await api('/ik');
   if (!gebruiker) { location.href = '/inloggen.html'; return; }
 
   staat.ik = gebruiker;
   staat.statussen = statussen;
+  staat.mailAan = mail;
   el('wieBenIk').textContent = gebruiker.naam;
 
   vulStatusKeuzes();
@@ -468,7 +470,9 @@ el('detailVerwijder').addEventListener('click', async () => {
 });
 
 // ── Teamscherm ───────────────────────────────────────────────────────────
-async function tekenTeam() {
+// `bericht` blijft staan nadat het scherm opnieuw is getekend — anders zou een
+// melding meteen weer verdwijnen doordat we hieronder alles overschrijven.
+async function tekenTeam(bericht = null) {
   staat.weergave = 'team';
   el('paginaTitel').textContent = 'Team';
   el('werkbalk').hidden = true;
@@ -496,7 +500,9 @@ async function tekenTeam() {
           <button class="btn btn-primary" id="uitnodigKnop">Uitnodiging maken</button>
         </div>
         <div class="melding" id="uitMelding" style="margin-top:12px"></div>
-        <div id="uitResultaat"></div>
+        ${staat.mailAan ? '' : `<p style="margin-top:10px;font-size:.8rem;color:var(--grijs)">
+          Mail staat uit. Uitnodigingen worden niet verstuurd; je krijgt de link hieronder om zelf door te sturen.
+        </p>`}
 
         ${uitnodigingen.length ? `
           <h3 style="margin-top:22px">Openstaande uitnodigingen</h3>
@@ -548,6 +554,12 @@ async function tekenTeam() {
       <div class="melding" id="wwMelding" style="margin-top:12px"></div>
     </div>`;
 
+  if (bericht) {
+    const melding = el('uitMelding');
+    melding.textContent = bericht.tekst;
+    melding.classList.toggle('goed', bericht.goed);
+  }
+
   koppelTeamKnoppen();
 }
 
@@ -562,14 +574,16 @@ function koppelTeamKnoppen() {
         body: { email: adres, rol: el('uitRol').value },
       });
 
-      melding.textContent = uitnodiging.gemaild
-        ? `Uitnodiging gemaild naar ${adres}.`
-        : `Uitnodiging gemaakt. Er is geen mail verstuurd (${uitnodiging.mailfout ?? 'onbekende reden'}), ` +
-          'dus stuur de link hieronder zelf door.';
-      melding.classList.add('goed');
-
       el('uitEmail').value = '';
-      tekenTeam();
+
+      // De melding gaat mee het opnieuw tekenen in, anders wist hij zichzelf.
+      tekenTeam({
+        goed: uitnodiging.gemaild,
+        tekst: uitnodiging.gemaild
+          ? `Uitnodiging gemaild naar ${adres}.`
+          : `Uitnodiging gemaakt, maar er is geen mail verstuurd. Stuur de link hieronder zelf door. ` +
+            `Reden: ${uitnodiging.mailfout ?? 'onbekend'}`,
+      });
     } catch (fout) {
       melding.textContent = fout.message;
     }
