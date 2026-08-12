@@ -16,6 +16,7 @@ statussen zijn hetzelfde gebleven; wat veranderde is dat de gegevens niet meer i
 cd taakbeheer
 npm install      # eenmalig
 node server.js   # http://localhost:3000
+npm test         # loopt de hele achterkant na (start zelf een server)
 ```
 
 De eerste keer stuurt de app je naar een scherm om de **eerste beheerder** aan te
@@ -74,6 +75,13 @@ je het een half jaar laat liggen.
 
 Startcommando is `node server.js`; de poort komt uit de omgevingsvariabele `PORT`,
 die het platform zelf invult.
+
+### Uitrollen gaat via GitHub Actions
+
+In `.github/workflows/taakbeheer.yml` staat een workflow die bij elke push eerst de
+tests draait en pas daarna uitrolt. Zakt een test, dan komt er niets online.
+
+**Klik-voor-klik uitleg staat in [HOSTING.md](HOSTING.md).**
 
 ### Back-ups
 

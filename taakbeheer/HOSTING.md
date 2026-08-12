@@ -1,63 +1,50 @@
 # Taakbeheer online zetten met Railway
 
-Stap voor stap, met de schermen zoals je ze tegenkomt. Reken op een kwartier.
-Aan het eind heb je een link die je naar je collega's kunt sturen.
+Stap voor stap. Reken op een half uur de eerste keer. Aan het eind heb je een link
+die je naar je collega's kunt sturen, en rolt elke wijziging zichzelf uit zodra de
+tests slagen.
 
-Kosten: het Hobby-abonnement kost **$5 per maand**. Daar hoort tegoed bij dat voor
-een app als deze ruim genoeg is.
+Kosten: het Hobby-abonnement kost **$5 per maand**, met tegoed dat voor een app als
+deze ruim genoeg is.
 
 ---
 
-## Stap 1 — Account maken
+## Deel 1 — De server klaarzetten
 
-1. Ga naar <https://railway.com> en klik **Login**.
-2. Kies **Login with GitHub**. Dan hoef je later niets extra's te koppelen.
-3. Railway vraagt om een abonnement voordat je kunt uitrollen. Kies **Hobby**.
+### Stap 1: Account
 
-## Stap 2 — Project aanmaken vanaf GitHub
+1. Ga naar <https://railway.com> en klik **Login** → **Login with GitHub**.
+2. Railway vraagt om een abonnement voordat je kunt uitrollen. Kies **Hobby**.
+
+### Stap 2: Een lege service aanmaken
 
 1. Klik **New Project**.
-2. Kies **Deploy from GitHub repo**.
-3. Staat je repo er niet bij? Klik **Configure GitHub App** en geef Railway
-   toegang tot `rimdehaan/RSS-feed`.
-4. Kies **RSS-feed**.
+2. Kies **Empty Service** — dus *niet* "Deploy from GitHub repo".
 
-Railway begint meteen te bouwen. **Dat gaat de eerste keer mis** — dat hoort zo.
-Railway kijkt nu nog naar de hoofdmap, waar de RSS-lezer staat. Dat repareren we
-in de volgende stap.
+Dat lijkt tegen-intuïtief, maar het is met opzet: de code wordt straks aangeleverd
+door GitHub Actions, nadat de tests zijn geslaagd. Koppel je hier je repo, dan rolt
+Railway óók zelf uit en krijg je elke wijziging dubbel — ook als de tests zakken.
 
-## Stap 3 — Wijs de juiste map en branch aan
+3. Klik op de service, ga naar **Settings** → **Service Name** en noem hem
+   **`taakbeheer`**. Die naam moet kloppen met de workflow.
 
-Klik op het blokje van je service, dan op het tabblad **Settings**.
+### Stap 3: Regio op Amsterdam
 
-Onder **Source**:
+**Settings** → **Deploy** → **Region**: kies **europe-west4 (Amsterdam)**.
 
-| Veld | Waarde |
-|---|---|
-| Branch | `claude/vibe-coden-getting-started-vdn6gh` |
-| Root Directory | `taakbeheer` |
+Je draait persoonsgegevens van je medewerkers; die horen in Europa te blijven. Het
+is bovendien sneller. Doe dit vóór je in gebruik neemt.
 
-De rest van de instellingen (startcommando, herstart bij fouten) leest Railway uit
-`railway.json`, dat al in de map staat. Daar hoef je niets aan te doen.
+### Stap 4: De opslag — dit is de belangrijkste stap
 
-## Stap 4 — Regio op Amsterdam
-
-Nog steeds in **Settings**, onder **Deploy** → **Region**: kies
-**europe-west4 (Amsterdam)**.
-
-Doe dit vóór je echt in gebruik neemt. Je draait gegevens van je medewerkers;
-die horen in Europa te blijven, en het scheelt ook nog eens snelheid.
-
-## Stap 5 — De opslag (de belangrijkste stap)
-
-Zonder deze stap is **al je data weg bij elke nieuwe versie** die je uitrolt.
-Railway geeft elke uitrol een schone machine; alleen een volume overleeft dat.
+Zonder deze stap is **al je data weg bij elke nieuwe versie**. Railway geeft elke
+uitrol een schone machine; alleen een volume overleeft dat.
 
 1. Klik met de rechtermuisknop op het lege vlak naast je service.
-2. Kies **Volume**, en koppel hem aan je service.
+2. Kies **Volume** en koppel hem aan je service.
 3. Zet **Mount path** op: `/data`
 
-## Stap 6 — Instellingen meegeven
+### Stap 5: Instellingen meegeven
 
 Tabblad **Variables** → **New Variable**. Voeg deze twee toe:
 
@@ -66,26 +53,67 @@ Tabblad **Variables** → **New Variable**. Voeg deze twee toe:
 | `DATABASE_PAD` | `/data/taakbeheer.db` |
 | `NODE_ENV` | `production` |
 
-De eerste zegt: bewaar de database op het volume uit stap 5. De tweede zorgt dat
+De eerste zegt: bewaar de database op het volume uit stap 4. De tweede zorgt dat
 inlogcookies alleen nog over https gaan.
 
 `PORT` hoef je **niet** in te vullen — die zet Railway zelf.
 
-## Stap 7 — Je link aanzetten
+### Stap 6: Je link aanzetten
 
-Tabblad **Settings** → **Networking** → **Generate Domain**.
+**Settings** → **Networking** → **Generate Domain**.
 
 Je krijgt iets als `taakbeheer-production-a1b2.up.railway.app`. Dat is je link.
 
-## Stap 8 — In gebruik nemen
+---
 
-1. Open de link. Je komt op het scherm **Eerste beheerder aanmaken**.
+## Deel 2 — GitHub laten uitrollen
+
+### Stap 7: Een token maken in Railway
+
+1. Ga naar je **project**settings (niet die van de service) → tabblad **Tokens**.
+2. Maak een token, gekoppeld aan de omgeving **production**.
+3. Kopieer hem meteen — je krijgt hem maar één keer te zien.
+
+Dit is een projecttoken: het geeft toegang tot dít project, niet tot je hele
+Railway-account. Dat is precies genoeg.
+
+### Stap 8: Het token in GitHub zetten
+
+1. Ga naar je repo op GitHub → **Settings** (van de repo, niet van je account).
+2. In de zijbalk: **Secrets and variables** → **Actions**.
+3. Klik **New repository secret**.
+4. Naam: **`RAILWAY_TOKEN`** — precies zo geschreven. Waarde: het token uit stap 7.
+
+Een secret is eenrichtingsverkeer: GitHub kan hem gebruiken, maar niemand kan hem
+meer uitlezen — jij ook niet. Kwijt? Maak dan een nieuwe in Railway.
+
+> Heb je je service in Railway anders genoemd dan `taakbeheer`? Voeg dan op
+> hetzelfde scherm onder **Variables** een variabele `RAILWAY_SERVICE` toe met die
+> naam erin.
+
+### Stap 9: Uitrollen
+
+1. Ga op GitHub naar het tabblad **Actions**.
+2. Kies links de workflow **Taakbeheer**.
+3. Klik **Run workflow**, kies je branch, en bevestig.
+
+Je ziet nu twee blokken: eerst **Tests**, dan **Uitrollen naar Railway**. Zakken de
+tests, dan gebeurt er niets — dat is het hele punt.
+
+Daarna gaat het vanzelf: elke push naar `main` die de tests haalt, rolt uit. Werk je
+op een andere branch, dan draaien alleen de tests; uitrollen doe je dan met de knop
+**Run workflow**.
+
+### Stap 10: In gebruik nemen
+
+1. Open je link uit stap 6. Je komt op **Eerste beheerder aanmaken**.
 2. Vul je naam, e-mailadres en een wachtwoord van minstens 10 tekens in.
-3. Je bent binnen. Ga naar **Team** en nodig je collega's uit.
-4. Kopieer de uitnodigingslink en stuur die per mail of Teams door.
+3. Ga naar **Team** en nodig je collega's uit. Kopieer de link en stuur hem door.
 
-Dat setup-scherm verdwijnt zodra dit eerste account bestaat. Niemand anders kan
-het dus nog gebruiken.
+Dat setup-scherm verdwijnt zodra dit eerste account bestaat.
+
+**Maak meteen een tweede beheerder.** Raak jij je wachtwoord kwijt en ben je de
+enige beheerder, dan is er geen weg terug.
 
 ---
 
@@ -97,37 +125,42 @@ Doe deze test één keer, nu het nog niet uitmaakt:
 2. Ga in Railway naar je service en klik **Redeploy**.
 3. Wacht tot hij klaar is en ververs je app.
 
-**Staat je taak er nog?** Dan is het volume goed gekoppeld. Is hij weg en moet je
-opnieuw een beheerder aanmaken, dan klopt stap 5 of stap 6 niet — kijk of het
-mount path exact `/data` is en of `DATABASE_PAD` exact `/data/taakbeheer.db` is.
+**Staat je taak er nog?** Dan is het volume goed gekoppeld. Moet je opnieuw een
+beheerder aanmaken, dan klopt stap 4 of 5 niet: kijk of het mount path exact `/data`
+is en `DATABASE_PAD` exact `/data/taakbeheer.db`.
 
 ## Back-ups
 
-Je hele administratie is dat ene bestand op het volume. Maak er regelmatig een
-kopie van. Railway kan snapshots van volumes maken; zet dat aan, of haal het
-bestand er af en toe zelf af.
+Je hele administratie is dat ene bestand op het volume. Railway kan snapshots van
+volumes maken — zet dat aan, of haal het bestand er af en toe zelf af.
 
-Een back-up die je nooit hebt teruggezet is geen back-up. Probeer één keer of je
-van een kopie kunt starten.
+Een back-up die je nooit hebt teruggezet is geen back-up. Probeer één keer of je van
+een kopie kunt starten.
 
 ---
 
 ## Als er iets misgaat
 
-Klik op je service en dan op **Deploy Logs**. Daar staat wat er gebeurde.
+Bij een rood kruisje op GitHub: klik erop, dan op het gezakte blok. De regel die je
+zoekt staat meestal onderaan.
 
 | Wat je ziet | Wat het betekent |
 |---|---|
-| `Cannot find module 'express'` | Root Directory staat niet op `taakbeheer` (stap 3) |
-| Alles leeg na een nieuwe versie | Volume of `DATABASE_PAD` klopt niet (stap 5 en 6) |
-| Bouwen mislukt op `better-sqlite3` | Meestal tijdelijk. Klik **Redeploy** |
-| Je komt niet meer binnen als beheerder | Zonder tweede beheerder is er geen weg terug. Maak daarom meteen een tweede beheerdersaccount aan |
-| Health check faalt | De app start niet. Kijk in de logs naar de regel vlak voor de fout |
+| Tests zakken, geen uitrol | Werkt zoals bedoeld. Lees welke controle faalde en plak die bij Claude |
+| `Geen RAILWAY_TOKEN ingesteld` | Stap 8 nog niet gedaan, of de naam is niet exact `RAILWAY_TOKEN` |
+| `Service not found` | De servicenaam in Railway wijkt af — zie de opmerking bij stap 8 |
+| `Project token not found` | Het token is ingetrokken of hoort bij een ander project. Maak een nieuwe (stap 7) |
+| Uitrol slaagt, app doet niets | Kijk in Railway onder **Deploy Logs**. Daar staat wat de server zelf zegt |
+| Alles leeg na een nieuwe versie | Volume of `DATABASE_PAD` klopt niet (stap 4 en 5) |
+| Bouwen mislukt op `better-sqlite3` | Meestal tijdelijk. Draai de workflow opnieuw |
 
-Plak een foutmelding gerust letterlijk bij Claude — dat is de snelste route naar
-een oplossing.
+Plak een foutmelding gerust letterlijk bij Claude — dat is de snelste route naar een
+oplossing.
 
-## Later, als dit naar de hoofdbranch gaat
+---
 
-Zodra dit werk in `main` staat, zet je in **Settings → Source → Branch** de
-branch op `main`. Daarna rolt elke push naar `main` vanzelf uit.
+## Had je al "Deploy from GitHub repo" aangezet?
+
+Dan rolt Railway zelf ook uit, en krijg je elke wijziging dubbel — zonder dat de
+tests iets tegenhouden. Ga naar **Settings** → **Source** en ontkoppel de repo.
+De GitHub Actions-route neemt het over.

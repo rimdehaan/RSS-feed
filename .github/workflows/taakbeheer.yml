@@ -1,0 +1,98 @@
+# Testen en uitrollen van Taakbeheer.
+#
+# Wat er gebeurt bij elke push:
+#   1. De tests draaien. Zakken die, dan stopt alles hier.
+#   2. Alleen vanaf de hoofdbranch (of als je het zelf start) gaat het naar Railway.
+#
+# Handmatig uitrollen kan via het tabblad Actions op GitHub:
+# kies deze workflow, klik "Run workflow", kies je branch.
+#
+# Instellen: zie taakbeheer/HOSTING.md
+
+name: Taakbeheer
+
+on:
+  push:
+    paths:
+      - 'taakbeheer/**'
+      - '.github/workflows/taakbeheer.yml'
+  pull_request:
+    paths:
+      - 'taakbeheer/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: taakbeheer
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: taakbeheer/package-lock.json
+
+      - name: Pakketten installeren
+        run: npm ci
+
+      - name: Tests draaien
+        run: npm test
+
+  deploy:
+    name: Uitrollen naar Railway
+    needs: test
+    # Alleen vanaf de hoofdbranch, of wanneer je het zelf start vanuit Actions.
+    if: github.ref_name == 'main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    concurrency:
+      # Nooit twee keer tegelijk uitrollen.
+      group: taakbeheer-deploy
+      cancel-in-progress: false
+
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      SERVICE: ${{ vars.RAILWAY_SERVICE || 'taakbeheer' }}
+
+    steps:
+      - name: Kijken of het token er is
+        id: controle
+        run: |
+          if [ -n "$RAILWAY_TOKEN" ]; then
+            echo "klaar=ja" >> "$GITHUB_OUTPUT"
+          else
+            echo "klaar=nee" >> "$GITHUB_OUTPUT"
+            echo "::warning::Geen RAILWAY_TOKEN ingesteld, dus er wordt niet uitgerold. Zie taakbeheer/HOSTING.md om die aan te maken."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.controle.outputs.klaar == 'ja'
+
+      - uses: actions/setup-node@v4
+        if: steps.controle.outputs.klaar == 'ja'
+        with:
+          node-version: '22'
+
+      - name: Railway-CLI installeren
+        if: steps.controle.outputs.klaar == 'ja'
+        run: npm install -g @railway/cli@5
+
+      - name: Uitrollen
+        if: steps.controle.outputs.klaar == 'ja'
+        working-directory: taakbeheer
+        run: railway up --service "$SERVICE" --detach
+
+      - name: Klaar
+        if: steps.controle.outputs.klaar == 'ja'
+        run: |
+          echo "### Uitgerold naar Railway :rocket:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Service: \`$SERVICE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit: \`${GITHUB_SHA:0:7}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Het bouwen loopt verder op Railway. Volg het daar onder **Deploy Logs**." >> "$GITHUB_STEP_SUMMARY"

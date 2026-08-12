@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Taakbeheer voor meerdere gebruikers, in de geest van monday.com",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node test/api.test.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.0.0",
