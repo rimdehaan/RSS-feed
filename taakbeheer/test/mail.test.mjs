@@ -56,7 +56,8 @@ const app = spawn(process.execPath, [join(hier, '..', 'server.js')], {
     NODE_ENV: 'test',
     RESEND_API_KEY: 're_nep_sleutel',
     RESEND_API_URL: `http://127.0.0.1:${mailPoort}/emails`,
-    MAIL_AFZENDER: 'Transafe <taken@transafe.nl>',
+    MAIL_AFZENDER: 'Transafe <taken@transafe.info>',
+    MAIL_ANTWOORD_NAAR: 'info@transafe.info',
     APP_URL: 'https://taakbeheer-production.up.railway.app',
   },
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -106,7 +107,8 @@ try {
 
   const mail = postvak[0];
   check('sleutel meegestuurd', mail.authorization === 'Bearer re_nep_sleutel');
-  check('afzender klopt', mail.body.from === 'Transafe <taken@transafe.nl>');
+  check('afzender klopt', mail.body.from === 'Transafe <taken@transafe.info>');
+  check('antwoorden gaan naar een echte postbus', mail.body.reply_to === 'info@transafe.info', JSON.stringify(mail.body.reply_to));
   check('geadresseerde klopt', Array.isArray(mail.body.to) && mail.body.to[0] === 'anna@transafe.nl');
   check('onderwerp is duidelijk', /uitgenodigd/i.test(mail.body.subject), mail.body.subject);
   check('naam van de uitnodiger staat erin', mail.body.text.includes('Rim de Haan'));

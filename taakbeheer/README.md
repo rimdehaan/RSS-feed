@@ -136,6 +136,7 @@ Twee pakketten van buiten, verder niets:
 | `NODE_ENV` | Zet op `production` zodra je live staat | leeg |
 | `RESEND_API_KEY` | Sleutel om mail te versturen. Leeg = geen mail, wel links | leeg |
 | `MAIL_AFZENDER` | Van wie de mail komt | testadres van Resend |
+| `MAIL_ANTWOORD_NAAR` | Waar antwoorden heen gaan. Leeg = antwoorden komen nergens aan | leeg |
 | `APP_URL` | Adres in maillinks. Leeg = het adres waarop je binnenkwam | leeg |
 
 ---

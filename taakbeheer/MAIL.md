@@ -22,12 +22,11 @@ gratis tot 3000 mails per maand, wat voor uitnodigingen ruimschoots genoeg is.
 
 ## En: het afzenderadres hoeft geen echte mailbox te zijn
 
-Ook een veelvoorkomend misverstand. `taken@transafe.nl` als afzender werkt zonder
+Ook een veelvoorkomend misverstand. `taken@transafe.info` als afzender werkt zonder
 dat er ergens een postbus met die naam bestaat. Het is puur een naam op de envelop.
 
-Het gevolg daarvan is wel: **antwoorden op die mail komen nergens aan.** Wil je dat
-mensen kunnen antwoorden, gebruik dan een adres dat wél bestaat, bijvoorbeeld
-`info@transafe.nl`.
+Het gevolg daarvan is wel: **antwoorden op die mail komen nergens aan.** Daarvoor is
+de instelling `MAIL_ANTWOORD_NAAR` — zie stap 3.
 
 ---
 
@@ -65,32 +64,43 @@ alleen stap 3 nog te doen. Kijk ook in je spamfolder.
 Wil je collega's kunnen uitnodigen, dan is **stap 3 verplicht** — niet optioneel,
 zoals je misschien zou denken.
 
-## Stap 3 — Versturen vanaf transafe.nl
+## Stap 3 — Versturen vanaf je eigen domein
 
 Nodig zodra je iemand anders dan jezelf wilt uitnodigen — zie de waarschuwing
 hierboven. Bijkomend voordeel: de mail belandt niet in de spam en ziet er
 professioneel uit.
 
-1. In Resend: **Domains** → **Add Domain** → vul `transafe.nl` in.
-2. Resend toont een handvol **DNS-regels** (types `TXT`, `MX`, en meestal `CNAME`).
-3. Die regels moeten worden toegevoegd bij de partij waar `transafe.nl` geregistreerd
+**Kies het domein dat in jullie werkmailadressen zit.** Staat je collega bekend als
+`naam@transafe.info`, dan verifieer je `transafe.info` — niet een ander domein dat
+je toevallig ook bezit.
+
+1. In Resend: **Domains** → **Add Domain** → vul je domein in.
+2. Resend toont een handvol **DNS-regels** (meestal een `MX` en twee of drie `TXT`).
+3. Die regels moeten worden toegevoegd bij de partij waar het domein geregistreerd
    staat — je hostingpartij of domeinleverancier.
 4. Klik daarna in Resend op **Verify**. Dat kan tot een uur duren.
 
-> Doe je dit niet zelf? Stuur de regels door naar degene die jullie domein beheert.
-> Dit is een normale vraag; wie DNS beheert weet meteen wat hij ermee moet.
+> Beheer je DNS niet zelf? Stuur Resend's lijst door naar degene die jullie domein
+> beheert, met de vraag of hij die records wil toevoegen. Dat is een normale,
+> alledaagse vraag; wie DNS beheert weet meteen wat ermee moet.
 
-Wat die regels doen: ze zijn het bewijs dat jij toestemming geeft om mail namens
-`transafe.nl` te versturen. Zonder dat bewijs vertrouwen ontvangende mailservers de
-mail niet, en verdwijnt hij in de spam.
+Wat die regels doen: ze zijn het bewijs dat jij toestemming geeft om mail namens dat
+domein te versturen. Zonder dat bewijs vertrouwen ontvangende mailservers de mail
+niet, en verdwijnt hij in de spam — of komt hij helemaal niet aan.
 
-5. Zodra het domein geverifieerd is, voeg je in Railway een tweede variabele toe:
+5. Zodra het domein geverifieerd is, zet je in Railway onder **Variables**:
 
 | Naam | Waarde |
 |---|---|
-| `MAIL_AFZENDER` | `Transafe Taakbeheer <taken@transafe.nl>` |
+| `MAIL_AFZENDER` | `Transafe Taakbeheer <taken@transafe.info>` |
+| `MAIL_ANTWOORD_NAAR` | een postbus die echt bestaat, bijvoorbeeld `info@transafe.info` |
 
 Klik weer op **Deploy**.
+
+Die tweede regelt iets wat je anders pas merkt als het te laat is: `taken@` bestaat
+niet als postbus, dus zonder deze instelling verdwijnt het antwoord van een collega
+in het niets. Met `MAIL_ANTWOORD_NAAR` komt een antwoord netjes aan op een adres dat
+je leest.
 
 ---
 

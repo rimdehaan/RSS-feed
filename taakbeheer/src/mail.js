@@ -4,10 +4,15 @@
 // gewoon op je scherm om zelf door te sturen. De app werkt dus met én zonder mail.
 //
 // Instellen met deze omgevingsvariabelen:
-//   RESEND_API_KEY   de sleutel uit je Resend-account (begint met re_)
-//   MAIL_AFZENDER    van wie de mail komt, bijvoorbeeld "Transafe <taken@transafe.nl>"
+//   RESEND_API_KEY       de sleutel uit je Resend-account (begint met re_)
+//   MAIL_AFZENDER        van wie de mail komt, bijvoorbeeld "Transafe <taken@transafe.info>"
+//   MAIL_ANTWOORD_NAAR   waar antwoorden heen gaan, bijvoorbeeld "info@transafe.info"
+//
+// Dat laatste is handig omdat het afzenderadres geen bestaande postbus hoeft te
+// zijn. Zonder deze instelling verdwijnt een antwoord van een collega in het niets.
 
 const AFZENDER = process.env.MAIL_AFZENDER || 'Taakbeheer <onboarding@resend.dev>';
+const ANTWOORD_NAAR = process.env.MAIL_ANTWOORD_NAAR;
 const ADRES = process.env.RESEND_API_URL || 'https://api.resend.com/emails';
 
 export function mailIsIngesteld() {
@@ -29,7 +34,14 @@ async function stuur({ naar, onderwerp, tekst, html }) {
         authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ from: AFZENDER, to: [naar], subject: onderwerp, text: tekst, html }),
+      body: JSON.stringify({
+        from: AFZENDER,
+        to: [naar],
+        subject: onderwerp,
+        text: tekst,
+        html,
+        ...(ANTWOORD_NAAR ? { reply_to: ANTWOORD_NAAR } : {}),
+      }),
       signal: AbortSignal.timeout(10_000),
     });
 
