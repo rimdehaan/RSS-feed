@@ -115,6 +115,73 @@ vastzetten met een variabele `APP_URL`, bijvoorbeeld
 de uitnodiging alsnog aangemaakt en krijg je de link op je scherm, met de reden
 erbij. Je kunt dus nooit vastlopen doordat de mail hapert.
 
+## Risicoafweging (ISO 27001 en AVG)
+
+Mail laten versturen door een externe dienst is een bewuste keuze met gevolgen.
+Hieronder wat je nodig hebt om die afweging te maken of voor te leggen.
+
+### Welke gegevens verlaten het bedrijf
+
+Alleen bij het uitnodigen en bij wachtwoordherstel, en alleen dit:
+
+| Gegeven | Waarom |
+|---|---|
+| E-mailadres van de ontvanger | Om de mail te bezorgen |
+| Naam van degene die uitnodigt | Staat in de tekst van de mail |
+| De uitnodigings- of herstellink | Is de inhoud van de mail |
+
+Taken, omschrijvingen, opmerkingen en klantgegevens gaan **nooit** mee. Die blijven
+op je eigen server staan.
+
+Wel relevant: e-mailadressen en namen van medewerkers zijn persoonsgegevens. Je
+mailleverancier wordt daarmee een **verwerker**, en hoort dus in je
+verwerkersregister met een verwerkersovereenkomst.
+
+### Wat de DNS-regels betekenen
+
+Ze geven de mailleverancier toestemming om mail te versturen die aantoonbaar van
+jouw domein komt. Twee risico's horen daarbij:
+
+1. **Fout bij het invoeren.** Er mag maar één SPF-regel (`v=spf1`) per naam bestaan.
+   Voegt iemand er een tweede bij in plaats van de bestaande aan te vullen, dan
+   faalt SPF voor *al* je bedrijfsmail. Dit is in de praktijk het grootste risico,
+   en het is menselijk, niet technisch.
+2. **Misbruik bij de leverancier.** Wordt de leverancier of je account daar
+   gekraakt, dan kan iemand overtuigende phishing versturen die als jouw domein
+   door de controle komt.
+
+### Zet het op een subdomein
+
+Beide risico's worden veel kleiner als je niet `transafe.info` verifieert maar
+bijvoorbeeld **`taken.transafe.info`**:
+
+- De records staan náást je bestaande mailinstellingen. Je raakt SPF, DKIM en DMARC
+  van je bedrijfsmail niet aan, dus je kunt de gewone mail niet slopen.
+- Misbruik beperkt zich tot `@taken.transafe.info`. Dat is een adres dat niemand
+  kent, waardoor phishing er meteen vreemd uitziet in plaats van geloofwaardig.
+- Terugdraaien is één actie: verwijder de records van het subdomein. Je hoofddomein
+  is dan nooit geraakt geweest.
+
+Je afzender wordt dan `taken@taken.transafe.info`, of netter met een weergavenaam:
+`Transafe Taakbeheer <taken@taken.transafe.info>`.
+
+### De herstellink is het gevoeligst
+
+Een uitnodiging levert hooguit een account met de rol *lid*. Een **herstellink**
+geeft toegang tot een bestaand account. Loopt die via een externe partij, dan is dat
+een route naar accountovername als die partij gecompromitteerd raakt.
+
+Beperkingen die er al zijn: herstellinks zijn twee dagen geldig, werken één keer,
+en kunnen alleen door een beheerder worden aangemaakt. Wil je ze helemaal niet
+mailen, geef ze dan persoonlijk door — laat `RESEND_API_KEY` leeg en je krijgt ze
+op je scherm.
+
+### Helemaal geen mail is een volwaardige keuze
+
+Voor een team van tien mensen nodig je een paar keer per jaar iemand uit. Het
+kopiëren van een link kost dan dertig seconden per jaar aan ongemak, en bespaart je
+een verwerker in je register, een DNS-wijziging en een leverancier om te beoordelen.
+
 ## Als er iets misgaat
 
 | Wat je ziet in het Team-scherm | Wat het betekent |
