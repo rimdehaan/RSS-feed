@@ -5,7 +5,7 @@
 
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,7 +41,13 @@ const poort = await vrijePoort();
 const BASIS = `http://127.0.0.1:${poort}/api`;
 
 const server = spawn(process.execPath, [join(hier, '..', 'server.js')], {
-  env: { ...process.env, PORT: String(poort), DATABASE_PAD: join(werkmap, 'test.db'), NODE_ENV: 'test' },
+  env: {
+    ...process.env,
+    PORT: String(poort),
+    DATABASE_PAD: join(werkmap, 'test.db'),
+    NODE_ENV: 'test',
+    MAX_BIJLAGE_MB: '1',     // klein, zodat de grensproef snel blijft
+  },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 
@@ -69,21 +75,41 @@ for (let poging = 0; poging < 50; poging++) {
   }
 }
 
-/** Maakt een "browser": onthoudt zijn eigen sessiecookie. */
+/** Hoeveel bestanden staan er op schijf in de bijlagenmap. */
+function bestandenInMap() {
+  try {
+    return readdirSync(join(werkmap, 'bijlagen')).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Maakt een "browser": onthoudt zijn eigen sessiecookie.
+ *   body          → wordt als JSON verstuurd
+ *   rauw          → wordt ongewijzigd verstuurd (voor bestandsuploads)
+ *   rauwAntwoord  → geef tekst en headers terug in plaats van JSON
+ */
 function client() {
   let cookie = '';
   return async (pad, opties = {}) => {
     const res = await fetch(BASIS + pad, {
-      ...opties,
+      method: opties.method,
       headers: {
         ...(opties.body ? { 'content-type': 'application/json' } : {}),
+        ...(opties.headers ?? {}),
         ...(cookie ? { cookie } : {}),
       },
-      body: opties.body ? JSON.stringify(opties.body) : undefined,
+      body: opties.rauw !== undefined ? opties.rauw : (opties.body ? JSON.stringify(opties.body) : undefined),
       redirect: 'manual',
     });
+
     for (const c of res.headers.getSetCookie?.() ?? []) {
       if (c.startsWith('sessie=')) cookie = c.split(';')[0];
+    }
+
+    if (opties.rauwAntwoord) {
+      return { status: res.status, tekst: await res.text(), headers: Object.fromEntries(res.headers) };
     }
     return { status: res.status, data: await res.json().catch(() => ({})) };
   };
@@ -361,6 +387,75 @@ try {
     (await rim(`/borden/${bordVanCarla}`, { method: 'PATCH', body: { naam: 'Bord van Carla' } })).status === 200);
   check('lid kan andermans bord niet verwijderen',
     (await carla('/borden/' + projectA, { method: 'DELETE' })).status === 403);
+
+  // ── Bijlagen ────────────────────────────────────────────────────────────
+  groep('Bijlagen');
+
+  /** Uploadt een bestand zoals de browser dat doet: kale stroom + headers. */
+  async function upload(sessie, taakId, naam, inhoud, type = 'text/plain') {
+    return sessie(`/taken/${taakId}/bijlagen`, {
+      method: 'POST',
+      rauw: inhoud,
+      headers: {
+        'content-type': 'application/octet-stream',
+        'x-bestandsnaam': encodeURIComponent(naam),
+        'x-bestandstype': type,
+      },
+    });
+  }
+
+  const metBijlage = (await rim(`/borden/${bordId}/taken`, { method: 'POST', body: { opdracht: 'Keuring met papieren' } })).data.id;
+
+  r = await upload(rim, metBijlage, 'keuringsrapport.pdf', 'dit stelt een pdf voor');
+  check('bestand geüpload', r.status === 200 && r.data.bestandsnaam === 'keuringsrapport.pdf', JSON.stringify(r.data));
+  check('grootte klopt', r.data.grootte === Buffer.byteLength('dit stelt een pdf voor'));
+  check('met wie het uploadde', r.data.geupload_door_naam === 'Rim de Haan');
+  const bijlageId = r.data.id;
+
+  r = await rim('/taken/' + metBijlage);
+  check('bijlage staat bij de taak', r.data.bijlagen.length === 1);
+  check('en wordt geteld in de lijst',
+    (await rim(`/borden/${bordId}/taken`)).data.find((t) => t.id === metBijlage).aantal_bijlagen === 1);
+  check('aanmaak staat in de historie', r.data.historie.some((h) => h.veld === 'bijlage toegevoegd'));
+
+  r = await rim('/bijlagen/' + bijlageId, { rauwAntwoord: true });
+  check('downloaden geeft de inhoud terug', r.tekst === 'dit stelt een pdf voor', r.tekst);
+  check('altijd als download, nooit als pagina',
+    /^attachment;/.test(r.headers['content-disposition'] ?? ''), r.headers['content-disposition']);
+  check('browser mag het type niet zelf raden', r.headers['x-content-type-options'] === 'nosniff');
+  check('inhoudstype is neutraal', r.headers['content-type'] === 'application/octet-stream');
+
+  check('lege naam wordt geweigerd', (await upload(rim, metBijlage, '', 'iets')).status === 400);
+  check('leeg bestand wordt geweigerd', (await upload(rim, metBijlage, 'leeg.txt', '')).status === 400);
+
+  const opSchijfVoor = bestandenInMap();
+  r = await upload(rim, metBijlage, 'veel-te-groot.zip', 'x'.repeat(1.2 * 1024 * 1024));
+  check('te groot bestand wordt geweigerd', r.status === 413, JSON.stringify(r.data));
+  check('met de grens erbij genoemd', /1 MB/.test(r.data.fout ?? ''), r.data.fout);
+  check('en er blijft niets van achter op schijf', bestandenInMap() === opSchijfVoor,
+    `voor: ${opSchijfVoor}, na: ${bestandenInMap()}`);
+  check('de taak heeft er ook geen regel bij',
+    (await rim('/taken/' + metBijlage)).data.bijlagen.length === 1);
+
+  r = await upload(rim, metBijlage, '../../server.js', 'stiekem');
+  check('padnamen worden onschadelijk gemaakt', r.status === 200 && !r.data.bestandsnaam.includes('/'),
+    r.data.bestandsnaam);
+  await rim('/bijlagen/' + r.data.id, { method: 'DELETE' });
+
+  groep('Bijlagen en afgeschermde borden');
+  const geheimeTaak = (await rim(`/borden/${projectD}/taken`, { method: 'POST', body: { opdracht: 'Vertrouwelijk' } })).data.id;
+  const geheimeBijlage = (await upload(rim, geheimeTaak, 'contract.pdf', 'geheime inhoud')).data.id;
+
+  check('Carla kan er niet bij', (await carla('/bijlagen/' + geheimeBijlage)).status === 404);
+  check('en kan er ook niet één toevoegen', (await upload(carla, geheimeTaak, 'eigen.txt', 'hoi')).status === 404);
+  check('en niet verwijderen', (await carla('/bijlagen/' + geheimeBijlage, { method: 'DELETE' })).status === 404);
+  check('het bestand is er nog', (await rim('/taken/' + geheimeTaak)).data.bijlagen.length === 1);
+
+  groep('Opruimen bij verwijderen');
+  const bestandenVoor = bestandenInMap();
+  await rim('/taken/' + geheimeTaak, { method: 'DELETE' });
+  check('bestand is van schijf verwijderd', bestandenInMap() === bestandenVoor - 1,
+    `voor: ${bestandenVoor}, na: ${bestandenInMap()}`);
 
   groep('Uitloggen');
   await rim('/uitloggen', { method: 'POST' });

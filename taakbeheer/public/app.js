@@ -317,7 +317,11 @@ function rijHtml(taak) {
                 style="background:${KLEUREN[taak.status]}">${opties}</select>
       </td>
       <td>${deadline}</td>
-      <td><button class="knop-link" data-detail="${taak.id}">Bekijk${taak.aantal_opmerkingen ? ` (${taak.aantal_opmerkingen})` : ''}</button></td>
+      <td>
+        <button class="knop-link" data-detail="${taak.id}">Bekijk</button>
+        ${taak.aantal_opmerkingen ? `<span class="zacht" title="opmerkingen" style="margin-left:6px">💬 ${taak.aantal_opmerkingen}</span>` : ''}
+        ${taak.aantal_bijlagen ? `<span class="zacht" title="bijlagen" style="margin-left:4px">📎 ${taak.aantal_bijlagen}</span>` : ''}
+      </td>
       <td><div class="acties">
         <button class="btn btn-secondary btn-sm" data-bewerk="${taak.id}">Bewerken</button>
         <button class="btn btn-danger btn-sm" data-verwijder="${taak.id}">Verwijder</button>
@@ -358,6 +362,7 @@ function kaartHtml(taak) {
           : ''}
         ${taak.deadline ? `<span class="${isVerlopen(taak) ? 'verlopen' : ''}">${datumNL(taak.deadline)}</span>` : ''}
         ${taak.aantal_opmerkingen ? `<span title="opmerkingen">💬 ${taak.aantal_opmerkingen}</span>` : ''}
+        ${taak.aantal_bijlagen ? `<span title="bijlagen">📎 ${taak.aantal_bijlagen}</span>` : ''}
       </div>
     </div>`;
 }
@@ -515,14 +520,23 @@ async function openDetail(id) {
     </span></div>
     <div><span class="naam">Deadline</span><span class="waarde">${taak.deadline ? datumNL(taak.deadline) : '—'}</span></div>`;
 
+  tekenBijlagen(taak.bijlagen);
   tekenOpmerkingen(taak.opmerkingen);
 
   el('historieLijst').innerHTML = taak.historie.length === 0
     ? '<li class="zacht">Nog geen wijzigingen.</li>'
     : taak.historie.map(regel => {
         const wie = esc(regel.gebruiker_naam || 'Iemand');
+        const wanneer = momentNL(regel.aangemaakt_op);
+
         if (regel.veld === 'aangemaakt') {
-          return `<li><b>${wie}</b> maakte deze taak aan — ${momentNL(regel.aangemaakt_op)}</li>`;
+          return `<li><b>${wie}</b> maakte deze taak aan — ${wanneer}</li>`;
+        }
+        if (regel.veld === 'bijlage toegevoegd') {
+          return `<li><b>${wie}</b> voegde de bijlage <b>${esc(regel.nieuwe_waarde)}</b> toe — ${wanneer}</li>`;
+        }
+        if (regel.veld === 'bijlage verwijderd') {
+          return `<li><b>${wie}</b> verwijderde de bijlage <b>${esc(regel.oude_waarde)}</b> — ${wanneer}</li>`;
         }
         return `<li><b>${wie}</b> wijzigde <b>${esc(regel.veld)}</b>
           van “${esc(regel.oude_waarde || 'leeg')}” naar “${esc(regel.nieuwe_waarde || 'leeg')}”
@@ -532,6 +546,82 @@ async function openDetail(id) {
   el('nieuweOpmerking').value = '';
   openVenster('detailVenster');
 }
+
+// ── Bijlagen ─────────────────────────────────────────────────────────────
+
+function leesbareGrootte(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' kB';
+  return (bytes / 1024 / 1024).toFixed(1).replace('.', ',') + ' MB';
+}
+
+const PAPERCLIP = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`;
+
+function tekenBijlagen(bijlagen) {
+  el('bijlagenLijst').innerHTML = bijlagen.length === 0
+    ? '<p class="zacht" style="font-size:.85rem">Nog geen bijlagen.</p>'
+    : bijlagen.map(b => `
+        <div class="bijlage">
+          ${PAPERCLIP}
+          <a href="/api/bijlagen/${b.id}" download>${esc(b.bestandsnaam)}</a>
+          <span class="bij">${leesbareGrootte(b.grootte)} · ${esc(b.geupload_door_naam || 'onbekend')}</span>
+          ${(b.geupload_door === staat.ik.id || staat.ik.rol === 'beheerder')
+            ? `<button class="weg" data-bijlage="${b.id}" title="Verwijderen">verwijder</button>` : ''}
+        </div>`).join('');
+
+  el('bijlagenLijst').querySelectorAll('[data-bijlage]').forEach(knop => {
+    knop.addEventListener('click', async () => {
+      if (!confirm('Deze bijlage verwijderen?')) return;
+      await api('/bijlagen/' + knop.dataset.bijlage, { method: 'DELETE' });
+      openDetail(staat.detailId);
+      herlaadTaken();
+    });
+  });
+}
+
+/** Stuurt het bestand als kale stroom; de naam gaat mee in een header. */
+async function uploadBijlage(bestand) {
+  const antwoord = await fetch(`/api/taken/${staat.detailId}/bijlagen`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/octet-stream',
+      'x-bestandsnaam': encodeURIComponent(bestand.name),
+      'x-bestandstype': bestand.type || 'onbekend',
+    },
+    body: bestand,
+  });
+
+  const data = await antwoord.json().catch(() => ({}));
+  if (!antwoord.ok) throw new Error(data.fout || 'Uploaden is mislukt.');
+  return data;
+}
+
+el('bijlageInvoer').addEventListener('change', async (gebeurtenis) => {
+  const bestanden = [...gebeurtenis.target.files];
+  gebeurtenis.target.value = '';          // zodat hetzelfde bestand opnieuw kan
+  if (bestanden.length === 0) return;
+
+  const hint = el('bijlageHint');
+  hint.classList.remove('fout');
+
+  for (const [nummer, bestand] of bestanden.entries()) {
+    hint.textContent = bestanden.length > 1
+      ? `Bezig met ${nummer + 1} van ${bestanden.length}: ${bestand.name}…`
+      : `Bezig met ${bestand.name}…`;
+
+    try {
+      await uploadBijlage(bestand);
+    } catch (fout) {
+      hint.textContent = `${bestand.name}: ${fout.message}`;
+      hint.classList.add('fout');
+      break;
+    }
+  }
+
+  if (!hint.classList.contains('fout')) hint.textContent = '';
+  openDetail(staat.detailId);
+  herlaadTaken();
+});
 
 function tekenOpmerkingen(opmerkingen) {
   el('opmerkingenLijst').innerHTML = opmerkingen.length === 0

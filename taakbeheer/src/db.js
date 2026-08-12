@@ -3,10 +3,15 @@
 
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 
 const pad = process.env.DATABASE_PAD || './data/taakbeheer.db';
 mkdirSync(dirname(pad), { recursive: true });
+
+// Bijlagen komen naast de database te staan, dus op dezelfde schijf. Eén plek
+// om een back-up van te maken, en geen externe opslagdienst nodig.
+export const BIJLAGEMAP = join(dirname(pad), 'bijlagen');
+mkdirSync(BIJLAGEMAP, { recursive: true });
 
 export const db = new Database(pad);
 
@@ -85,6 +90,17 @@ db.exec(`
     gebruiker_id  INTEGER REFERENCES gebruikers(id) ON DELETE SET NULL,
     tekst         TEXT NOT NULL,
     aangemaakt_op TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS bijlagen (
+    id             INTEGER PRIMARY KEY,
+    taak_id        INTEGER NOT NULL REFERENCES taken(id) ON DELETE CASCADE,
+    bestandsnaam   TEXT NOT NULL,   -- zoals de gebruiker hem kent
+    opslagnaam     TEXT NOT NULL,   -- willekeurige naam op schijf
+    type           TEXT,
+    grootte        INTEGER NOT NULL,
+    geupload_door  INTEGER REFERENCES gebruikers(id) ON DELETE SET NULL,
+    aangemaakt_op  TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS historie (

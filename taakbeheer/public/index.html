@@ -164,7 +164,15 @@
       <div class="detail-meta" id="detailMeta"></div>
       <div class="detail-tekst" id="detailTekst"></div>
 
-      <div class="blok-kop">Opmerkingen</div>
+      <div class="blok-kop">Bijlagen</div>
+      <div id="bijlagenLijst"></div>
+      <div class="bijlage-toevoegen">
+        <label class="btn btn-secondary btn-sm" for="bijlageInvoer">Bestand kiezen…</label>
+        <input type="file" id="bijlageInvoer" multiple hidden />
+        <span class="bijlage-hint" id="bijlageHint"></span>
+      </div>
+
+      <div class="blok-kop" style="margin-top:24px">Opmerkingen</div>
       <div id="opmerkingenLijst"></div>
       <div class="nieuwe-opmerking">
         <textarea id="nieuweOpmerking" placeholder="Schrijf een opmerking..."></textarea>

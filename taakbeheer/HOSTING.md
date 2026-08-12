@@ -144,8 +144,10 @@ is en `DATABASE_PAD` exact `/data/taakbeheer.db`.
 
 ## Back-ups
 
-Je hele administratie is dat ene bestand op het volume. Railway kan snapshots van
-volumes maken — zet dat aan, of haal het bestand er af en toe zelf af.
+Je administratie staat op het volume: het databasebestand én de map `bijlagen`
+met de geüploade bestanden. Maak dus een kopie van de **hele `/data`-map**, niet
+alleen van het databasebestand. Railway kan snapshots van volumes maken — zet dat
+aan, of haal de map er af en toe zelf af.
 
 Een back-up die je nooit hebt teruggezet is geen back-up. Probeer één keer of je van
 een kopie kunt starten.

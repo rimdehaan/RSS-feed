@@ -353,6 +353,27 @@ tbody td { padding: 10px 16px; font-size: 0.87rem; color: var(--donker); vertica
 }
 .opmerking .weg:hover { color: var(--rood); }
 
+/* ── Bijlagen ── */
+.bijlage {
+  display: flex; align-items: center; gap: 10px; padding: 9px 0;
+  border-bottom: 1px solid var(--lijn); font-size: 0.86rem;
+}
+.bijlage:last-of-type { border-bottom: none; }
+.bijlage svg { color: var(--blauw); flex-shrink: 0; }
+.bijlage a { color: var(--donker); text-decoration: none; font-weight: 600; word-break: break-all; }
+.bijlage a:hover { color: var(--blauw); text-decoration: underline; }
+.bijlage .bij { color: var(--grijs); font-size: 0.75rem; white-space: nowrap; margin-left: auto; }
+.bijlage .weg {
+  background: none; border: none; color: var(--grijs);
+  cursor: pointer; font-size: 0.75rem; padding: 0 2px;
+}
+.bijlage .weg:hover { color: var(--rood); }
+.bijlage.bezig { opacity: 0.6; }
+
+.bijlage-toevoegen { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.bijlage-hint { font-size: 0.78rem; color: var(--grijs); }
+.bijlage-hint.fout { color: var(--rood); }
+
 .nieuwe-opmerking { display: flex; gap: 8px; margin-top: 12px; }
 .nieuwe-opmerking textarea {
   flex: 1; min-height: 60px; padding: 9px 12px; border: 1px solid var(--grijs);

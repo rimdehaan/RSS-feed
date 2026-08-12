@@ -41,6 +41,7 @@ administratie — zie *Back-ups* verderop.
 | Wie ziet wat | Per project in te stellen: iedereen, of alleen gekozen mensen |
 | Tabelweergave | Zoals je prototype: opdracht, uitvoerend, status, deadline, omschrijving |
 | Kanban | De zes statussen als kolommen, kaarten ertussen slepen |
+| Bijlagen | Bestanden bij een taak, zodat de uitvoerder alles bij de hand heeft. Staan op je eigen server, niet bij een externe dienst |
 | Opmerkingen | Een gesprek per taak, met naam en tijdstip |
 | Historie | Automatisch: wie veranderde welk veld, van wat naar wat |
 | CSV-export | Exporteert wat er op dat moment gefilterd op je scherm staat |
@@ -68,6 +69,29 @@ dat hij niet kan openen:
    rest niet, en de server weigert het ook als je het toch probeert.
 
 Instellingen wijzigen mag een beheerder, en degene die het bord heeft aangemaakt.
+
+### Waar bijlagen staan
+
+Naast de database, in `bijlagen/` op dezelfde schijf. Bewust geen externe
+opslagdienst: dat zou weer een verwerker in je register betekenen, net als bij
+mail. Je bestanden blijven op je eigen server.
+
+**Voor je back-up betekent dit: kopieer de hele `/data`-map, niet alleen het
+databasebestand.** Anders heb je straks wel je taken terug, maar geen bijlagen.
+
+Drie dingen die de opslag veilig houden:
+
+- Op schijf krijgt elk bestand een willekeurige naam. De naam die jij kiest staat
+  alleen in de database, dus een bestandsnaam als `../../server.js` kan nergens
+  buiten de bijlagenmap schrijven.
+- Downloaden gaat altijd als download, nooit als pagina. Een geüpload html- of
+  svg-bestand zou anders als onderdeel van deze site kunnen draaien en bij de
+  sessie van de kijker kunnen komen.
+- Bijlagen volgen de zichtbaarheid van hun bord. Kun je het bord niet zien, dan
+  kun je de bestanden niet opvragen, toevoegen of verwijderen.
+
+Standaard maximaal 10 MB per bestand en 20 bestanden per taak. Verwijder je een
+taak of een bord, dan gaan de bestanden ook echt van schijf.
 
 ---
 
@@ -181,6 +205,7 @@ Twee pakketten van buiten, verder niets:
 | `PORT` | Poort waarop de server luistert | `3000` |
 | `DATABASE_PAD` | Waar het databasebestand staat | `./data/taakbeheer.db` |
 | `NODE_ENV` | Zet op `production` zodra je live staat | leeg |
+| `MAX_BIJLAGE_MB` | Grootste bestand dat je mag uploaden | `10` |
 
 ---
 

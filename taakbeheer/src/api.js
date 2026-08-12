@@ -3,7 +3,9 @@
 
 import { Router } from 'express';
 import { randomBytes } from 'node:crypto';
-import { db, STATUSSEN, aantalGebruikers, logHistorie } from './db.js';
+import { createWriteStream, createReadStream, unlink, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { db, BIJLAGEMAP, STATUSSEN, aantalGebruikers, logHistorie } from './db.js';
 import {
   hashWachtwoord, wachtwoordKlopt, maakSessie, verwijderSessie,
   vereistLogin, vereistBeheerder,
@@ -414,7 +416,15 @@ api.delete('/borden/:id', vereistLogin, (req, res) => {
     return res.status(403).json({ fout: 'Alleen een beheerder of de maker van dit bord kan het verwijderen.' });
   }
 
+  const bestanden = db.prepare(
+    `SELECT bl.opslagnaam FROM bijlagen bl
+       JOIN taken t ON t.id = bl.taak_id
+      WHERE t.bord_id = ?`
+  ).all(bord.id);
+
   db.prepare('DELETE FROM borden WHERE id = ?').run(bord.id);
+  bestanden.forEach((b) => verwijderBestand(b.opslagnaam));
+
   res.json({ ok: true });
 });
 
@@ -424,7 +434,8 @@ const TAAK_SELECT = `
   SELECT t.id, t.bord_id, t.opdracht, t.uitvoerend_id, t.status, t.deadline,
          t.omschrijving, t.positie, t.aangemaakt_op, t.gewijzigd_op,
          g.naam AS uitvoerend_naam,
-         (SELECT COUNT(*) FROM opmerkingen o WHERE o.taak_id = t.id) AS aantal_opmerkingen
+         (SELECT COUNT(*) FROM opmerkingen o WHERE o.taak_id = t.id) AS aantal_opmerkingen,
+         (SELECT COUNT(*) FROM bijlagen bl WHERE bl.taak_id = t.id) AS aantal_bijlagen
     FROM taken t
     LEFT JOIN gebruikers g ON g.id = t.uitvoerend_id
 `;
@@ -495,6 +506,13 @@ api.get('/taken/:id', vereistLogin, (req, res) => {
     `SELECT o.id, o.tekst, o.aangemaakt_op, o.gebruiker_id, g.naam AS gebruiker_naam
        FROM opmerkingen o LEFT JOIN gebruikers g ON g.id = o.gebruiker_id
       WHERE o.taak_id = ? ORDER BY o.aangemaakt_op, o.id`
+  ).all(id);
+
+  taak.bijlagen = db.prepare(
+    `SELECT b.id, b.bestandsnaam, b.type, b.grootte, b.aangemaakt_op,
+            b.geupload_door, g.naam AS geupload_door_naam
+       FROM bijlagen b LEFT JOIN gebruikers g ON g.id = b.geupload_door
+      WHERE b.taak_id = ? ORDER BY b.aangemaakt_op, b.id`
   ).all(id);
 
   taak.historie = db.prepare(
@@ -594,7 +612,149 @@ api.delete('/taken/:id', vereistLogin, (req, res) => {
   const taak = zichtbareTaak(req.gebruiker, req.params.id);
   if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
 
+  // De databaseregels verdwijnen vanzelf, de bestanden op schijf niet.
+  const bestanden = db.prepare('SELECT opslagnaam FROM bijlagen WHERE taak_id = ?').all(taak.id);
   db.prepare('DELETE FROM taken WHERE id = ?').run(taak.id);
+  bestanden.forEach((b) => verwijderBestand(b.opslagnaam));
+
+  res.json({ ok: true });
+});
+
+// ── Bijlagen ─────────────────────────────────────────────────────────────
+// Het bestand komt als kale stroom binnen, met de naam in een header. Dat
+// scheelt een pakket voor formulierupload en is goed te volgen.
+//
+// Op schijf krijgt elk bestand een willekeurige naam. De naam die de gebruiker
+// koos bewaren we alleen in de database: zo kan niemand met een naam als
+// "../../server.js" buiten de opslagmap schrijven.
+
+const MAX_BIJLAGE = Number(process.env.MAX_BIJLAGE_MB || 10) * 1024 * 1024;
+const MAX_PER_TAAK = 20;
+
+function schoneBestandsnaam(ruw) {
+  return String(ruw ?? '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')   // stuurtekens
+    .replace(/[\\/]/g, '-')                  // padscheidingen
+    .trim()
+    .slice(0, 150);
+}
+
+function verwijderBestand(opslagnaam) {
+  unlink(join(BIJLAGEMAP, opslagnaam), () => {});   // al weg is ook goed
+}
+
+api.post('/taken/:id/bijlagen', vereistLogin, (req, res) => {
+  const taak = zichtbareTaak(req.gebruiker, req.params.id);
+  if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
+
+  const bestandsnaam = schoneBestandsnaam(decodeURIComponent(req.get('x-bestandsnaam') || ''));
+  if (!bestandsnaam) return res.status(400).json({ fout: 'De naam van het bestand ontbreekt.' });
+
+  const aantal = db.prepare('SELECT COUNT(*) AS n FROM bijlagen WHERE taak_id = ?').get(taak.id).n;
+  if (aantal >= MAX_PER_TAAK) {
+    return res.status(400).json({ fout: `Er passen maximaal ${MAX_PER_TAAK} bestanden bij één taak.` });
+  }
+
+  const teGroot = `Dit bestand is te groot. Maximaal ${Math.round(MAX_BIJLAGE / 1024 / 1024)} MB per bestand.`;
+
+  /**
+   * Afbreken terwijl de browser nog aan het versturen is. De verbinding moet
+   * daarna dicht: laat je hem open, dan hergebruikt de browser hem voor het
+   * volgende verzoek en loopt dát verzoek stuk op de resten van deze upload.
+   */
+  const stopMet = (status, fout) => {
+    res.setHeader('connection', 'close');
+    res.status(status).json({ fout });
+    res.on('finish', () => req.destroy());
+  };
+
+  // De browser stuurt vooraf hoe groot het bestand is. Dan hoeven we een te
+  // groot bestand niet eerst helemaal naar schijf te schrijven.
+  if (Number(req.get('content-length')) > MAX_BIJLAGE) {
+    return stopMet(413, teGroot);
+  }
+
+  const opslagnaam = randomBytes(16).toString('hex');
+  const schrijver = createWriteStream(join(BIJLAGEMAP, opslagnaam));
+  let bytes = 0;
+  let afgebroken = false;
+
+  const afbreken = (status, fout) => {
+    if (afgebroken) return;
+    afgebroken = true;
+    req.unpipe(schrijver);
+    schrijver.destroy();
+    verwijderBestand(opslagnaam);
+    stopMet(status, fout);
+  };
+
+  req.on('data', (stuk) => {
+    bytes += stuk.length;
+    if (bytes > MAX_BIJLAGE) afbreken(413, teGroot);
+  });
+
+  req.on('aborted', () => afbreken(400, 'De upload is afgebroken.'));
+  schrijver.on('error', () => afbreken(500, 'Opslaan is mislukt.'));
+
+  schrijver.on('finish', () => {
+    if (afgebroken) return;
+    if (bytes === 0) return afbreken(400, 'Het bestand is leeg.');
+
+    const r = db.prepare(
+      `INSERT INTO bijlagen (taak_id, bestandsnaam, opslagnaam, type, grootte, geupload_door)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(taak.id, bestandsnaam, opslagnaam, tekst(req.get('x-bestandstype'), 100) || null, bytes, req.gebruiker.id);
+
+    logHistorie(taak.id, req.gebruiker.id, 'bijlage toegevoegd', null, bestandsnaam);
+    res.json(db.prepare(
+      `SELECT b.id, b.bestandsnaam, b.type, b.grootte, b.aangemaakt_op, g.naam AS geupload_door_naam
+         FROM bijlagen b LEFT JOIN gebruikers g ON g.id = b.geupload_door WHERE b.id = ?`
+    ).get(r.lastInsertRowid));
+  });
+
+  req.pipe(schrijver);
+});
+
+api.get('/bijlagen/:id', vereistLogin, (req, res) => {
+  const bijlage = db.prepare('SELECT * FROM bijlagen WHERE id = ?').get(Number(req.params.id));
+  if (!bijlage || !zichtbareTaak(req.gebruiker, bijlage.taak_id)) {
+    return res.status(404).json({ fout: 'Bijlage niet gevonden.' });
+  }
+
+  const pad = join(BIJLAGEMAP, bijlage.opslagnaam);
+  try {
+    statSync(pad);
+  } catch {
+    return res.status(404).json({ fout: 'Het bestand staat niet meer op de server.' });
+  }
+
+  // Altijd downloaden, nooit tonen in het scherm. Een geüpload html- of
+  // svg-bestand zou anders als pagina van deze site kunnen draaien, en dan bij
+  // de sessie van de kijker kunnen komen.
+  const veiligeNaam = bijlage.bestandsnaam.replace(/["\\]/g, '');
+  res.setHeader('content-type', 'application/octet-stream');
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('content-length', bijlage.grootte);
+  res.setHeader(
+    'content-disposition',
+    `attachment; filename="${veiligeNaam.replace(/[^\x20-\x7e]/g, '_')}"; ` +
+    `filename*=UTF-8''${encodeURIComponent(bijlage.bestandsnaam)}`
+  );
+
+  createReadStream(pad).pipe(res);
+});
+
+api.delete('/bijlagen/:id', vereistLogin, (req, res) => {
+  const bijlage = db.prepare('SELECT * FROM bijlagen WHERE id = ?').get(Number(req.params.id));
+  if (!bijlage) return res.json({ ok: true });
+
+  const taak = zichtbareTaak(req.gebruiker, bijlage.taak_id);
+  if (!taak) return res.status(404).json({ fout: 'Bijlage niet gevonden.' });
+
+  db.prepare('DELETE FROM bijlagen WHERE id = ?').run(bijlage.id);
+  verwijderBestand(bijlage.opslagnaam);
+  logHistorie(taak.id, req.gebruiker.id, 'bijlage verwijderd', bijlage.bestandsnaam, null);
+
   res.json({ ok: true });
 });
 
