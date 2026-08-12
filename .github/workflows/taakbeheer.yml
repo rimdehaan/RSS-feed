@@ -2,10 +2,11 @@
 #
 # Wat er gebeurt bij elke push:
 #   1. De tests draaien. Zakken die, dan stopt alles hier.
-#   2. Alleen vanaf de hoofdbranch (of als je het zelf start) gaat het naar Railway.
+#   2. Vanaf de hoofdbranch gaat het daarna naar Railway. Werk je op een andere
+#      branch, dan draaien alleen de tests.
 #
-# Handmatig uitrollen kan via het tabblad Actions op GitHub:
-# kies deze workflow, klik "Run workflow", kies je branch.
+# Handmatig uitrollen kan ook: tabblad Actions op GitHub, klik links op
+# "Taakbeheer", dan rechts op "Run workflow".
 #
 # Instellen: zie taakbeheer/HOSTING.md
 
@@ -47,8 +48,9 @@ jobs:
   deploy:
     name: Uitrollen naar Railway
     needs: test
-    # Alleen vanaf de hoofdbranch, of wanneer je het zelf start vanuit Actions.
-    if: github.ref_name == 'main' || github.event_name == 'workflow_dispatch'
+    # Alleen vanaf de hoofdbranch van de repo — hoe die ook heet — of wanneer je
+    # het zelf start vanuit het Actions-tabblad.
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     concurrency:
       # Nooit twee keer tegelijk uitrollen.

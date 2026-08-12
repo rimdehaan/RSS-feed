@@ -99,16 +99,23 @@ meer uitlezen — jij ook niet. Kwijt? Maak dan een nieuwe in Railway.
 
 ### Stap 9: Uitrollen
 
-1. Ga op GitHub naar het tabblad **Actions**.
-2. Kies links de workflow **Taakbeheer**.
-3. Klik **Run workflow**, kies je branch, en bevestig.
+Dit gaat vanzelf: elke push naar je **hoofdbranch** die de tests haalt, rolt uit.
+Welke dat is, zie je op GitHub bovenaan het tabblad **Code**.
 
-Je ziet nu twee blokken: eerst **Tests**, dan **Uitrollen naar Railway**. Zakken de
+Wil je het zelf starten, bijvoorbeeld vanaf een andere branch:
+
+1. Ga op GitHub naar het tabblad **Actions**.
+2. Klik links op **Taakbeheer** — niet op "All workflows", want de knop hoort bij
+   de workflow zelf.
+3. Rechts verschijnt **Run workflow**. Kies je branch en bevestig.
+
+Je ziet dan twee blokken: eerst **Tests**, dan **Uitrollen naar Railway**. Zakken de
 tests, dan gebeurt er niets — dat is het hele punt.
 
-Daarna gaat het vanzelf: elke push naar `main` die de tests haalt, rolt uit. Werk je
-op een andere branch, dan draaien alleen de tests; uitrollen doe je dan met de knop
-**Run workflow**.
+> **Een groen vinkje betekent niet automatisch dat er is uitgerold.** Draaide de
+> workflow op een andere branch dan de hoofdbranch, dan zijn alleen de tests
+> gedaan en is het uitrolblok overgeslagen. Klik op de run: staan er twee blokken
+> of één?
 
 ### Stap 10: In gebruik nemen
 
