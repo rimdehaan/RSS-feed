@@ -16,16 +16,22 @@ deze ruim genoeg is.
 1. Ga naar <https://railway.com> en klik **Login** → **Login with GitHub**.
 2. Railway vraagt om een abonnement voordat je kunt uitrollen. Kies **Hobby**.
 
-### Stap 2: Een lege service aanmaken
+### Stap 2: Een leeg project met een lege service
 
 1. Klik **New Project**.
-2. Kies **Empty Service** — dus *niet* "Deploy from GitHub repo".
+2. Kies onderaan **Empty Project** — dus *niet* "GitHub Repository".
 
 Dat lijkt tegen-intuïtief, maar het is met opzet: de code wordt straks aangeleverd
-door GitHub Actions, nadat de tests zijn geslaagd. Koppel je hier je repo, dan rolt
-Railway óók zelf uit en krijg je elke wijziging dubbel — ook als de tests zakken.
+door GitHub Actions, nadat de tests zijn geslaagd. Kies je hier "GitHub Repository",
+dan rolt Railway óók zelf uit en krijg je elke wijziging dubbel — ook als de tests
+zakken.
 
-3. Klik op de service, ga naar **Settings** → **Service Name** en noem hem
+Railway kent twee niveaus. Het **project** is de map eromheen; de **service** is de
+app die echt draait. Je hebt er dus allebei één nodig.
+
+3. Je krijgt een leeg vlak te zien. Klik daar op **Create** (of het plusje) en kies
+   **Empty Service**.
+4. Klik op de service → **Settings** → **Service Name**, en noem hem
    **`taakbeheer`**. Die naam moet kloppen met de workflow.
 
 ### Stap 3: Regio op Amsterdam
@@ -159,7 +165,7 @@ oplossing.
 
 ---
 
-## Had je al "Deploy from GitHub repo" aangezet?
+## Had je al "GitHub Repository" gekozen?
 
 Dan rolt Railway zelf ook uit, en krijg je elke wijziging dubbel — zonder dat de
 tests iets tegenhouden. Ga naar **Settings** → **Source** en ontkoppel de repo.
