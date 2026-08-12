@@ -45,16 +45,31 @@ Klik op je service → tabblad **Variables** → **New Variable**:
 |---|---|
 | `RESEND_API_KEY` | de sleutel uit stap 1 |
 
-Klik daarna op **Deploy** om het toe te passen. Dat is genoeg om te beginnen: de app
-verstuurt nu vanaf `onboarding@resend.dev`, een testadres van Resend.
+Klik daarna op **Deploy** om het toe te passen. Zonder die klik blijft de oude
+versie draaien en verandert er niets.
 
-**Probeer het meteen:** nodig jezelf uit op een privéadres. Kijk ook in je
-spamfolder — dat testadres komt daar vaak in terecht. Dat is precies de reden voor
-de volgende stap.
+### Let op: zolang je domein niet geverifieerd is, mag je maar naar één adres mailen
+
+Resend staat in testmodus alleen mail toe naar **het adres waarmee je je Resend-account
+hebt aangemaakt**. Naar collega's mailen lukt dan nog niet; je krijgt in het
+Team-scherm een melding als *"You can only send testing emails to your own email
+address"*.
+
+Dat is geen fout in de app. Het is Resend die voorkomt dat verse accounts spam
+versturen.
+
+**Probeer het dus eerst op jezelf:** nodig jezelf uit op precies het adres waarmee je
+je bij Resend hebt aangemeld. Komt die mail aan, dan werkt de hele keten en hoef je
+alleen stap 3 nog te doen. Kijk ook in je spamfolder.
+
+Wil je collega's kunnen uitnodigen, dan is **stap 3 verplicht** — niet optioneel,
+zoals je misschien zou denken.
 
 ## Stap 3 — Versturen vanaf transafe.nl
 
-Voor mail die niet in de spam belandt en er professioneel uitziet.
+Nodig zodra je iemand anders dan jezelf wilt uitnodigen — zie de waarschuwing
+hierboven. Bijkomend voordeel: de mail belandt niet in de spam en ziet er
+professioneel uit.
 
 1. In Resend: **Domains** → **Add Domain** → vul `transafe.nl` in.
 2. Resend toont een handvol **DNS-regels** (types `TXT`, `MX`, en meestal `CNAME`).
@@ -96,6 +111,7 @@ erbij. Je kunt dus nooit vastlopen doordat de mail hapert.
 |---|---|
 | `Er is geen mailsleutel ingesteld` | `RESEND_API_KEY` staat niet in Railway, of je hebt na het toevoegen niet op Deploy geklikt |
 | `Domein is niet geverifieerd` | De DNS-regels uit stap 3 staan er nog niet, of `MAIL_AFZENDER` gebruikt een domein dat je nog niet hebt geverifieerd |
+| `You can only send testing emails to your own email address` | Je domein is nog niet geverifieerd. Nodig eerst jezelf uit op je Resend-adres, en doe daarna stap 3 |
 | `Mailserver gaf status 401` | De sleutel klopt niet. Maak een nieuwe in Resend |
 | `Mailserver gaf status 429` | Te veel mail in korte tijd. Even wachten |
 | Mail komt aan in spam | Je verstuurt nog vanaf het testadres. Doe stap 3 |
