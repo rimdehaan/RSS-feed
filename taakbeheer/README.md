@@ -36,7 +36,6 @@ administratie — zie *Back-ups* verderop.
 | Uitnodigen | Alleen een beheerder voegt mensen toe. Je krijgt een link die je zelf doorstuurt |
 | Rollen | *Beheerder* mag uitnodigen en accounts beheren, *lid* werkt gewoon mee |
 | Wachtwoord kwijt | Een beheerder maakt een eenmalige herstellink, twee dagen geldig |
-| Mail | Uitnodigingen en herstellinks worden gemaild zodra je dat aanzet — zie [MAIL.md](MAIL.md). Zonder instelling krijg je de link op je scherm om zelf door te sturen |
 | Borden | Meerdere borden naast elkaar, bijvoorbeeld per project of per klant |
 | Tabelweergave | Zoals je prototype: opdracht, uitvoerend, status, deadline, omschrijving |
 | Kanban | De zes statussen als kolommen, kaarten ertussen slepen |
@@ -97,12 +96,40 @@ volume maken. Een back-up die je nooit hebt teruggezet is geen back-up: probeer
 
 Bewust weggelaten, zodat het overzichtelijk blijft:
 
+- **Geen mail vanuit de app.** Zie hieronder — dit is een besluit, geen omissie.
 - **Iedereen ziet alle borden.** Er is nog geen instelling per bord voor wie
   erbij mag. Voor een team van 2 tot 10 mensen is dat meestal prima; zodra er
   klanten of externen bij komen is dit het eerste wat je nodig hebt.
 - **Geen live bijwerken.** Zie je een wijziging van een collega niet, dan is
   verversen genoeg. Automatisch bijwerken kan later.
 - **Geen bijlagen, geen tijdlijn, geen automatiseringen.**
+
+### Waarom er geen mail in zit
+
+Dit heeft er kort in gezeten en is er bewust weer uit gehaald. Voeg het niet
+terug zonder overleg met de eigenaar.
+
+De reden: Transafe is ISO 27001-gecertificeerd. Mail versturen namens het eigen
+domein vraagt DNS-wijzigingen bij een externe partij, en dat brengt drie dingen
+mee die niet opwegen tegen het gemak:
+
+1. **Een verwerker erbij.** E-mailadressen en namen van medewerkers zijn
+   persoonsgegevens, dus de mailleverancier hoort in het verwerkersregister met
+   een verwerkersovereenkomst.
+2. **Risico voor de bestaande bedrijfsmail.** Er mag maar één SPF-regel per naam
+   bestaan. Wordt er een tweede toegevoegd in plaats van de bestaande aangevuld,
+   dan faalt SPF voor álle mail van het bedrijf.
+3. **Een route naar accountovername.** Herstellinks geven toegang tot een
+   bestaand account. Die door een externe partij laten lopen is een risico dat je
+   voor het gemak van een paar uitnodigingen per jaar niet hoeft te nemen.
+
+Daar staat weinig winst tegenover: een team van tien mensen nodigt een paar keer
+per jaar iemand uit. Een link kopiëren en persoonlijk doorsturen kost seconden.
+
+Komt dit terug op de agenda — bijvoorbeeld bij automatische deadlineherinneringen,
+waar het wél echt iets oplevert — weeg dan deze drie punten opnieuw. Verifieer in
+dat geval een **subdomein** (`taken.transafe.info`) en nooit het hoofddomein: dan
+blijft de bestaande bedrijfsmail onaangeroerd en is terugdraaien één handeling.
 
 ---
 
@@ -134,10 +161,6 @@ Twee pakketten van buiten, verder niets:
 | `PORT` | Poort waarop de server luistert | `3000` |
 | `DATABASE_PAD` | Waar het databasebestand staat | `./data/taakbeheer.db` |
 | `NODE_ENV` | Zet op `production` zodra je live staat | leeg |
-| `RESEND_API_KEY` | Sleutel om mail te versturen. Leeg = geen mail, wel links | leeg |
-| `MAIL_AFZENDER` | Van wie de mail komt | testadres van Resend |
-| `MAIL_ANTWOORD_NAAR` | Waar antwoorden heen gaan. Leeg = antwoorden komen nergens aan | leeg |
-| `APP_URL` | Adres in maillinks. Leeg = het adres waarop je binnenkwam | leeg |
 
 ---
 

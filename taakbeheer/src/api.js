@@ -8,7 +8,6 @@ import {
   hashWachtwoord, wachtwoordKlopt, maakSessie, verwijderSessie,
   vereistLogin, vereistBeheerder,
 } from './auth.js';
-import { mailIsIngesteld, stuurUitnodiging, stuurHerstel } from './mail.js';
 
 const api = Router();
 
@@ -26,13 +25,6 @@ function geldigEmail(email) {
 function datumOfNull(waarde) {
   const d = tekst(waarde, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
-}
-
-/** Het webadres waarop de app draait, om links in mails mee te bouwen. */
-function basisUrl(req) {
-  const ingesteld = process.env.APP_URL;
-  if (ingesteld) return ingesteld.replace(/\/+$/, '');
-  return `${req.protocol}://${req.get('host')}`;
 }
 
 // ── Eerste installatie ───────────────────────────────────────────────────
@@ -93,7 +85,7 @@ api.post('/uitloggen', (req, res) => {
 });
 
 api.get('/ik', (req, res) => {
-  res.json({ gebruiker: req.gebruiker, statussen: STATUSSEN, mail: mailIsIngesteld() });
+  res.json({ gebruiker: req.gebruiker, statussen: STATUSSEN });
 });
 
 // ── Uitnodigingen ────────────────────────────────────────────────────────
@@ -148,7 +140,7 @@ api.get('/uitnodigingen', vereistBeheerder, (req, res) => {
   ).all());
 });
 
-api.post('/uitnodigingen', vereistBeheerder, async (req, res) => {
+api.post('/uitnodigingen', vereistBeheerder, (req, res) => {
   const email = tekst(req.body.email, 160).toLowerCase();
   const rol = req.body.rol === 'beheerder' ? 'beheerder' : 'lid';
 
@@ -177,12 +169,9 @@ api.post('/uitnodigingen', vereistBeheerder, async (req, res) => {
     'INSERT INTO uitnodigingen (token, email, rol, uitgenodigd_door, verloopt_op) VALUES (?, ?, ?, ?, ?)'
   ).run(token, email, rol, req.gebruiker.id, verloopt);
 
-  // Mailen als het kan. Lukt dat niet, dan krijg je de link alsnog terug om zelf
-  // door te sturen — de uitnodiging is hoe dan ook aangemaakt.
-  const link = `${basisUrl(req)}/inloggen.html?uitnodiging=${token}`;
-  const post = await stuurUitnodiging({ naar: email, uitgenodigdDoor: req.gebruiker.naam, link });
-
-  res.json({ token, email, rol, gemaild: post.verstuurd, mailfout: post.verstuurd ? null : post.fout });
+  // Bewust geen mail vanuit de app: je krijgt de link terug en stuurt hem zelf
+  // door. Zie het kopje "Waarom er geen mail in zit" in de README.
+  res.json({ token, email, rol });
 });
 
 api.delete('/uitnodigingen/:token', vereistBeheerder, (req, res) => {
@@ -219,21 +208,20 @@ api.patch('/gebruikers/:id', vereistBeheerder, (req, res) => {
   res.json({ ok: true });
 });
 
-// Wachtwoord vergeten: er wordt geen e-mail verstuurd, dus een beheerder maakt
-// een herstellink aan en geeft die persoonlijk door.
-api.post('/gebruikers/:id/herstel', vereistBeheerder, async (req, res) => {
+// Wachtwoord vergeten: een beheerder maakt een herstellink aan en geeft die
+// persoonlijk door. Juist deze link mailen we niet — hij geeft toegang tot een
+// bestaand account.
+api.post('/gebruikers/:id/herstel', vereistBeheerder, (req, res) => {
   const id = Number(req.params.id);
-  const gebruiker = db.prepare('SELECT naam, email FROM gebruikers WHERE id = ?').get(id);
-  if (!gebruiker) return res.status(404).json({ fout: 'Gebruiker niet gevonden.' });
+  if (!db.prepare('SELECT 1 FROM gebruikers WHERE id = ?').get(id)) {
+    return res.status(404).json({ fout: 'Gebruiker niet gevonden.' });
+  }
 
   const token = randomBytes(24).toString('hex');
   db.prepare('INSERT INTO herstel (token, gebruiker_id, verloopt_op) VALUES (?, ?, ?)')
     .run(token, id, new Date(Date.now() + 2 * 864e5).toISOString());
 
-  const link = `${basisUrl(req)}/inloggen.html?herstel=${token}`;
-  const post = await stuurHerstel({ naar: gebruiker.email, naam: gebruiker.naam, link });
-
-  res.json({ token, gemaild: post.verstuurd, mailfout: post.verstuurd ? null : post.fout });
+  res.json({ token });
 });
 
 api.get('/herstel/:token', (req, res) => {

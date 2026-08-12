@@ -20,6 +20,12 @@ uit een prototype van de eigenaar dat alles in `localStorage` bewaarde.
 
 - **Hier mogen wél pakketten in**, maar zuinig: nu alleen `express` en
   `better-sqlite3`. Voeg er niets bij zonder te overleggen.
+- **Geen mail vanuit de app.** Dit heeft er ingezeten en is er bewust weer uit
+  gehaald: Transafe is ISO 27001-gecertificeerd, en een externe maildienst kost
+  een verwerker in het register plus DNS-wijzigingen die de bestaande
+  bedrijfsmail kunnen raken. Uitnodigingen en herstellinks gaan als link over het
+  scherm. Niet terugbouwen zonder overleg; de afweging staat in
+  `taakbeheer/README.md`.
 - `server.js` — koppelt alles aan elkaar
 - `src/db.js` — database en tabellen · `src/auth.js` — wachtwoorden en sessies ·
   `src/api.js` — alle API-routes

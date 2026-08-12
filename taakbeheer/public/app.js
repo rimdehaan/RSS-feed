@@ -8,7 +8,6 @@ const staat = {
   borden: [],
   bordId: null,
   taken: [],
-  mailAan: false,
   weergave: 'tabel',   // 'tabel' | 'kanban' | 'team'
   bewerktId: null,
   detailId: null,
@@ -83,12 +82,11 @@ document.addEventListener('keydown', (e) => {
 
 // ── Opstarten ────────────────────────────────────────────────────────────
 async function start() {
-  const { gebruiker, statussen, mail } = await api('/ik');
+  const { gebruiker, statussen } = await api('/ik');
   if (!gebruiker) { location.href = '/inloggen.html'; return; }
 
   staat.ik = gebruiker;
   staat.statussen = statussen;
-  staat.mailAan = mail;
   el('wieBenIk').textContent = gebruiker.naam;
 
   vulStatusKeuzes();
@@ -500,9 +498,9 @@ async function tekenTeam(bericht = null) {
           <button class="btn btn-primary" id="uitnodigKnop">Uitnodiging maken</button>
         </div>
         <div class="melding" id="uitMelding" style="margin-top:12px"></div>
-        ${staat.mailAan ? '' : `<p style="margin-top:10px;font-size:.8rem;color:var(--grijs)">
-          Mail staat uit. Uitnodigingen worden niet verstuurd; je krijgt de link hieronder om zelf door te sturen.
-        </p>`}
+        <p style="margin-top:10px;font-size:.8rem;color:var(--grijs)">
+          De app verstuurt zelf geen mail. Je krijgt hieronder een link die je persoonlijk doorstuurt.
+        </p>
 
         ${uitnodigingen.length ? `
           <h3 style="margin-top:22px">Openstaande uitnodigingen</h3>
@@ -569,7 +567,7 @@ function koppelTeamKnoppen() {
     melding.classList.remove('goed');
     try {
       const adres = el('uitEmail').value.trim();
-      const uitnodiging = await api('/uitnodigingen', {
+      await api('/uitnodigingen', {
         method: 'POST',
         body: { email: adres, rol: el('uitRol').value },
       });
@@ -578,11 +576,8 @@ function koppelTeamKnoppen() {
 
       // De melding gaat mee het opnieuw tekenen in, anders wist hij zichzelf.
       tekenTeam({
-        goed: uitnodiging.gemaild,
-        tekst: uitnodiging.gemaild
-          ? `Uitnodiging gemaild naar ${adres}.`
-          : `Uitnodiging gemaakt, maar er is geen mail verstuurd. Stuur de link hieronder zelf door. ` +
-            `Reden: ${uitnodiging.mailfout ?? 'onbekend'}`,
+        goed: true,
+        tekst: `Uitnodiging voor ${adres} aangemaakt. Stuur de link hieronder naar je collega.`,
       });
     } catch (fout) {
       melding.textContent = fout.message;
@@ -617,15 +612,13 @@ function koppelTeamKnoppen() {
     knop.addEventListener('click', async () => {
       const melding = el('herstelMelding');
       try {
-        const antwoord = await api(`/gebruikers/${knop.dataset.herstel}/herstel`, { method: 'POST' });
-        const link = `${location.origin}/inloggen.html?herstel=${antwoord.token}`;
+        const { token } = await api(`/gebruikers/${knop.dataset.herstel}/herstel`, { method: 'POST' });
+        const link = `${location.origin}/inloggen.html?herstel=${token}`;
 
-        melding.innerHTML = antwoord.gemaild
-          ? 'De herstellink is gemaild. Hij is twee dagen geldig en werkt één keer.'
-          : `Geef deze link persoonlijk door — hij is twee dagen geldig en werkt één keer:
-             <div class="uitnodig-link"><code>${esc(link)}</code></div>`;
+        melding.innerHTML = `Geef deze link persoonlijk door — hij is twee dagen geldig en werkt één keer:
+          <div class="uitnodig-link"><code>${esc(link)}</code></div>`;
         melding.classList.add('goed');
-        if (!antwoord.gemaild) navigator.clipboard?.writeText(link);
+        navigator.clipboard?.writeText(link);
       } catch (fout) {
         melding.textContent = fout.message;
         melding.classList.remove('goed');
