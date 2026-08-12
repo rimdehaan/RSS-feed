@@ -157,6 +157,19 @@ api.post('/uitnodigingen', vereistBeheerder, async (req, res) => {
     return res.status(409).json({ fout: 'Deze persoon heeft al een account.' });
   }
 
+  // Al een openstaande uitnodiging? Dan geen tweede erbij: dat levert alleen
+  // twee links op waarvan je niet weet welke je moet doorsturen. Verlopen of
+  // ingetrokken uitnodigingen tellen niet mee.
+  const openstaand = db.prepare(
+    'SELECT 1 FROM uitnodigingen WHERE email = ? AND gebruikt_op IS NULL AND verloopt_op > ?'
+  ).get(email, new Date().toISOString());
+
+  if (openstaand) {
+    return res.status(409).json({
+      fout: 'Dit e-mailadres is al uitgenodigd. Trek de openstaande uitnodiging hieronder in als je een nieuwe wilt maken.',
+    });
+  }
+
   const token = randomBytes(24).toString('hex');
   const verloopt = new Date(Date.now() + 14 * 864e5).toISOString();
 

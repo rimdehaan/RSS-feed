@@ -132,6 +132,27 @@ try {
   check('link is eenmalig',
     (await anoniem('/registreren', { method: 'POST', body: { token: uitnodiging, naam: 'Kopie', wachtwoord: 'nogEenWachtwoord' } })).status === 404);
 
+  // ── Geen dubbele uitnodigingen ──────────────────────────────────────────
+  groep('Dubbel uitnodigen');
+  const eerste = await rim('/uitnodigingen', { method: 'POST', body: { email: 'bram@transafe.nl' } });
+  check('eerste uitnodiging lukt', eerste.status === 200);
+
+  r = await rim('/uitnodigingen', { method: 'POST', body: { email: 'bram@transafe.nl' } });
+  check('tweede keer wordt geweigerd', r.status === 409, JSON.stringify(r.data));
+  check('met een begrijpelijke melding', /al uitgenodigd/i.test(r.data.fout ?? ''), r.data.fout);
+  check('en er komt geen tweede link bij',
+    (await rim('/uitnodigingen')).data.filter((u) => u.email === 'bram@transafe.nl').length === 1);
+
+  check('hoofdletters gelden als hetzelfde adres',
+    (await rim('/uitnodigingen', { method: 'POST', body: { email: 'BRAM@transafe.nl' } })).status === 409);
+
+  check('na intrekken mag het weer',
+    (await rim('/uitnodigingen/' + eerste.data.token, { method: 'DELETE' })).status === 200 &&
+    (await rim('/uitnodigingen', { method: 'POST', body: { email: 'bram@transafe.nl' } })).status === 200);
+
+  check('iemand met een account krijgt een andere melding',
+    /al een account/i.test((await rim('/uitnodigingen', { method: 'POST', body: { email: 'rim@transafe.nl' } })).data.fout ?? ''));
+
   const annaId = (await rim('/gebruikers')).data.find((g) => g.email === 'anna@transafe.nl').id;
 
   // ── Rechten ─────────────────────────────────────────────────────────────
