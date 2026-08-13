@@ -35,7 +35,9 @@ uit een prototype van de eigenaar dat alles in `localStorage` bewaarde.
 ## Algemene uitgangspunten
 
 - **Klein houden.** Liever leesbare code dan slimme code.
-- **Nederlands** in commentaar, teksten in de interface en in de uitleg.
+- **Nederlands** in alles: namen van variabelen en functies, commentaar, teksten
+  in de interface, commitberichten en de uitleg aan de eigenaar. Uitzondering
+  zijn de zes statussen en de vier prioriteiten, die staan bewust in het Engels.
 - **Huisstijl Transafe** in Taakbeheer: donkerblauw `#002944`, blauwgrijs
   `#5B869F`, grijs `#B3B3B3`. De zes statussen en hun kleuren liggen vast, net
   als de vier prioriteiten (Critical, High, Medium, Low) en die van hen.

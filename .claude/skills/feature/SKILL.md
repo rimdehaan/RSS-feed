@@ -160,10 +160,6 @@ Per acceptatiepunt: welke handeling hij in de app uitvoert en wat hij dan moet
 zien. Geen verwijzingen naar code of bestanden. Vermeld hier ook welke
 automatische tests je toevoegt, als die er zijn.
 
-Overleg met de gebruiker in het Nederlands. Alles wat in de codebase terechtkomt
-blijft Engels: identifiers, commentaar, commitberichten en gebruikersteksten die
-al Engels zijn.
-
 ---
 
 ## Fase 4 — Terugkoppelen
