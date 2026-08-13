@@ -3,7 +3,7 @@
 
 import { Router } from 'express';
 import { randomBytes } from 'node:crypto';
-import { createWriteStream, createReadStream, unlink, statSync } from 'node:fs';
+import { createWriteStream, createReadStream, unlinkSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { db, BIJLAGEMAP, STATUSSEN, aantalGebruikers, logHistorie } from './db.js';
 import {
@@ -127,7 +127,11 @@ api.post('/uitloggen', (req, res) => {
 });
 
 api.get('/ik', (req, res) => {
-  res.json({ gebruiker: req.gebruiker, statussen: STATUSSEN });
+  res.json({
+    gebruiker: req.gebruiker,
+    statussen: STATUSSEN,
+    max_bijlage_mb: Math.round(MAX_BIJLAGE / 1024 / 1024),
+  });
 });
 
 // ── Uitnodigingen ────────────────────────────────────────────────────────
@@ -667,8 +671,16 @@ function schoneBestandsnaam(ruw) {
     .slice(0, 150);
 }
 
+/**
+ * Haalt een bestand meteen van schijf, niet ergens later. Zo betekent een
+ * geslaagd verzoek ook echt dat het bestand weg is. Al weg is ook goed.
+ */
 function verwijderBestand(opslagnaam) {
-  unlink(join(BIJLAGEMAP, opslagnaam), () => {});   // al weg is ook goed
+  try {
+    unlinkSync(join(BIJLAGEMAP, opslagnaam));
+  } catch {
+    // Bestond niet meer; niets aan de hand.
+  }
 }
 
 api.post('/taken/:id/bijlagen', vereistLogin, (req, res) => {
@@ -686,14 +698,40 @@ api.post('/taken/:id/bijlagen', vereistLogin, (req, res) => {
   const teGroot = `Dit bestand is te groot. Maximaal ${Math.round(MAX_BIJLAGE / 1024 / 1024)} MB per bestand.`;
 
   /**
-   * Afbreken terwijl de browser nog aan het versturen is. De verbinding moet
-   * daarna dicht: laat je hem open, dan hergebruikt de browser hem voor het
-   * volgende verzoek en loopt dát verzoek stuk op de resten van deze upload.
+   * Weigeren terwijl de browser nog aan het versturen is.
+   *
+   * Antwoorden en meteen ophangen lijkt logisch, maar dan blijft er ongelezen
+   * data op de verbinding staan en loopt het volgende verzoek daarop stuk. We
+   * lezen de rest daarom uit en gooien die weg, en antwoorden pas daarna. Dan
+   * blijft de verbinding schoon.
    */
   const stopMet = (status, fout) => {
-    res.setHeader('connection', 'close');
-    res.status(status).json({ fout });
-    res.on('finish', () => req.destroy());
+    let geantwoord = false;
+    const antwoord = () => {
+      if (geantwoord) return;
+      geantwoord = true;
+      res.status(status).json({ fout });
+    };
+
+    // Is alles al binnen — bijvoorbeeld bij een leeg bestand — dan valt er niets
+    // meer af te wachten en kunnen we meteen antwoorden.
+    if (req.complete || req.readableEnded) return antwoord();
+
+    let weggegooid = 0;
+    req.on('data', (stuk) => {
+      weggegooid += stuk.length;
+      // Noodrem: blijft er onzinnig veel komen, dan toch de verbinding dicht.
+      if (weggegooid > 5 * MAX_BIJLAGE) {
+        if (!res.headersSent) res.setHeader('connection', 'close');
+        antwoord();
+        req.destroy();
+      }
+    });
+
+    req.on('end', antwoord);
+    req.on('close', antwoord);
+    req.on('error', antwoord);
+    req.resume();
   };
 
   // De browser stuurt vooraf hoe groot het bestand is. Dan hoeven we een te

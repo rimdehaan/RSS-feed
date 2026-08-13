@@ -83,11 +83,12 @@ document.addEventListener('keydown', (e) => {
 
 // ── Opstarten ────────────────────────────────────────────────────────────
 async function start() {
-  const { gebruiker, statussen } = await api('/ik');
+  const { gebruiker, statussen, max_bijlage_mb } = await api('/ik');
   if (!gebruiker) { location.href = '/inloggen.html'; return; }
 
   staat.ik = gebruiker;
   staat.statussen = statussen;
+  staat.maxBijlageMB = max_bijlage_mb ?? 10;
   el('wieBenIk').textContent = gebruiker.naam;
 
   vulStatusKeuzes();
@@ -644,6 +645,15 @@ el('bijlageInvoer').addEventListener('change', async (gebeurtenis) => {
   hint.classList.remove('fout');
 
   for (const [nummer, bestand] of bestanden.entries()) {
+    // Zelf al kijken hoe groot het is: dan hoeft een te groot bestand niet
+    // eerst helemaal naar de server voordat je hoort dat het niet past.
+    if (bestand.size > staat.maxBijlageMB * 1024 * 1024) {
+      hint.textContent = `${bestand.name} is ${leesbareGrootte(bestand.size)}. ` +
+        `Maximaal ${staat.maxBijlageMB} MB per bestand.`;
+      hint.classList.add('fout');
+      break;
+    }
+
     hint.textContent = bestanden.length > 1
       ? `Bezig met ${nummer + 1} van ${bestanden.length}: ${bestand.name}…`
       : `Bezig met ${bestand.name}…`;
