@@ -41,6 +41,7 @@ administratie — zie *Back-ups* verderop.
 | Wie ziet wat | Per project in te stellen: iedereen, of alleen gekozen mensen |
 | Tabelweergave | Zoals je prototype: opdracht, uitvoerend, status, deadline, omschrijving |
 | Prioriteit | Critical, High, Medium of Low — of geen. Klik en kies, net als bij status. Ook te filteren |
+| Deadline-alarm | Taken lichten rood op zodra de deadline dichtbij is en er nog niet aan gewerkt wordt |
 | Kanban | De zes statussen als kolommen, kaarten ertussen slepen |
 | Overdragen | Een taak naar een ander project verplaatsen via **Bewerken → Project**. Opmerkingen, historie en bijlagen gaan mee |
 | Bijlagen | Bestanden bij een taak, zodat de uitvoerder alles bij de hand heeft. Staan op je eigen server, niet bij een externe dienst |
@@ -50,6 +51,26 @@ administratie — zie *Back-ups* verderop.
 
 De zes statussen zijn ongewijzigd: Not Started, Working on it, Validating, Done,
 On Hold, Cancelled.
+
+### Wanneer een taak rood oplicht
+
+Een taak springt eruit — rode regel of rode kaart, met een ⚠ ervoor — zodra
+**de deadline morgen of eerder is en er nog niet aan gewerkt wordt**.
+
+Wat telt als "er wordt aan gewerkt": alleen de status **Working on it**. Klaar
+(*Done*) en vervallen (*Cancelled*) vragen geen aandacht meer. Alle andere
+statussen wel, dus ook *On Hold* en *Validating*: die zijn niet af, en de
+deadline komt eraan.
+
+Twee keuzes die afwijken van een letterlijke lezing van "de deadline is morgen":
+
+- **Ook vandaag en te laat lichten op.** Een taak die vandaag af moet en nog niet
+  is opgepakt is dringender dan een van morgen, niet minder.
+- **Af en vervallen lichten niet op.** Anders zou elke afgeronde taak met een
+  deadline van morgen rood worden.
+
+De vergelijking gebruikt de datum van de kijker, niet die van de server. Om
+middernacht in Nederland verspringt het dus ook echt.
 
 Prioriteiten zijn Critical, High, Medium en Low. **Geen prioriteit is ook een
 geldige keuze** en blijft bewust onopvallend grijs: anders zou elke taak een

@@ -209,6 +209,12 @@ tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: #f8f9fb; }
 tbody td { padding: 10px 16px; font-size: 0.87rem; color: var(--donker); vertical-align: middle; }
 .leeg td { text-align: center; color: var(--grijs); padding: 44px; font-size: 0.9rem; }
+
+/* Deadline morgen of eerder, en er wordt nog niet aan gewerkt. */
+tbody tr.let-op { background: #fdecec; box-shadow: inset 3px 0 0 var(--rood); }
+tbody tr.let-op:hover { background: #fbe2e2; }
+tbody tr.let-op td { color: #7d2431; }
+.let-op-teken { color: var(--rood); margin-right: 2px; }
 .acties { display: flex; gap: 6px; align-items: center; }
 .zacht { color: var(--grijs); }
 
@@ -241,6 +247,11 @@ tbody td { padding: 10px 16px; font-size: 0.87rem; color: var(--donker); vertica
 }
 .kaart:active { cursor: grabbing; }
 .kaart.sleept { opacity: 0.4; }
+.kaart.let-op {
+  background: #fdecec; border-color: #f0b6b6;
+  box-shadow: 0 1px 3px rgba(196,49,75,0.18), inset 3px 0 0 var(--rood);
+}
+.kaart.let-op .kaart-titel { color: #7d2431; }
 .kaart-titel { font-weight: 600; color: var(--donker); margin-bottom: 7px; line-height: 1.35; }
 .prio-vlag {
   display: inline-block; margin-bottom: 6px; padding: 2px 9px; border-radius: 12px;

@@ -59,9 +59,42 @@ function initialen(naam) {
   return naam.trim().split(/\s+/).slice(0, 2).map(d => d[0].toUpperCase()).join('');
 }
 
+/** Datum als jjjj-mm-dd in de tijdzone van de gebruiker, niet in UTC. */
+function datumSleutel(datum) {
+  return `${datum.getFullYear()}-${String(datum.getMonth() + 1).padStart(2, '0')}-${String(datum.getDate()).padStart(2, '0')}`;
+}
+
+const vandaag = () => datumSleutel(new Date());
+
+function morgen() {
+  const datum = new Date();
+  datum.setDate(datum.getDate() + 1);
+  return datumSleutel(datum);
+}
+
+// Af of vervallen: dan hoeft een deadline geen aandacht meer te vragen.
+const AFGEROND = ['Done', 'Cancelled'];
+
 function isVerlopen(taak) {
-  if (!taak.deadline || taak.status === 'Done' || taak.status === 'Cancelled') return false;
-  return taak.deadline < new Date().toISOString().slice(0, 10);
+  if (!taak.deadline || AFGEROND.includes(taak.status)) return false;
+  return taak.deadline < vandaag();
+}
+
+/**
+ * Springt eruit als de deadline morgen of eerder is terwijl er nog niet aan
+ * gewerkt wordt. "Working on it" telt als opgepakt, "Done" en "Cancelled" zijn
+ * klaar; de rest — ook On Hold en Validating — vraagt dan om aandacht.
+ */
+function vraagtAandacht(taak) {
+  if (!taak.deadline) return false;
+  if (taak.status === 'Working on it' || AFGEROND.includes(taak.status)) return false;
+  return taak.deadline <= morgen();
+}
+
+function waaromRood(taak) {
+  if (taak.deadline < vandaag()) return 'De deadline is verstreken en er wordt nog niet aan gewerkt.';
+  if (taak.deadline === vandaag()) return 'De deadline is vandaag en er wordt nog niet aan gewerkt.';
+  return 'De deadline is morgen en er wordt nog niet aan gewerkt.';
 }
 
 // ── Praten met de server ─────────────────────────────────────────────────
@@ -360,13 +393,14 @@ function rijHtml(taak) {
     staat.prioriteiten.map(p =>
       `<option value="${esc(p)}" ${p === taak.prioriteit ? 'selected' : ''}>${esc(prioTekst(p))}</option>`).join('');
 
+  const aandacht = vraagtAandacht(taak);
   const deadline = taak.deadline
-    ? `<span class="${isVerlopen(taak) ? 'verlopen' : ''}" style="${isVerlopen(taak) ? 'color:#EB5757;font-weight:600' : ''}">${datumNL(taak.deadline)}</span>`
+    ? `<span style="${aandacht || isVerlopen(taak) ? 'color:#C4314B;font-weight:700' : ''}">${datumNL(taak.deadline)}</span>`
     : '<span class="zacht">—</span>';
 
   return `
-    <tr>
-      <td><strong>${esc(taak.opdracht)}</strong></td>
+    <tr class="${aandacht ? 'let-op' : ''}" ${aandacht ? `title="${esc(waaromRood(taak))}"` : ''}>
+      <td><strong>${aandacht ? '<span class="let-op-teken" aria-hidden="true">⚠</span> ' : ''}${esc(taak.opdracht)}</strong></td>
       <td>${taak.uitvoerend_naam ? esc(taak.uitvoerend_naam) : '<span class="zacht">—</span>'}</td>
       <td>
         <select class="status-select ${prioKlasse(taak.prioriteit)}" data-prio="${taak.id}"
@@ -413,8 +447,11 @@ function tekenKanban() {
 }
 
 function kaartHtml(taak) {
+  const aandacht = vraagtAandacht(taak);
   return `
-    <div class="kaart" draggable="true" data-taak="${taak.id}" data-detail="${taak.id}" data-bord="${taak.bord_id}">
+    <div class="kaart ${aandacht ? 'let-op' : ''}" draggable="true" data-taak="${taak.id}"
+         data-detail="${taak.id}" data-bord="${taak.bord_id}"
+         ${aandacht ? `title="${esc(waaromRood(taak))}"` : ''}>
       ${taak.prioriteit
         ? `<span class="prio-vlag ${prioKlasse(taak.prioriteit)}">${esc(prioTekst(taak.prioriteit))}</span>`
         : ''}
@@ -423,7 +460,9 @@ function kaartHtml(taak) {
         ${taak.uitvoerend_naam && !isPersoonlijk()
           ? `<span class="bolletje" title="${esc(taak.uitvoerend_naam)}">${esc(initialen(taak.uitvoerend_naam))}</span>`
           : ''}
-        ${taak.deadline ? `<span class="${isVerlopen(taak) ? 'verlopen' : ''}">${datumNL(taak.deadline)}</span>` : ''}
+        ${taak.deadline
+          ? `<span class="${aandacht || isVerlopen(taak) ? 'verlopen' : ''}">${datumNL(taak.deadline)}</span>`
+          : ''}
         ${taak.aantal_opmerkingen ? `<span title="opmerkingen">💬 ${taak.aantal_opmerkingen}</span>` : ''}
         ${taak.aantal_bijlagen ? `<span title="bijlagen">📎 ${taak.aantal_bijlagen}</span>` : ''}
       </div>
@@ -597,7 +636,11 @@ async function openDetail(id) {
     <div><span class="naam">Prioriteit</span><span class="waarde">
       <span class="status-select ${prioKlasse(taak.prioriteit)}" style="background:${PRIO_KLEUREN[taak.prioriteit ?? '']};display:inline-block;cursor:default;min-width:auto">${esc(prioTekst(taak.prioriteit))}</span>
     </span></div>
-    <div><span class="naam">Deadline</span><span class="waarde">${taak.deadline ? datumNL(taak.deadline) : '—'}</span></div>`;
+    <div><span class="naam">Deadline</span><span class="waarde"
+      style="${vraagtAandacht(taak) ? 'color:#C4314B;font-weight:700' : ''}">${taak.deadline ? datumNL(taak.deadline) : '—'}</span></div>`;
+
+  el('detailWaarschuwing').textContent = vraagtAandacht(taak) ? waaromRood(taak) : '';
+  el('detailWaarschuwing').hidden = !vraagtAandacht(taak);
 
   tekenBijlagen(taak.bijlagen);
   tekenOpmerkingen(taak.opmerkingen);
