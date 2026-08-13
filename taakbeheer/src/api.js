@@ -528,12 +528,30 @@ api.patch('/taken/:id', vereistLogin, (req, res) => {
   const taak = zichtbareTaak(req.gebruiker, req.params.id);
   if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
 
-  if (req.body.uitvoerend_id !== undefined) {
-    const bord = db.prepare('SELECT * FROM borden WHERE id = ?').get(taak.bord_id);
-    const nieuweUitvoerder = req.body.uitvoerend_id ? Number(req.body.uitvoerend_id) : null;
-    if (!magToegewezenWorden(bord, nieuweUitvoerder)) {
-      return res.status(400).json({ fout: 'Die persoon kan dit bord niet zien. Geef hem eerst toegang bij de bordinstellingen.' });
+  // Naar een ander project verplaatsen. Opmerkingen, historie en bijlagen hangen
+  // aan de taak zelf en gaan dus vanzelf mee.
+  const huidigBord = db.prepare('SELECT * FROM borden WHERE id = ?').get(taak.bord_id);
+  let doelBord = huidigBord;
+
+  if (req.body.bord_id !== undefined && Number(req.body.bord_id) !== taak.bord_id) {
+    doelBord = zichtbaarBord(req.gebruiker, req.body.bord_id);
+    if (!doelBord) {
+      return res.status(400).json({ fout: 'Dat project bestaat niet, of je kunt het niet zien.' });
     }
+  }
+
+  // De uitvoerder moet het bord kunnen zien waar de taak terechtkomt.
+  const uitvoerderNa = req.body.uitvoerend_id === undefined
+    ? taak.uitvoerend_id
+    : (req.body.uitvoerend_id ? Number(req.body.uitvoerend_id) : null);
+
+  if (!magToegewezenWorden(doelBord, uitvoerderNa)) {
+    const naam = db.prepare('SELECT naam FROM gebruikers WHERE id = ?').get(uitvoerderNa)?.naam ?? 'Die persoon';
+    return res.status(400).json({
+      fout: doelBord.id === taak.bord_id
+        ? `${naam} kan dit project niet zien. Geef hem eerst toegang bij de projectinstellingen.`
+        : `${naam} kan "${doelBord.naam}" niet zien. Geef hem daar eerst toegang, of haal hem van de taak af.`,
+    });
   }
 
   const nieuw = {
@@ -551,6 +569,7 @@ api.patch('/taken/:id', vereistLogin, (req, res) => {
   // Alleen echte wijzigingen belanden in de historie.
   const namen = { opdracht: 'opdracht', uitvoerend_id: 'uitvoerend', status: 'status', deadline: 'deadline', omschrijving: 'omschrijving' };
   const naamVan = (id) => id ? (db.prepare('SELECT naam FROM gebruikers WHERE id = ?').get(id)?.naam ?? null) : null;
+  const verhuist = doelBord.id !== taak.bord_id;
 
   db.transaction(() => {
     for (const veld of Object.keys(nieuw)) {
@@ -558,6 +577,15 @@ api.patch('/taken/:id', vereistLogin, (req, res) => {
       const toon = veld === 'uitvoerend_id' ? naamVan : (v) => v;
       logHistorie(taak.id, req.gebruiker.id, namen[veld], toon(taak[veld]), toon(nieuw[veld]));
     }
+
+    if (verhuist) {
+      logHistorie(taak.id, req.gebruiker.id, 'project', huidigBord.naam, doelBord.naam);
+      // Onderaan het nieuwe project, zodat hij niet tussen bestaand werk inschuift.
+      const onderaan = db.prepare('SELECT COALESCE(MAX(positie), 0) + 1 AS p FROM taken WHERE bord_id = ?')
+        .get(doelBord.id).p;
+      db.prepare('UPDATE taken SET bord_id = ?, positie = ? WHERE id = ?').run(doelBord.id, onderaan, taak.id);
+    }
+
     db.prepare(
       `UPDATE taken SET opdracht = ?, uitvoerend_id = ?, status = ?, deadline = ?, omschrijving = ?,
               gewijzigd_op = datetime('now')

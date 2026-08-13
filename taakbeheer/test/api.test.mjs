@@ -457,6 +457,56 @@ try {
   check('bestand is van schijf verwijderd', bestandenInMap() === bestandenVoor - 1,
     `voor: ${bestandenVoor}, na: ${bestandenInMap()}`);
 
+  // ── Taken overdragen ────────────────────────────────────────────────────
+  groep('Taak naar een ander project');
+
+  const teVerhuizen = (await rim(`/borden/${projectA}/taken`, { method: 'POST', body: {
+    opdracht: 'Overdracht keuring', uitvoerend_id: carlaId, status: 'Working on it' } })).data.id;
+  await rim(`/taken/${teVerhuizen}/opmerkingen`, { method: 'POST', body: { tekst: 'Deels gedaan.' } });
+  await upload(rim, teVerhuizen, 'tussenrapport.pdf', 'stand van zaken');
+
+  r = await rim(`/taken/${teVerhuizen}`, { method: 'PATCH', body: { bord_id: projectA } });
+  check('hetzelfde project kiezen verandert niets', r.status === 200 && r.data.bord_id === projectA);
+
+  r = await rim(`/taken/${teVerhuizen}`, { method: 'PATCH', body: { bord_id: projectB } });
+  check('taak verplaatst naar het andere project', r.status === 200 && r.data.bord_id === projectB, JSON.stringify(r.data));
+  check('hij staat niet meer op het oude project',
+    !(await rim(`/borden/${projectA}/taken`)).data.some((t) => t.id === teVerhuizen));
+  check('en wel op het nieuwe',
+    (await rim(`/borden/${projectB}/taken`)).data.some((t) => t.id === teVerhuizen));
+
+  r = await rim('/taken/' + teVerhuizen);
+  check('de opmerking is meegegaan', r.data.opmerkingen.length === 1);
+  check('de bijlage ook', r.data.bijlagen.length === 1 && r.data.bijlagen[0].bestandsnaam === 'tussenrapport.pdf');
+  check('status en uitvoerder blijven staan', r.data.status === 'Working on it' && r.data.uitvoerend_naam === 'Carla Smit');
+
+  const verhuisregel = r.data.historie.find((h) => h.veld === 'project');
+  check('de verhuizing staat in de historie',
+    verhuisregel?.oude_waarde === 'Project A' && verhuisregel?.nieuwe_waarde === 'Project B',
+    JSON.stringify(verhuisregel));
+
+  check('hij staat achteraan het nieuwe project',
+    (await rim(`/borden/${projectB}/taken`)).data.at(-1).id === teVerhuizen);
+  check('Carlas persoonlijke bord noemt nu het nieuwe project',
+    (await carla('/mijn-taken')).data.find((t) => t.id === teVerhuizen)?.bord_naam === 'Project B');
+
+  groep('Verplaatsen dat niet mag');
+  check('naar een project dat je niet kunt zien',
+    (await carla(`/taken/${teVerhuizen}`, { method: 'PATCH', body: { bord_id: projectD } })).status === 400);
+  check('naar een project dat niet bestaat',
+    (await rim(`/taken/${teVerhuizen}`, { method: 'PATCH', body: { bord_id: 999999 } })).status === 400);
+
+  // Carla mag Project C niet zien, dus haar taak kan daar niet heen.
+  r = await rim(`/taken/${teVerhuizen}`, { method: 'PATCH', body: { bord_id: projectC } });
+  check('uitvoerder die het doelproject niet ziet, wordt tegengehouden', r.status === 400, JSON.stringify(r.data));
+  check('met haar naam en het project erbij',
+    /Carla/.test(r.data.fout ?? '') && /Project C/.test(r.data.fout ?? ''), r.data.fout);
+  check('de taak is niet stiekem toch verhuisd',
+    (await rim('/taken/' + teVerhuizen)).data.bord_id === projectB);
+
+  check('zonder uitvoerder mag het wel',
+    (await rim(`/taken/${teVerhuizen}`, { method: 'PATCH', body: { bord_id: projectC, uitvoerend_id: null } })).status === 200);
+
   groep('Uitloggen');
   await rim('/uitloggen', { method: 'POST' });
   check('na uitloggen geen toegang', (await rim('/borden')).status === 401);

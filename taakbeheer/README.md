@@ -41,6 +41,7 @@ administratie — zie *Back-ups* verderop.
 | Wie ziet wat | Per project in te stellen: iedereen, of alleen gekozen mensen |
 | Tabelweergave | Zoals je prototype: opdracht, uitvoerend, status, deadline, omschrijving |
 | Kanban | De zes statussen als kolommen, kaarten ertussen slepen |
+| Overdragen | Een taak naar een ander project verplaatsen via **Bewerken → Project**. Opmerkingen, historie en bijlagen gaan mee |
 | Bijlagen | Bestanden bij een taak, zodat de uitvoerder alles bij de hand heeft. Staan op je eigen server, niet bij een externe dienst |
 | Opmerkingen | Een gesprek per taak, met naam en tijdstip |
 | Historie | Automatisch: wie veranderde welk veld, van wat naar wat |
@@ -69,6 +70,17 @@ dat hij niet kan openen:
    rest niet, en de server weigert het ook als je het toch probeert.
 
 Instellingen wijzigen mag een beheerder, en degene die het bord heeft aangemaakt.
+
+### Een taak overdragen aan een ander project
+
+Open **Bewerken** en kies bij **Project** een ander project. De taak verhuist
+compleet: opmerkingen, historie en bijlagen hangen aan de taak zelf en gaan mee.
+In de historie komt te staan wie hem wanneer verplaatste, en van waar naar waar.
+
+Kies je een project waar de uitvoerder geen toegang toe heeft, dan verdwijnt die
+persoon uit de keuzelijst en valt de keuze terug op "niemand" — regel 3 hierboven
+geldt ook bij verhuizen. Wil je dat hij de taak houdt, geef hem dan eerst toegang
+tot dat project.
 
 ### Waar bijlagen staan
 

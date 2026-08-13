@@ -116,20 +116,44 @@ function vulGebruikerKeuzes() {
   el('filterUitvoerend').innerHTML = '<option value="">Iedereen</option>' + opties;
 }
 
+/** Wie mag er op dit bord een taak krijgen? null = iedereen. */
+async function toegestaneVoorBord(bordId) {
+  const bord = staat.borden.find(b => b.id === bordId);
+  if (!bord || bord.zichtbaar_voor_iedereen) return null;
+  return new Set((await api(`/borden/${bordId}/instellingen`)).leden);
+}
+
 /**
- * De keuzelijst voor "uitvoerend" toont alleen mensen die dit bord kunnen zien.
- * Anders wijs je werk toe dat de ontvanger niet kan openen — de server weigert
- * dat, maar het is prettiger om die keuze niet eens aan te bieden.
+ * De keuzelijst voor "uitvoerend" toont alleen mensen die het gekozen project
+ * kunnen zien. Anders wijs je werk toe dat de ontvanger niet kan openen — de
+ * server weigert dat, maar het is prettiger die keuze niet eens aan te bieden.
  */
-function vulUitvoerendKeuze() {
-  const mag = (g) => !staat.toegestaneUitvoerders
-    || g.rol === 'beheerder'
-    || staat.toegestaneUitvoerders.has(g.id);
+function vulUitvoerendKeuze(toegestaan = staat.toegestaneUitvoerders) {
+  const vorige = el('vUitvoerend').value;
+  const mag = (g) => !toegestaan || g.rol === 'beheerder' || toegestaan.has(g.id);
 
   el('vUitvoerend').innerHTML = '<option value="">— niemand —</option>' +
     staat.gebruikers.filter(g => g.actief && mag(g))
       .map(g => `<option value="${g.id}">${esc(g.naam)}</option>`).join('');
+
+  // Selectie behouden als die persoon ook op het nieuwe project mag.
+  el('vUitvoerend').value = [...el('vUitvoerend').options].some(o => o.value === vorige) ? vorige : '';
 }
+
+function vulProjectKeuze(huidigBordId) {
+  el('vProject').innerHTML = staat.borden
+    .map(b => `<option value="${b.id}" ${b.id === huidigBordId ? 'selected' : ''}>${esc(b.naam)}</option>`)
+    .join('');
+}
+
+// Kies je een ander project, dan verandert ook wie de taak mag uitvoeren.
+el('vProject').addEventListener('change', async () => {
+  try {
+    vulUitvoerendKeuze(await toegestaneVoorBord(Number(el('vProject').value)));
+  } catch (fout) {
+    el('taakMelding').textContent = fout.message;
+  }
+});
 
 const isPersoonlijk = () => staat.bordId === null;
 
@@ -466,8 +490,18 @@ async function openTaakVenster(id = null) {
   // meteen een taak kunnen geven, zonder de pagina te herladen.
   staat.gebruikers = await api('/gebruikers');
   vulGebruikerKeuzes();
-  vulUitvoerendKeuze();
+
   const taak = id ? staat.taken.find(t => t.id === id) : null;
+  const bordVanTaak = taak?.bord_id ?? staat.bordId;
+
+  // Verplaatsen kan alleen bij een bestaande taak, en alleen als er iets is om
+  // naartoe te verplaatsen.
+  el('vProjectVeld').hidden = !taak || staat.borden.length < 2;
+  vulProjectKeuze(bordVanTaak);
+  vulUitvoerendKeuze(taak && taak.bord_id !== staat.bordId
+    ? await toegestaneVoorBord(bordVanTaak)
+    : staat.toegestaneUitvoerders);
+
   el('vOpdracht').value     = taak?.opdracht ?? '';
   el('vUitvoerend').value   = taak?.uitvoerend_id ?? '';
   el('vStatus').value       = taak?.status ?? 'Not Started';
@@ -494,6 +528,7 @@ el('taakOpslaan').addEventListener('click', async () => {
 
   try {
     if (staat.bewerktId) {
+      if (!el('vProjectVeld').hidden) gegevens.bord_id = Number(el('vProject').value);
       await api(`/taken/${staat.bewerktId}`, { method: 'PATCH', body: gegevens });
     } else {
       await api(`/borden/${staat.bordId}/taken`, { method: 'POST', body: gegevens });
@@ -537,6 +572,10 @@ async function openDetail(id) {
         }
         if (regel.veld === 'bijlage verwijderd') {
           return `<li><b>${wie}</b> verwijderde de bijlage <b>${esc(regel.oude_waarde)}</b> — ${wanneer}</li>`;
+        }
+        if (regel.veld === 'project') {
+          return `<li><b>${wie}</b> verplaatste deze taak van <b>${esc(regel.oude_waarde)}</b>
+            naar <b>${esc(regel.nieuwe_waarde)}</b> — ${wanneer}</li>`;
         }
         return `<li><b>${wie}</b> wijzigde <b>${esc(regel.veld)}</b>
           van “${esc(regel.oude_waarde || 'leeg')}” naar “${esc(regel.nieuwe_waarde || 'leeg')}”
