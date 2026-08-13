@@ -37,7 +37,8 @@ uit een prototype van de eigenaar dat alles in `localStorage` bewaarde.
 - **Klein houden.** Liever leesbare code dan slimme code.
 - **Nederlands** in commentaar, teksten in de interface en in de uitleg.
 - **Huisstijl Transafe** in Taakbeheer: donkerblauw `#002944`, blauwgrijs
-  `#5B869F`, grijs `#B3B3B3`. De zes statussen en hun kleuren liggen vast.
+  `#5B869F`, grijs `#B3B3B3`. De zes statussen en hun kleuren liggen vast, net
+  als de vier prioriteiten (Critical, High, Medium, Low) en die van hen.
 
 ## Draaien en testen
 

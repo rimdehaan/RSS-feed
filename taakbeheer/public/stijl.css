@@ -27,7 +27,7 @@ body {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 8px 16px; border-radius: 6px;
   font-size: 0.85rem; font-weight: 600; font-family: inherit;
-  cursor: pointer; border: none;
+  cursor: pointer; border: none; white-space: nowrap;
   transition: background 0.15s, opacity 0.15s;
 }
 .btn-primary   { background: var(--donker); color: #fff; }
@@ -68,6 +68,13 @@ body {
   cursor: pointer; outline: none; text-align: center; min-width: 130px;
 }
 .status-select:hover { opacity: 0.85; }
+
+/* Prioriteiten. Leeg is ook een keuze en blijft bewust onopvallend. */
+.p-critical { background: #C4314B; color: #fff; }
+.p-high     { background: #E2445C; color: #fff; }
+.p-medium   { background: #F2C94C; color: #5a4000; }
+.p-low      { background: #6C9FF5; color: #fff; }
+.p-geen     { background: #eceef1; color: #8b8f98; }
 
 .s-not-started    { background: var(--grijs); color: #fff; }
 .s-working-on-it  { background: #F2C94C; color: #5a4000; }
@@ -164,6 +171,7 @@ body {
 .balk {
   padding: 12px 28px; display: flex; align-items: center; gap: 10px;
   background: #fff; border-bottom: 1px solid var(--lijn); flex-shrink: 0;
+  flex-wrap: wrap;   /* op een smal scherm liever een regel erbij dan knoppen die afbreken */
 }
 .weergave-knoppen { display: flex; background: var(--achtergrond); border-radius: 6px; padding: 3px; gap: 2px; }
 .weergave-knoppen button {
@@ -173,7 +181,7 @@ body {
 }
 .weergave-knoppen button.actief { background: #fff; color: var(--donker); box-shadow: 0 1px 3px rgba(0,41,68,0.1); }
 
-.filters { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.filters { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
 .filters label { font-size: 0.82rem; color: var(--blauw); font-weight: 600; }
 .filters select {
   padding: 6px 10px; border: 1px solid var(--grijs); border-radius: 6px;
@@ -234,6 +242,10 @@ tbody td { padding: 10px 16px; font-size: 0.87rem; color: var(--donker); vertica
 .kaart:active { cursor: grabbing; }
 .kaart.sleept { opacity: 0.4; }
 .kaart-titel { font-weight: 600; color: var(--donker); margin-bottom: 7px; line-height: 1.35; }
+.prio-vlag {
+  display: inline-block; margin-bottom: 6px; padding: 2px 9px; border-radius: 12px;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.2px;
+}
 .kaart-voet { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--blauw); flex-wrap: wrap; }
 .kaart-voet .verlopen { color: var(--rood); font-weight: 600; }
 

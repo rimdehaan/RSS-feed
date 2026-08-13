@@ -507,6 +507,45 @@ try {
   check('zonder uitvoerder mag het wel',
     (await rim(`/taken/${teVerhuizen}`, { method: 'PATCH', body: { bord_id: projectC, uitvoerend_id: null } })).status === 200);
 
+  // ── Prioriteit ──────────────────────────────────────────────────────────
+  groep('Prioriteit');
+
+  r = await rim(`/borden/${bordId}/taken`, { method: 'POST', body: { opdracht: 'Zonder prioriteit' } });
+  check('taak zonder prioriteit mag', r.status === 200 && r.data.prioriteit === null, JSON.stringify(r.data));
+  const zonderPrio = r.data.id;
+
+  r = await rim(`/borden/${bordId}/taken`, { method: 'POST', body: { opdracht: 'Spoedklus', prioriteit: 'Critical' } });
+  check('prioriteit bij aanmaken', r.data.prioriteit === 'Critical', JSON.stringify(r.data));
+  const spoed = r.data.id;
+
+  check('verzonnen prioriteit wordt genegeerd',
+    (await rim(`/borden/${bordId}/taken`, { method: 'POST', body: { opdracht: 'X', prioriteit: 'Superurgent' } })).data.prioriteit === null);
+
+  check('prioriteit los aanpassen',
+    (await rim(`/taken/${zonderPrio}`, { method: 'PATCH', body: { prioriteit: 'Medium' } })).data.prioriteit === 'Medium');
+  check('en weer weghalen',
+    (await rim(`/taken/${zonderPrio}`, { method: 'PATCH', body: { prioriteit: null } })).data.prioriteit === null);
+  check('een verzonnen waarde maakt hem leeg, niet kapot',
+    (await rim(`/taken/${spoed}`, { method: 'PATCH', body: { prioriteit: 'Onzin' } })).data.prioriteit === null);
+
+  await rim(`/taken/${spoed}`, { method: 'PATCH', body: { prioriteit: 'High' } });
+  r = await rim('/taken/' + spoed);
+  const prioRegel = r.data.historie.find((h) => h.veld === 'prioriteit' && h.nieuwe_waarde === 'High');
+  check('wijziging staat in de historie', !!prioRegel, JSON.stringify(r.data.historie.slice(0, 3)));
+
+  check('alleen de status wijzigen laat de prioriteit staan',
+    (await rim(`/taken/${spoed}`, { method: 'PATCH', body: { status: 'Done' } })).data.prioriteit === 'High');
+
+  check('prioriteit staat in de takenlijst',
+    (await rim(`/borden/${bordId}/taken`)).data.find((t) => t.id === spoed).prioriteit === 'High');
+
+  await rim(`/taken/${spoed}`, { method: 'PATCH', body: { uitvoerend_id: carlaId } });
+  check('en op het persoonlijke bord',
+    (await carla('/mijn-taken')).data.find((t) => t.id === spoed)?.prioriteit === 'High');
+
+  check('prioriteit gaat mee bij verplaatsen naar een ander project',
+    (await rim(`/taken/${spoed}`, { method: 'PATCH', body: { bord_id: projectA } })).data.prioriteit === 'High');
+
   groep('Uitloggen');
   await rim('/uitloggen', { method: 'POST' });
   check('na uitloggen geen toegang', (await rim('/borden')).status === 401);

@@ -23,8 +23,19 @@ const KLEUREN = {
   'Cancelled':     '#EB5757',
 };
 
+// Kleuren en klasse voor prioriteit. Leeg = geen prioriteit opgegeven.
+const PRIO_KLEUREN = {
+  Critical: '#C4314B',
+  High: '#E2445C',
+  Medium: '#F2C94C',
+  Low: '#6C9FF5',
+  '': '#eceef1',
+};
+
 const el = (id) => document.getElementById(id);
 const statusKlasse = (status) => 's-' + status.toLowerCase().replace(/\s+/g, '-');
+const prioKlasse = (prioriteit) => 'p-' + (prioriteit ? prioriteit.toLowerCase() : 'geen');
+const prioTekst = (prioriteit) => prioriteit === 'Critical' ? 'Critical ⚠' : (prioriteit || '—');
 
 function esc(waarde) {
   return String(waarde ?? '')
@@ -83,11 +94,12 @@ document.addEventListener('keydown', (e) => {
 
 // ── Opstarten ────────────────────────────────────────────────────────────
 async function start() {
-  const { gebruiker, statussen, max_bijlage_mb } = await api('/ik');
+  const { gebruiker, statussen, prioriteiten, max_bijlage_mb } = await api('/ik');
   if (!gebruiker) { location.href = '/inloggen.html'; return; }
 
   staat.ik = gebruiker;
   staat.statussen = statussen;
+  staat.prioriteiten = prioriteiten ?? [];
   staat.maxBijlageMB = max_bijlage_mb ?? 10;
   el('wieBenIk').textContent = gebruiker.naam;
 
@@ -109,6 +121,11 @@ function vulStatusKeuzes() {
   const opties = staat.statussen.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
   el('vStatus').innerHTML = opties;
   el('filterStatus').innerHTML = '<option value="">Alle statussen</option>' + opties;
+
+  const prio = staat.prioriteiten.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  el('vPrioriteit').innerHTML = '<option value="">— geen —</option>' + prio;
+  el('filterPrioriteit').innerHTML = '<option value="">Alle prioriteiten</option>' + prio +
+    '<option value="geen">Zonder prioriteit</option>';
 }
 
 function vulGebruikerKeuzes() {
@@ -234,10 +251,13 @@ async function herlaadTaken() {
 function gefilterdeTaken() {
   const zoek = el('zoek').value.trim().toLowerCase();
   const status = el('filterStatus').value;
+  const prioriteit = el('filterPrioriteit').value;
   const uitvoerend = el('filterUitvoerend').value;
 
   return staat.taken.filter(taak => {
     if (status && taak.status !== status) return false;
+    if (prioriteit === 'geen' && taak.prioriteit) return false;
+    if (prioriteit && prioriteit !== 'geen' && taak.prioriteit !== prioriteit) return false;
     if (uitvoerend && String(taak.uitvoerend_id) !== uitvoerend) return false;
     if (!zoek) return true;
     return (taak.opdracht + ' ' + (taak.uitvoerend_naam || '') + ' ' + taak.omschrijving)
@@ -300,11 +320,11 @@ function tabelHtml(taken) {
     <div class="tabel-omhulsel">
       <table>
         <thead><tr>
-          <th>Opdracht</th><th>Uitvoerend</th><th>Status</th>
+          <th>Opdracht</th><th>Uitvoerend</th><th>Prioriteit</th><th>Status</th>
           <th>Deadline</th><th>Details</th><th>Acties</th>
         </tr></thead>
         <tbody>${taken.length === 0
-          ? '<tr class="leeg"><td colspan="6">Geen taken gevonden.</td></tr>'
+          ? '<tr class="leeg"><td colspan="7">Geen taken gevonden.</td></tr>'
           : taken.map(rijHtml).join('')}</tbody>
       </table>
     </div>`;
@@ -314,6 +334,13 @@ function koppelStatusKeuzes(wortel) {
   wortel.querySelectorAll('.status-select[data-taak]').forEach(keuze => {
     keuze.addEventListener('change', async () => {
       await api(`/taken/${keuze.dataset.taak}`, { method: 'PATCH', body: { status: keuze.value } });
+      herlaadTaken();
+    });
+  });
+
+  wortel.querySelectorAll('.status-select[data-prio]').forEach(keuze => {
+    keuze.addEventListener('change', async () => {
+      await api(`/taken/${keuze.dataset.prio}`, { method: 'PATCH', body: { prioriteit: keuze.value || null } });
       herlaadTaken();
     });
   });
@@ -329,6 +356,10 @@ function rijHtml(taak) {
   const opties = staat.statussen
     .map(s => `<option value="${esc(s)}" ${s === taak.status ? 'selected' : ''}>${esc(s)}</option>`).join('');
 
+  const prioOpties = `<option value="" ${!taak.prioriteit ? 'selected' : ''}>—</option>` +
+    staat.prioriteiten.map(p =>
+      `<option value="${esc(p)}" ${p === taak.prioriteit ? 'selected' : ''}>${esc(prioTekst(p))}</option>`).join('');
+
   const deadline = taak.deadline
     ? `<span class="${isVerlopen(taak) ? 'verlopen' : ''}" style="${isVerlopen(taak) ? 'color:#EB5757;font-weight:600' : ''}">${datumNL(taak.deadline)}</span>`
     : '<span class="zacht">—</span>';
@@ -337,6 +368,10 @@ function rijHtml(taak) {
     <tr>
       <td><strong>${esc(taak.opdracht)}</strong></td>
       <td>${taak.uitvoerend_naam ? esc(taak.uitvoerend_naam) : '<span class="zacht">—</span>'}</td>
+      <td>
+        <select class="status-select ${prioKlasse(taak.prioriteit)}" data-prio="${taak.id}"
+                style="background:${PRIO_KLEUREN[taak.prioriteit ?? '']};min-width:110px">${prioOpties}</select>
+      </td>
       <td>
         <select class="status-select ${statusKlasse(taak.status)}" data-taak="${taak.id}"
                 style="background:${KLEUREN[taak.status]}">${opties}</select>
@@ -380,6 +415,9 @@ function tekenKanban() {
 function kaartHtml(taak) {
   return `
     <div class="kaart" draggable="true" data-taak="${taak.id}" data-detail="${taak.id}" data-bord="${taak.bord_id}">
+      ${taak.prioriteit
+        ? `<span class="prio-vlag ${prioKlasse(taak.prioriteit)}">${esc(prioTekst(taak.prioriteit))}</span>`
+        : ''}
       <div class="kaart-titel">${esc(taak.opdracht)}</div>
       <div class="kaart-voet">
         ${taak.uitvoerend_naam && !isPersoonlijk()
@@ -506,6 +544,7 @@ async function openTaakVenster(id = null) {
   el('vOpdracht').value     = taak?.opdracht ?? '';
   el('vUitvoerend').value   = taak?.uitvoerend_id ?? '';
   el('vStatus').value       = taak?.status ?? 'Not Started';
+  el('vPrioriteit').value   = taak?.prioriteit ?? '';
   el('vDeadline').value     = taak?.deadline ?? '';
   el('vOmschrijving').value = taak?.omschrijving ?? '';
 
@@ -518,6 +557,7 @@ el('taakOpslaan').addEventListener('click', async () => {
     opdracht: el('vOpdracht').value.trim(),
     uitvoerend_id: el('vUitvoerend').value || null,
     status: el('vStatus').value,
+    prioriteit: el('vPrioriteit').value || null,
     deadline: el('vDeadline').value || null,
     omschrijving: el('vOmschrijving').value.trim(),
   };
@@ -553,6 +593,9 @@ async function openDetail(id) {
     <div><span class="naam">Uitvoerend</span><span class="waarde">${esc(taak.uitvoerend_naam || '—')}</span></div>
     <div><span class="naam">Status</span><span class="waarde">
       <span class="status-select ${statusKlasse(taak.status)}" style="background:${KLEUREN[taak.status]};display:inline-block;cursor:default">${esc(taak.status)}</span>
+    </span></div>
+    <div><span class="naam">Prioriteit</span><span class="waarde">
+      <span class="status-select ${prioKlasse(taak.prioriteit)}" style="background:${PRIO_KLEUREN[taak.prioriteit ?? '']};display:inline-block;cursor:default;min-width:auto">${esc(prioTekst(taak.prioriteit))}</span>
     </span></div>
     <div><span class="naam">Deadline</span><span class="waarde">${taak.deadline ? datumNL(taak.deadline) : '—'}</span></div>`;
 
@@ -989,6 +1032,7 @@ function koppelTeamKnoppen() {
 el('nieuwTaakKnop').addEventListener('click', () => openTaakVenster());
 el('zoek').addEventListener('input', () => { if (staat.weergave !== 'team') teken(); });
 el('filterStatus').addEventListener('change', teken);
+el('filterPrioriteit').addEventListener('change', teken);
 el('filterUitvoerend').addEventListener('change', teken);
 el('teamKnop').addEventListener('click', tekenTeam);
 
@@ -1017,13 +1061,13 @@ el('exportKnop').addEventListener('click', () => {
   // Op het persoonlijke bord staan taken uit meerdere projecten door elkaar,
   // dus dan hoort het project er in de export bij.
   const kolommen = isPersoonlijk()
-    ? ['Project', 'Opdracht', 'Uitvoerend', 'Status', 'Deadline', 'Omschrijving']
-    : ['Opdracht', 'Uitvoerend', 'Status', 'Deadline', 'Omschrijving'];
+    ? ['Project', 'Opdracht', 'Uitvoerend', 'Prioriteit', 'Status', 'Deadline', 'Omschrijving']
+    : ['Opdracht', 'Uitvoerend', 'Prioriteit', 'Status', 'Deadline', 'Omschrijving'];
 
   const veld = (waarde) => `"${String(waarde ?? '').replace(/"/g, '""')}"`;
 
   const regels = gefilterdeTaken().map(t => {
-    const waarden = [t.opdracht, t.uitvoerend_naam, t.status, t.deadline, t.omschrijving];
+    const waarden = [t.opdracht, t.uitvoerend_naam, t.prioriteit, t.status, t.deadline, t.omschrijving];
     return (isPersoonlijk() ? [t.bord_naam, ...waarden] : waarden).map(veld).join(',');
   });
 

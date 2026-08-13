@@ -40,6 +40,7 @@ administratie — zie *Back-ups* verderop.
 | Projecten | Meerdere borden naast elkaar, bijvoorbeeld per project of per klant |
 | Wie ziet wat | Per project in te stellen: iedereen, of alleen gekozen mensen |
 | Tabelweergave | Zoals je prototype: opdracht, uitvoerend, status, deadline, omschrijving |
+| Prioriteit | Critical, High, Medium of Low — of geen. Klik en kies, net als bij status. Ook te filteren |
 | Kanban | De zes statussen als kolommen, kaarten ertussen slepen |
 | Overdragen | Een taak naar een ander project verplaatsen via **Bewerken → Project**. Opmerkingen, historie en bijlagen gaan mee |
 | Bijlagen | Bestanden bij een taak, zodat de uitvoerder alles bij de hand heeft. Staan op je eigen server, niet bij een externe dienst |
@@ -49,6 +50,11 @@ administratie — zie *Back-ups* verderop.
 
 De zes statussen zijn ongewijzigd: Not Started, Working on it, Validating, Done,
 On Hold, Cancelled.
+
+Prioriteiten zijn Critical, High, Medium en Low. **Geen prioriteit is ook een
+geldige keuze** en blijft bewust onopvallend grijs: anders zou elke taak een
+oordeel moeten krijgen dat niemand heeft gegeven. Status en prioriteit staan los
+van elkaar — een taak kan Done zijn en toch High hebben gehad.
 
 ### Hoe borden en zichtbaarheid werken
 

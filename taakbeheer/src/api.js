@@ -5,7 +5,7 @@ import { Router } from 'express';
 import { randomBytes } from 'node:crypto';
 import { createWriteStream, createReadStream, unlinkSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { db, BIJLAGEMAP, STATUSSEN, aantalGebruikers, logHistorie } from './db.js';
+import { db, BIJLAGEMAP, STATUSSEN, PRIORITEITEN, aantalGebruikers, logHistorie } from './db.js';
 import {
   hashWachtwoord, wachtwoordKlopt, maakSessie, verwijderSessie,
   vereistLogin, vereistBeheerder,
@@ -130,6 +130,7 @@ api.get('/ik', (req, res) => {
   res.json({
     gebruiker: req.gebruiker,
     statussen: STATUSSEN,
+    prioriteiten: PRIORITEITEN,
     max_bijlage_mb: Math.round(MAX_BIJLAGE / 1024 / 1024),
   });
 });
@@ -435,7 +436,7 @@ api.delete('/borden/:id', vereistLogin, (req, res) => {
 // ── Taken ────────────────────────────────────────────────────────────────
 
 const TAAK_SELECT = `
-  SELECT t.id, t.bord_id, t.opdracht, t.uitvoerend_id, t.status, t.deadline,
+  SELECT t.id, t.bord_id, t.opdracht, t.uitvoerend_id, t.status, t.prioriteit, t.deadline,
          t.omschrijving, t.positie, t.aangemaakt_op, t.gewijzigd_op,
          g.naam AS uitvoerend_naam,
          (SELECT COUNT(*) FROM opmerkingen o WHERE o.taak_id = t.id) AS aantal_opmerkingen,
@@ -458,7 +459,7 @@ api.get('/borden/:id/taken', vereistLogin, (req, res) => {
  */
 api.get('/mijn-taken', vereistLogin, (req, res) => {
   res.json(db.prepare(
-    `SELECT t.id, t.bord_id, t.opdracht, t.uitvoerend_id, t.status, t.deadline,
+    `SELECT t.id, t.bord_id, t.opdracht, t.uitvoerend_id, t.status, t.prioriteit, t.deadline,
             t.omschrijving, t.positie, t.aangemaakt_op, t.gewijzigd_op,
             g.naam AS uitvoerend_naam,
             b.naam AS bord_naam,
@@ -480,6 +481,7 @@ api.post('/borden/:id/taken', vereistLogin, (req, res) => {
   if (!opdracht) return res.status(400).json({ fout: 'Geef de opdracht een naam.' });
 
   const status = STATUSSEN.includes(req.body.status) ? req.body.status : 'Not Started';
+  const prioriteit = PRIORITEITEN.includes(req.body.prioriteit) ? req.body.prioriteit : null;
   const uitvoerendId = req.body.uitvoerend_id ? Number(req.body.uitvoerend_id) : null;
 
   if (!magToegewezenWorden(bord, uitvoerendId)) {
@@ -489,9 +491,9 @@ api.post('/borden/:id/taken', vereistLogin, (req, res) => {
   const onderaan = db.prepare('SELECT COALESCE(MAX(positie), 0) + 1 AS p FROM taken WHERE bord_id = ?').get(bordId).p;
 
   const r = db.prepare(
-    `INSERT INTO taken (bord_id, opdracht, uitvoerend_id, status, deadline, omschrijving, positie, aangemaakt_door)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(bordId, opdracht, uitvoerendId, status, datumOfNull(req.body.deadline),
+    `INSERT INTO taken (bord_id, opdracht, uitvoerend_id, status, prioriteit, deadline, omschrijving, positie, aangemaakt_door)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(bordId, opdracht, uitvoerendId, status, prioriteit, datumOfNull(req.body.deadline),
         tekst(req.body.omschrijving, 20000), onderaan, req.gebruiker.id);
 
   logHistorie(r.lastInsertRowid, req.gebruiker.id, 'aangemaakt', null, opdracht);
@@ -566,12 +568,19 @@ api.patch('/taken/:id', vereistLogin, (req, res) => {
     status: req.body.status === undefined
       ? taak.status
       : (STATUSSEN.includes(req.body.status) ? req.body.status : taak.status),
+    // Een lege waarde is hier een geldige keuze: "geen prioriteit".
+    prioriteit: req.body.prioriteit === undefined
+      ? taak.prioriteit
+      : (PRIORITEITEN.includes(req.body.prioriteit) ? req.body.prioriteit : null),
     deadline: req.body.deadline === undefined ? taak.deadline : datumOfNull(req.body.deadline),
     omschrijving: req.body.omschrijving === undefined ? taak.omschrijving : tekst(req.body.omschrijving, 20000),
   };
 
   // Alleen echte wijzigingen belanden in de historie.
-  const namen = { opdracht: 'opdracht', uitvoerend_id: 'uitvoerend', status: 'status', deadline: 'deadline', omschrijving: 'omschrijving' };
+  const namen = {
+    opdracht: 'opdracht', uitvoerend_id: 'uitvoerend', status: 'status',
+    prioriteit: 'prioriteit', deadline: 'deadline', omschrijving: 'omschrijving',
+  };
   const naamVan = (id) => id ? (db.prepare('SELECT naam FROM gebruikers WHERE id = ?').get(id)?.naam ?? null) : null;
   const verhuist = doelBord.id !== taak.bord_id;
 
@@ -591,10 +600,11 @@ api.patch('/taken/:id', vereistLogin, (req, res) => {
     }
 
     db.prepare(
-      `UPDATE taken SET opdracht = ?, uitvoerend_id = ?, status = ?, deadline = ?, omschrijving = ?,
-              gewijzigd_op = datetime('now')
+      `UPDATE taken SET opdracht = ?, uitvoerend_id = ?, status = ?, prioriteit = ?,
+              deadline = ?, omschrijving = ?, gewijzigd_op = datetime('now')
          WHERE id = ?`
-    ).run(nieuw.opdracht, nieuw.uitvoerend_id, nieuw.status, nieuw.deadline, nieuw.omschrijving, taak.id);
+    ).run(nieuw.opdracht, nieuw.uitvoerend_id, nieuw.status, nieuw.prioriteit,
+          nieuw.deadline, nieuw.omschrijving, taak.id);
   })();
 
   res.json(db.prepare(`${TAAK_SELECT} WHERE t.id = ?`).get(taak.id));

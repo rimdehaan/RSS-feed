@@ -132,6 +132,9 @@ function voegKolomToe(tabel, kolom, definitie) {
 voegKolomToe('borden', 'zichtbaar_voor_iedereen', 'INTEGER NOT NULL DEFAULT 1');
 voegKolomToe('borden', 'aangemaakt_door', 'INTEGER REFERENCES gebruikers(id)');
 
+// Leeg betekent: geen prioriteit opgegeven. Bestaande taken beginnen zo.
+voegKolomToe('taken', 'prioriteit', 'TEXT');
+
 export const STATUSSEN = [
   'Not Started',
   'Working on it',
@@ -140,6 +143,10 @@ export const STATUSSEN = [
   'On Hold',
   'Cancelled',
 ];
+
+// Van dringend naar rustig. Geen prioriteit is ook een geldige keuze; die staat
+// als lege waarde in de database.
+export const PRIORITEITEN = ['Critical', 'High', 'Medium', 'Low'];
 
 /** Aantal gebruikers — gebruikt om te bepalen of de eerste installatie nog moet. */
 export function aantalGebruikers() {
