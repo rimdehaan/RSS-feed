@@ -862,6 +862,8 @@ async function tekenWerkprocessen() {
 let procesId = null;
 let conceptStappen = [];
 
+const GRIJPER = `<svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.4"/><circle cx="9" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="9" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="9" cy="13" r="1.4"/></svg>`;
+
 async function openProcesVenster(id) {
   procesId = id;
   el('pMelding').textContent = '';
@@ -886,8 +888,10 @@ async function openProcesVenster(id) {
   el('pOpslaan').hidden = !mag;
   el('pVerwijder').hidden = !mag || !id;
 
-  tekenConceptStappen();
+  // Eerst openen, dan tekenen. Een verborgen tekstvak heeft geen hoogte, en dan
+  // zouden de vakken op nul blijven staan en de tekst onzichtbaar zijn.
   openVenster('procesVenster');
+  tekenConceptStappen();
   if (mag) el('pNaam').focus();
 }
 
@@ -901,37 +905,95 @@ function tekenConceptStappen() {
   el('pStappen').innerHTML = conceptStappen.length === 0
     ? '<div class="stappen-leeg">Nog geen stappen. Plak hierboven je procedure.</div>'
     : conceptStappen.map((stap, index) => `
-        <div class="stap-regel">
+        <div class="stap-regel" data-regel="${index}">
+          ${mag ? `<span class="hendel" title="Sleep om te verplaatsen">${GRIJPER}</span>` : ''}
           <span class="nummer">${index + 1}.</span>
-          <input value="${esc(stap)}" data-stap="${index}" ${mag ? '' : 'readonly'} />
-          ${mag ? `
-            <button data-omhoog="${index}" title="Omhoog" ${index === 0 ? 'disabled' : ''}>↑</button>
-            <button data-omlaag="${index}" title="Omlaag" ${index === conceptStappen.length - 1 ? 'disabled' : ''}>↓</button>
-            <button class="weg" data-weg="${index}" title="Verwijderen">✕</button>` : ''}
+          <textarea rows="1" data-stap="${index}" ${mag ? '' : 'readonly'}>${esc(stap)}</textarea>
+          ${mag ? '<button class="weg" data-weg="' + index + '" title="Verwijderen">✕</button>' : ''}
         </div>`).join('');
 
-  // Tekst bijwerken zonder opnieuw te tekenen, anders raak je de cursor kwijt.
-  el('pStappen').querySelectorAll('[data-stap]').forEach(invoer => {
-    invoer.addEventListener('input', () => { conceptStappen[Number(invoer.dataset.stap)] = invoer.value; });
+  el('pStappen').querySelectorAll('[data-stap]').forEach(veld => {
+    pasHoogteAan(veld);
+
+    // Tekst bijwerken zonder opnieuw te tekenen, anders raak je de cursor kwijt.
+    veld.addEventListener('input', () => {
+      // Eén stap is één regel; geplakte regeleindes worden spaties.
+      if (veld.value.includes('\n')) veld.value = veld.value.replace(/\s*\n\s*/g, ' ');
+      conceptStappen[Number(veld.dataset.stap)] = veld.value;
+      pasHoogteAan(veld);
+    });
+
+    veld.addEventListener('keydown', (gebeurtenis) => {
+      if (gebeurtenis.key === 'Enter') gebeurtenis.preventDefault();
+    });
   });
 
-  const verplaats = (van, naar) => {
-    [conceptStappen[van], conceptStappen[naar]] = [conceptStappen[naar], conceptStappen[van]];
-    tekenConceptStappen();
-  };
-
-  el('pStappen').querySelectorAll('[data-omhoog]').forEach(knop => {
-    knop.addEventListener('click', () => verplaats(Number(knop.dataset.omhoog), Number(knop.dataset.omhoog) - 1));
-  });
-  el('pStappen').querySelectorAll('[data-omlaag]').forEach(knop => {
-    knop.addEventListener('click', () => verplaats(Number(knop.dataset.omlaag), Number(knop.dataset.omlaag) + 1));
-  });
   el('pStappen').querySelectorAll('[data-weg]').forEach(knop => {
     knop.addEventListener('click', () => {
       conceptStappen.splice(Number(knop.dataset.weg), 1);
       tekenConceptStappen();
     });
   });
+
+  if (mag) koppelStappenSlepen();
+}
+
+/** Laat het tekstvak meegroeien met de inhoud. */
+function pasHoogteAan(veld) {
+  veld.style.height = 'auto';
+
+  // Staat het veld (nog) niet op het scherm, dan meet de browser nul. Die nul
+  // vastzetten zou de tekst onzichtbaar maken; laat de hoogte dan met rust.
+  if (veld.scrollHeight > 0) veld.style.height = veld.scrollHeight + 'px';
+}
+
+/**
+ * Slepen aan de hendel. De regel zelf is niet sleepbaar: anders kun je geen
+ * tekst meer selecteren in het tekstvak.
+ */
+function koppelStappenSlepen() {
+  let gesleept = null;
+
+  el('pStappen').querySelectorAll('.stap-regel').forEach(regel => {
+    const hendel = regel.querySelector('.hendel');
+
+    hendel.addEventListener('mousedown', () => { regel.draggable = true; });
+    regel.addEventListener('dragend', () => {
+      regel.draggable = false;
+      regel.classList.remove('sleept');
+      gesleept = null;
+      legVolgordeVast();
+    });
+
+    regel.addEventListener('dragstart', (gebeurtenis) => {
+      gesleept = regel;
+      regel.classList.add('sleept');
+      gebeurtenis.dataTransfer.effectAllowed = 'move';
+      gebeurtenis.dataTransfer.setData('text/plain', regel.dataset.regel);
+    });
+
+    regel.addEventListener('dragover', (gebeurtenis) => {
+      if (!gesleept || gesleept === regel) return;
+      gebeurtenis.preventDefault();
+
+      const vak = regel.getBoundingClientRect();
+      const bovenhelft = gebeurtenis.clientY < vak.top + vak.height / 2;
+      regel.parentNode.insertBefore(gesleept, bovenhelft ? regel : regel.nextSibling);
+    });
+  });
+
+  el('pStappen').addEventListener('drop', (gebeurtenis) => gebeurtenis.preventDefault());
+}
+
+/** Leest de volgorde van het scherm terug en tekent opnieuw met nieuwe nummers. */
+function legVolgordeVast() {
+  const volgorde = [...el('pStappen').querySelectorAll('.stap-regel')]
+    .map(regel => conceptStappen[Number(regel.dataset.regel)]);
+
+  if (volgorde.length === conceptStappen.length && volgorde.every(stap => stap !== undefined)) {
+    conceptStappen = volgorde;
+  }
+  tekenConceptStappen();
 }
 
 // Plakken of typen vervangt de voorvertoning; dat staat er ook bij.

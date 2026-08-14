@@ -415,18 +415,27 @@ tbody tr.let-op td { color: #7d2431; }
 /* ── Werkprocessen ── */
 .stappenlijst { display: flex; flex-direction: column; gap: 6px; }
 .stap-regel {
-  display: flex; align-items: center; gap: 8px;
-  background: #f8f9fb; border: 1px solid var(--lijn); border-radius: 6px; padding: 6px 8px;
+  display: flex; align-items: flex-start; gap: 8px;
+  background: #f8f9fb; border: 1px solid var(--lijn); border-radius: 6px; padding: 7px 8px;
 }
+.stap-regel .hendel {
+  flex-shrink: 0; color: var(--grijs); cursor: grab;
+  padding: 3px 1px 0; line-height: 0; user-select: none;
+}
+.stap-regel .hendel:hover { color: var(--blauw); }
+.stap-regel .hendel:active { cursor: grabbing; }
+.stap-regel.sleept { opacity: 0.35; }
 .stap-regel .nummer {
-  width: 24px; flex-shrink: 0; text-align: right;
+  width: 24px; flex-shrink: 0; text-align: right; padding-top: 3px;
   font-size: 0.78rem; font-weight: 700; color: var(--blauw);
 }
-.stap-regel input {
+/* Groeit mee met de tekst, zodat een lange stap nooit half uit beeld valt. */
+.stap-regel textarea {
   flex: 1; min-width: 0; border: none; background: transparent; outline: none;
-  font-family: inherit; font-size: 0.87rem; color: var(--donker); padding: 2px 0;
+  font-family: inherit; font-size: 0.87rem; line-height: 1.5; color: var(--donker);
+  padding: 1px 0; resize: none; overflow: hidden; display: block;
 }
-.stap-regel input:focus { border-bottom: 1px solid var(--blauw); }
+.stap-regel textarea:focus { border-bottom: 1px solid var(--blauw); }
 .stap-regel button {
   background: none; border: none; cursor: pointer; color: var(--grijs);
   font-size: 0.85rem; line-height: 1; padding: 3px 5px; border-radius: 4px;
