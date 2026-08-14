@@ -43,6 +43,7 @@ administratie — zie *Back-ups* verderop.
 | Prioriteit | Critical, High, Medium of Low — of geen. Klik en kies, net als bij status. Ook te filteren |
 | Deadline-alarm | Taken lichten rood op zodra de deadline dichtbij is en er nog niet aan gewerkt wordt |
 | Kanban | De zes statussen als kolommen, kaarten ertussen slepen |
+| Werkprocessen | Bibliotheek met vaste werkwijzen. Je maakt er een door een procedure te plakken; de app knipt hem in stappen |
 | Overdragen | Een taak naar een ander project verplaatsen via **Bewerken → Project**. Opmerkingen, historie en bijlagen gaan mee |
 | Bijlagen | Bestanden bij een taak, zodat de uitvoerder alles bij de hand heeft. Staan op je eigen server, niet bij een externe dienst |
 | Opmerkingen | Een gesprek per taak, met naam en tijdstip |
@@ -108,6 +109,56 @@ Kies je een project waar de uitvoerder geen toegang toe heeft, dan verdwijnt die
 persoon uit de keuzelijst en valt de keuze terug op "niemand" — regel 3 hierboven
 geldt ook bij verhuizen. Wil je dat hij de taak houdt, geef hem dan eerst toegang
 tot dat project.
+
+### Werkprocessen
+
+Een bibliotheek met vaste werkwijzen, bedrijfsbreed. Je maakt er een door een
+bestaande procedure in het tekstvak te plakken.
+
+**Het format is: één stap per regel.** De app haalt er zelf af wat Word en mail
+eromheen zetten: nummering (`1.`, `1)`, `Stap 1:`), opsommingstekens (`-`, `*`,
+`•`) en lege regels. Deze drie leveren dus hetzelfde op:
+
+```
+1. Controleer de flesdruk      - Controleer de flesdruk      Controleer de flesdruk
+2. Noteer het serienummer      - Noteer het serienummer      Noteer het serienummer
+```
+
+Wat niet werkt is lopende tekst: *"Controleer eerst de druk, noteer daarna het
+nummer"* wordt één stap, want het is één regel.
+
+Daarom is er een **voorvertoning**: je ziet meteen welke stappen eruit komen en
+kunt ze aanpassen, verwijderen, verplaatsen of aanvullen vóór het opslaan. De
+herkenning hoeft niet perfect te zijn — wat in de voorvertoning staat, is wat
+wordt opgeslagen.
+
+Twee dingen om te weten:
+
+- **Nummers als `10-15 stuks` en temperaturen als `-15 graden` blijven heel.**
+  Een cijfer of streepje wordt alleen als opsomming gezien als er een leesteken
+  of spatie op volgt.
+- **Versies gaan alleen omhoog bij een echte wijziging in de stappen.** De naam
+  of toelichting aanpassen verandert de versie niet. Er is bewust geen apart
+  versiearchief: zodra een taak een werkproces krijgt (stap 2), krijgt die taak
+  een eigen kopie van de stappen, en die kopie is het bewijs van welke versie er
+  gevolgd is.
+
+Grenzen: 200 stappen per werkproces, 500 tekens per stap.
+
+### Wie mag werkprocessen beheren
+
+Iedereen die is ingelogd ziet de bibliotheek. Beheren — aanmaken, wijzigen,
+verwijderen — mag een beheerder, en ieder lid bij wie op het Teamscherm het
+vinkje **mag beheren** aanstaat.
+
+Die aparte instelling bestaat omdat degene die werkinstructies onderhoudt vaak
+de kwaliteits- of KAM-coördinator is, en dat is meestal niet degene die de
+applicatie beheert. Zo kan die persoon procedures onderhouden zonder toegang tot
+accounts en uitnodigingen.
+
+Het is bewust één los recht en geen rechtensysteem. Dat komt pas in beeld bij
+het derde losse recht of zodra er combinaties nodig zijn; dan weet je uit de
+praktijk welke rechten er werkelijk toe doen.
 
 ### Waar bijlagen staan
 

@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { createWriteStream, createReadStream, unlinkSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { db, BIJLAGEMAP, STATUSSEN, PRIORITEITEN, aantalGebruikers, logHistorie } from './db.js';
+import { splitsStappen, MAX_STAPPEN, MAX_STAP_TEKENS } from '../public/stappen.js';
 import {
   hashWachtwoord, wachtwoordKlopt, maakSessie, verwijderSessie,
   vereistLogin, vereistBeheerder,
@@ -131,6 +132,7 @@ api.get('/ik', (req, res) => {
     gebruiker: req.gebruiker,
     statussen: STATUSSEN,
     prioriteiten: PRIORITEITEN,
+    mag_werkprocessen: req.gebruiker ? magWerkprocessenBeheren(req.gebruiker) : false,
     max_bijlage_mb: Math.round(MAX_BIJLAGE / 1024 / 1024),
   });
 });
@@ -230,7 +232,8 @@ api.delete('/uitnodigingen/:token', vereistBeheerder, (req, res) => {
 
 api.get('/gebruikers', vereistLogin, (req, res) => {
   res.json(db.prepare(
-    'SELECT id, naam, email, rol, actief FROM gebruikers ORDER BY actief DESC, naam COLLATE NOCASE'
+    `SELECT id, naam, email, rol, actief, mag_werkprocessen
+       FROM gebruikers ORDER BY actief DESC, naam COLLATE NOCASE`
   ).all());
 });
 
@@ -249,7 +252,13 @@ api.patch('/gebruikers/:id', vereistBeheerder, (req, res) => {
     return res.status(400).json({ fout: 'Er moet minstens één actieve beheerder overblijven.' });
   }
 
-  db.prepare('UPDATE gebruikers SET rol = ?, actief = ? WHERE id = ?').run(rol, actief, id);
+  const magWerkprocessen = req.body.mag_werkprocessen === undefined
+    ? gebruiker.mag_werkprocessen
+    : (req.body.mag_werkprocessen ? 1 : 0);
+
+  db.prepare('UPDATE gebruikers SET rol = ?, actief = ?, mag_werkprocessen = ? WHERE id = ?')
+    .run(rol, actief, magWerkprocessen, id);
+
   if (!actief) db.prepare('DELETE FROM sessies WHERE gebruiker_id = ?').run(id);
 
   res.json({ ok: true });
@@ -831,6 +840,142 @@ api.delete('/bijlagen/:id', vereistLogin, (req, res) => {
   verwijderBestand(bijlage.opslagnaam);
   logHistorie(taak.id, req.gebruiker.id, 'bijlage verwijderd', bijlage.bestandsnaam, null);
 
+  res.json({ ok: true });
+});
+
+// ── Werkprocessen ────────────────────────────────────────────────────────
+// De bibliotheek met vaste werkwijzen. Iedereen mag kijken; beheren mag een
+// beheerder en wie dat recht heeft gekregen.
+
+function magWerkprocessenBeheren(gebruiker) {
+  return gebruiker.rol === 'beheerder' || gebruiker.mag_werkprocessen;
+}
+
+function vereistWerkprocesRecht(req, res, next) {
+  if (!req.gebruiker) return res.status(401).json({ fout: 'Je bent niet ingelogd.' });
+  if (!magWerkprocessenBeheren(req.gebruiker)) {
+    return res.status(403).json({ fout: 'Je hebt geen recht om werkprocessen te beheren. Vraag een beheerder om dat aan te zetten.' });
+  }
+  next();
+}
+
+/** Controleert de stappen die de browser stuurt. Vertrouw nooit de voorvertoning. */
+function controleerStappen(ruw) {
+  if (!Array.isArray(ruw)) return { fout: 'Er zijn geen stappen meegestuurd.' };
+
+  const stappen = ruw
+    .map((stap) => tekst(stap, MAX_STAP_TEKENS))
+    .filter((stap) => stap.length > 0);
+
+  if (stappen.length === 0) {
+    return { fout: 'Er zijn geen stappen gevonden. Plak een lijst met één stap per regel.' };
+  }
+  if (stappen.length > MAX_STAPPEN) {
+    return { fout: `Dit werkproces heeft ${stappen.length} stappen. Er passen er maximaal ${MAX_STAPPEN} in.` };
+  }
+  return { stappen };
+}
+
+function schrijfStappen(werkprocesId, stappen) {
+  db.prepare('DELETE FROM werkproces_stappen WHERE werkproces_id = ?').run(werkprocesId);
+  const voegToe = db.prepare('INSERT INTO werkproces_stappen (werkproces_id, tekst, positie) VALUES (?, ?, ?)');
+  stappen.forEach((stap, index) => voegToe.run(werkprocesId, stap, index + 1));
+}
+
+const stappenVan = (werkprocesId) => db
+  .prepare('SELECT tekst FROM werkproces_stappen WHERE werkproces_id = ? ORDER BY positie, id')
+  .all(werkprocesId).map((rij) => rij.tekst);
+
+api.get('/werkprocessen', vereistLogin, (req, res) => {
+  res.json({
+    mag_beheren: magWerkprocessenBeheren(req.gebruiker),
+    werkprocessen: db.prepare(
+      `SELECT w.id, w.naam, w.toelichting, w.versie, w.aangemaakt_op, w.gewijzigd_op,
+              g.naam AS aangemaakt_door_naam,
+              (SELECT COUNT(*) FROM werkproces_stappen s WHERE s.werkproces_id = w.id) AS aantal_stappen
+         FROM werkprocessen w
+         LEFT JOIN gebruikers g ON g.id = w.aangemaakt_door
+        ORDER BY w.naam COLLATE NOCASE`
+    ).all(),
+  });
+});
+
+api.get('/werkprocessen/:id', vereistLogin, (req, res) => {
+  const werkproces = db.prepare('SELECT * FROM werkprocessen WHERE id = ?').get(Number(req.params.id));
+  if (!werkproces) return res.status(404).json({ fout: 'Werkproces niet gevonden.' });
+
+  res.json({ ...werkproces, stappen: stappenVan(werkproces.id) });
+});
+
+api.post('/werkprocessen', vereistWerkprocesRecht, (req, res) => {
+  const naam = tekst(req.body.naam, 120);
+  if (!naam) return res.status(400).json({ fout: 'Geef het werkproces een naam.' });
+
+  if (db.prepare('SELECT 1 FROM werkprocessen WHERE naam = ?').get(naam)) {
+    return res.status(409).json({ fout: `Er bestaat al een werkproces met de naam "${naam}".` });
+  }
+
+  const gecontroleerd = controleerStappen(req.body.stappen);
+  if (gecontroleerd.fout) return res.status(400).json({ fout: gecontroleerd.fout });
+
+  const id = db.transaction(() => {
+    const r = db.prepare(
+      'INSERT INTO werkprocessen (naam, toelichting, aangemaakt_door) VALUES (?, ?, ?)'
+    ).run(naam, tekst(req.body.toelichting, 300), req.gebruiker.id);
+
+    schrijfStappen(r.lastInsertRowid, gecontroleerd.stappen);
+    return r.lastInsertRowid;
+  })();
+
+  res.json({ id, naam, versie: 1 });
+});
+
+api.patch('/werkprocessen/:id', vereistWerkprocesRecht, (req, res) => {
+  const werkproces = db.prepare('SELECT * FROM werkprocessen WHERE id = ?').get(Number(req.params.id));
+  if (!werkproces) return res.status(404).json({ fout: 'Werkproces niet gevonden.' });
+
+  const naam = req.body.naam === undefined ? werkproces.naam : tekst(req.body.naam, 120);
+  if (!naam) return res.status(400).json({ fout: 'Geef het werkproces een naam.' });
+
+  const bezet = db.prepare('SELECT 1 FROM werkprocessen WHERE naam = ? AND id != ?').get(naam, werkproces.id);
+  if (bezet) return res.status(409).json({ fout: `Er bestaat al een werkproces met de naam "${naam}".` });
+
+  const toelichting = req.body.toelichting === undefined
+    ? werkproces.toelichting
+    : tekst(req.body.toelichting, 300);
+
+  // Alleen een echte wijziging in de stappen hoogt de versie op. De naam of de
+  // toelichting bijwerken is geen nieuwe werkwijze.
+  let versie = werkproces.versie;
+  let nieuweStappen = null;
+
+  if (req.body.stappen !== undefined) {
+    const gecontroleerd = controleerStappen(req.body.stappen);
+    if (gecontroleerd.fout) return res.status(400).json({ fout: gecontroleerd.fout });
+
+    const huidige = stappenVan(werkproces.id);
+    const verschilt = gecontroleerd.stappen.length !== huidige.length
+      || gecontroleerd.stappen.some((stap, index) => stap !== huidige[index]);
+
+    if (verschilt) {
+      nieuweStappen = gecontroleerd.stappen;
+      versie += 1;
+    }
+  }
+
+  db.transaction(() => {
+    db.prepare(
+      "UPDATE werkprocessen SET naam = ?, toelichting = ?, versie = ?, gewijzigd_op = datetime('now') WHERE id = ?"
+    ).run(naam, toelichting, versie, werkproces.id);
+
+    if (nieuweStappen) schrijfStappen(werkproces.id, nieuweStappen);
+  })();
+
+  res.json({ ok: true, versie });
+});
+
+api.delete('/werkprocessen/:id', vereistWerkprocesRecht, (req, res) => {
+  db.prepare('DELETE FROM werkprocessen WHERE id = ?').run(Number(req.params.id));
   res.json({ ok: true });
 });
 

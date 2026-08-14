@@ -103,6 +103,27 @@ db.exec(`
     aangemaakt_op  TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Vaste werkwijzen, bedrijfsbreed. Een taak krijgt er straks een kopie van,
+  -- dus deze tabel is de bibliotheek en niet de administratie van wat er gedaan is.
+  CREATE TABLE IF NOT EXISTS werkprocessen (
+    id              INTEGER PRIMARY KEY,
+    naam            TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    toelichting     TEXT NOT NULL DEFAULT '',
+    versie          INTEGER NOT NULL DEFAULT 1,
+    aangemaakt_door INTEGER REFERENCES gebruikers(id) ON DELETE SET NULL,
+    aangemaakt_op   TEXT NOT NULL DEFAULT (datetime('now')),
+    gewijzigd_op    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS werkproces_stappen (
+    id            INTEGER PRIMARY KEY,
+    werkproces_id INTEGER NOT NULL REFERENCES werkprocessen(id) ON DELETE CASCADE,
+    tekst         TEXT NOT NULL,
+    positie       INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_stappen_werkproces ON werkproces_stappen(werkproces_id);
+
   CREATE TABLE IF NOT EXISTS historie (
     id            INTEGER PRIMARY KEY,
     taak_id       INTEGER NOT NULL REFERENCES taken(id) ON DELETE CASCADE,
@@ -134,6 +155,10 @@ voegKolomToe('borden', 'aangemaakt_door', 'INTEGER REFERENCES gebruikers(id)');
 
 // Leeg betekent: geen prioriteit opgegeven. Bestaande taken beginnen zo.
 voegKolomToe('taken', 'prioriteit', 'TEXT');
+
+// Recht om de werkprocesbibliotheek te beheren. Standaard uit; beheerders mogen
+// het al via hun rol, dus niemand raakt hierdoor iets kwijt.
+voegKolomToe('gebruikers', 'mag_werkprocessen', 'INTEGER NOT NULL DEFAULT 0');
 
 export const STATUSSEN = [
   'Not Started',

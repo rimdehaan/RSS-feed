@@ -30,6 +30,9 @@ uit een prototype van de eigenaar dat alles in `localStorage` bewaarde.
 - `src/db.js` — database en tabellen · `src/auth.js` — wachtwoorden en sessies ·
   `src/api.js` — alle API-routes
 - `public/` — inloggen, de app, opmaak
+- `public/stappen.js` — knipt geplakte tekst in stappen. Staat in `public/` omdat
+  de browser hem nodig heeft voor de voorvertoning, maar de server importeert
+  hetzelfde bestand bij het opslaan. Eén regelset, geen twee die uit elkaar lopen.
 - Zie `taakbeheer/README.md` voor draaien, hosting en wat er bewust nog niet in zit.
 
 ## Algemene uitgangspunten

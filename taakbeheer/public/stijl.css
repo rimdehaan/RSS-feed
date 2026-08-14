@@ -412,6 +412,45 @@ tbody tr.let-op td { color: #7d2431; }
 .historie li:last-child { border-bottom: none; }
 .historie b { color: var(--donker); font-weight: 600; }
 
+/* ── Werkprocessen ── */
+.stappenlijst { display: flex; flex-direction: column; gap: 6px; }
+.stap-regel {
+  display: flex; align-items: center; gap: 8px;
+  background: #f8f9fb; border: 1px solid var(--lijn); border-radius: 6px; padding: 6px 8px;
+}
+.stap-regel .nummer {
+  width: 24px; flex-shrink: 0; text-align: right;
+  font-size: 0.78rem; font-weight: 700; color: var(--blauw);
+}
+.stap-regel input {
+  flex: 1; min-width: 0; border: none; background: transparent; outline: none;
+  font-family: inherit; font-size: 0.87rem; color: var(--donker); padding: 2px 0;
+}
+.stap-regel input:focus { border-bottom: 1px solid var(--blauw); }
+.stap-regel button {
+  background: none; border: none; cursor: pointer; color: var(--grijs);
+  font-size: 0.85rem; line-height: 1; padding: 3px 5px; border-radius: 4px;
+}
+.stap-regel button:hover { color: var(--donker); background: var(--lijn); }
+.stap-regel button.weg:hover { color: var(--rood); }
+.stappen-leeg {
+  color: var(--grijs); font-size: 0.85rem; padding: 14px;
+  border: 1px dashed var(--lijn); border-radius: 6px; text-align: center;
+}
+
+.proces-kaart {
+  background: #fff; border: 1px solid var(--lijn); border-radius: 10px;
+  padding: 16px 18px; margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,41,68,0.06);
+  display: flex; align-items: center; gap: 14px;
+}
+.proces-kaart h3 { font-size: 0.95rem; color: var(--donker); margin-bottom: 3px; }
+.proces-kaart .bij { font-size: 0.78rem; color: var(--grijs); }
+.proces-kaart .inhoud { flex: 1; min-width: 0; }
+.proces-kaart .versie {
+  background: var(--achtergrond); border: 1px solid var(--lijn); border-radius: 20px;
+  padding: 3px 11px; font-size: 0.72rem; font-weight: 700; color: var(--blauw); white-space: nowrap;
+}
+
 /* ── Team ── */
 .kaartje {
   background: #fff; border: 1px solid var(--lijn); border-radius: 10px;

@@ -1,5 +1,7 @@
 // Transafe Taakbeheer — alles wat er in de browser gebeurt.
 
+import { splitsStappen, MAX_STAPPEN } from './stappen.js';
+
 // ── Gedeelde toestand ────────────────────────────────────────────────────
 const staat = {
   ik: null,
@@ -8,7 +10,7 @@ const staat = {
   borden: [],
   bordId: null,        // null = het persoonlijke bord
   taken: [],
-  weergave: 'tabel',   // 'tabel' | 'kanban' | 'team'
+  weergave: 'tabel',   // 'tabel' | 'kanban' | 'team' | 'werkprocessen'
   bewerktId: null,
   detailId: null,
   toegestaneUitvoerders: null,   // null = iedereen mag; anders een Set met ids
@@ -235,11 +237,12 @@ function tekenZijbalk() {
   });
 
   el('teamKnop').classList.toggle('actief', staat.weergave === 'team');
+  el('werkprocessenKnop').classList.toggle('actief', staat.weergave === 'werkprocessen');
 }
 
 async function kiesBord(id) {
   staat.bordId = id;
-  if (staat.weergave === 'team') staat.weergave = 'tabel';
+  if (staat.weergave === 'team' || staat.weergave === 'werkprocessen') staat.weergave = 'tabel';
 
   if (isPersoonlijk()) {
     staat.taken = await api('/mijn-taken');
@@ -300,6 +303,7 @@ function gefilterdeTaken() {
 
 // ── Tekenen ──────────────────────────────────────────────────────────────
 function teken() {
+  if (staat.weergave === 'werkprocessen') return tekenWerkprocessen();
   if (staat.weergave === 'team') return tekenTeam();
   if (isPersoonlijk()) return tekenMijnTaken();
   if (staat.weergave === 'kanban') return tekenKanban();
@@ -805,6 +809,187 @@ el('detailVerwijder').addEventListener('click', async () => {
   herlaadTaken();
 });
 
+// ── Werkprocessen: de bibliotheek ────────────────────────────────────────
+
+async function tekenWerkprocessen() {
+  staat.weergave = 'werkprocessen';
+  el('paginaTitel').textContent = 'Werkprocessen';
+  el('werkbalk').hidden = true;
+  tekenZijbalk();
+
+  const { mag_beheren, werkprocessen } = await api('/werkprocessen');
+  staat.magWerkprocessen = mag_beheren;
+
+  el('inhoud').innerHTML = `
+    <div style="max-width:900px">
+      <p class="hint" style="margin:0 0 16px">
+        Vaste werkwijzen die je straks aan een taak kunt hangen. Je maakt ze door een
+        bestaande procedure te plakken; de app knipt hem in stappen die je nog kunt bijwerken.
+        ${mag_beheren ? '' : '<br><strong>Je mag ze wel bekijken, maar niet wijzigen.</strong> Vraag een beheerder om dat recht.'}
+      </p>
+
+      ${mag_beheren ? '<button class="btn btn-primary" id="nieuwProcesKnop" style="margin-bottom:16px">Nieuw werkproces</button>' : ''}
+
+      ${werkprocessen.length === 0
+        ? '<div class="mijn-leeg">Er zijn nog geen werkprocessen. Maak er een door je eerste procedure te plakken.</div>'
+        : werkprocessen.map(proces => `
+            <div class="proces-kaart">
+              <div class="inhoud">
+                <h3>${esc(proces.naam)}</h3>
+                <div class="bij">
+                  ${proces.aantal_stappen} ${proces.aantal_stappen === 1 ? 'stap' : 'stappen'}
+                  ${proces.toelichting ? '· ' + esc(proces.toelichting) : ''}
+                  · door ${esc(proces.aangemaakt_door_naam || 'onbekend')}
+                </div>
+              </div>
+              <span class="versie">versie ${proces.versie}</span>
+              <button class="btn btn-secondary btn-sm" data-bekijk="${proces.id}">
+                ${mag_beheren ? 'Bekijken en wijzigen' : 'Bekijken'}
+              </button>
+            </div>`).join('')}
+    </div>`;
+
+  el('nieuwProcesKnop')?.addEventListener('click', () => openProcesVenster(null));
+  el('inhoud').querySelectorAll('[data-bekijk]').forEach(knop => {
+    knop.addEventListener('click', () => openProcesVenster(Number(knop.dataset.bekijk)));
+  });
+}
+
+// ── Werkprocesvenster met voorvertoning ──────────────────────────────────
+// De voorvertoning is de waarheid: wat daar staat wordt opgeslagen. Daarom kun
+// je er stappen aanpassen, verwijderen, verplaatsen en toevoegen.
+
+let procesId = null;
+let conceptStappen = [];
+
+async function openProcesVenster(id) {
+  procesId = id;
+  el('pMelding').textContent = '';
+  el('procesVensterTitel').textContent = id ? 'Werkproces' : 'Nieuw werkproces';
+  el('pTekst').value = '';
+
+  if (id) {
+    const proces = await api('/werkprocessen/' + id);
+    el('pNaam').value = proces.naam;
+    el('pToelichting').value = proces.toelichting;
+    conceptStappen = [...proces.stappen];
+  } else {
+    el('pNaam').value = '';
+    el('pToelichting').value = '';
+    conceptStappen = [];
+  }
+
+  // Zonder recht mag je kijken, niet wijzigen.
+  const mag = staat.magWerkprocessen;
+  for (const veld of ['pNaam', 'pToelichting', 'pTekst']) el(veld).readOnly = !mag;
+  el('pStapErbij').hidden = !mag;
+  el('pOpslaan').hidden = !mag;
+  el('pVerwijder').hidden = !mag || !id;
+
+  tekenConceptStappen();
+  openVenster('procesVenster');
+  if (mag) el('pNaam').focus();
+}
+
+function tekenConceptStappen() {
+  const mag = staat.magWerkprocessen;
+
+  el('pAantal').textContent = conceptStappen.length === 0
+    ? ''
+    : `— ${conceptStappen.length} ${conceptStappen.length === 1 ? 'stap' : 'stappen'}`;
+
+  el('pStappen').innerHTML = conceptStappen.length === 0
+    ? '<div class="stappen-leeg">Nog geen stappen. Plak hierboven je procedure.</div>'
+    : conceptStappen.map((stap, index) => `
+        <div class="stap-regel">
+          <span class="nummer">${index + 1}.</span>
+          <input value="${esc(stap)}" data-stap="${index}" ${mag ? '' : 'readonly'} />
+          ${mag ? `
+            <button data-omhoog="${index}" title="Omhoog" ${index === 0 ? 'disabled' : ''}>↑</button>
+            <button data-omlaag="${index}" title="Omlaag" ${index === conceptStappen.length - 1 ? 'disabled' : ''}>↓</button>
+            <button class="weg" data-weg="${index}" title="Verwijderen">✕</button>` : ''}
+        </div>`).join('');
+
+  // Tekst bijwerken zonder opnieuw te tekenen, anders raak je de cursor kwijt.
+  el('pStappen').querySelectorAll('[data-stap]').forEach(invoer => {
+    invoer.addEventListener('input', () => { conceptStappen[Number(invoer.dataset.stap)] = invoer.value; });
+  });
+
+  const verplaats = (van, naar) => {
+    [conceptStappen[van], conceptStappen[naar]] = [conceptStappen[naar], conceptStappen[van]];
+    tekenConceptStappen();
+  };
+
+  el('pStappen').querySelectorAll('[data-omhoog]').forEach(knop => {
+    knop.addEventListener('click', () => verplaats(Number(knop.dataset.omhoog), Number(knop.dataset.omhoog) - 1));
+  });
+  el('pStappen').querySelectorAll('[data-omlaag]').forEach(knop => {
+    knop.addEventListener('click', () => verplaats(Number(knop.dataset.omlaag), Number(knop.dataset.omlaag) + 1));
+  });
+  el('pStappen').querySelectorAll('[data-weg]').forEach(knop => {
+    knop.addEventListener('click', () => {
+      conceptStappen.splice(Number(knop.dataset.weg), 1);
+      tekenConceptStappen();
+    });
+  });
+}
+
+// Plakken of typen vervangt de voorvertoning; dat staat er ook bij.
+el('pTekst').addEventListener('input', () => {
+  conceptStappen = splitsStappen(el('pTekst').value);
+  el('pMelding').textContent = conceptStappen.length > MAX_STAPPEN
+    ? `Dit zijn ${conceptStappen.length} stappen. Er passen er maximaal ${MAX_STAPPEN} in één werkproces.`
+    : '';
+  tekenConceptStappen();
+});
+
+el('pStapErbij').addEventListener('click', () => {
+  conceptStappen.push('');
+  tekenConceptStappen();
+  el('pStappen').querySelector('[data-stap="' + (conceptStappen.length - 1) + '"]')?.focus();
+});
+
+el('pOpslaan').addEventListener('click', async () => {
+  const stappen = conceptStappen.map(stap => stap.trim()).filter(Boolean);
+
+  if (!el('pNaam').value.trim()) return toonProcesFout('Geef het werkproces een naam.');
+  if (stappen.length === 0) return toonProcesFout('Er zijn geen stappen. Plak een procedure of voeg er handmatig een toe.');
+
+  const gegevens = {
+    naam: el('pNaam').value.trim(),
+    toelichting: el('pToelichting').value.trim(),
+    stappen,
+  };
+
+  try {
+    if (procesId) await api('/werkprocessen/' + procesId, { method: 'PATCH', body: gegevens });
+    else await api('/werkprocessen', { method: 'POST', body: gegevens });
+
+    sluitVenster('procesVenster');
+    tekenWerkprocessen();
+  } catch (fout) {
+    toonProcesFout(fout.message);
+  }
+});
+
+el('pVerwijder').addEventListener('click', async () => {
+  if (!confirm(`"${el('pNaam').value}" verwijderen uit de bibliotheek?`)) return;
+  try {
+    await api('/werkprocessen/' + procesId, { method: 'DELETE' });
+    sluitVenster('procesVenster');
+    tekenWerkprocessen();
+  } catch (fout) {
+    toonProcesFout(fout.message);
+  }
+});
+
+function toonProcesFout(bericht) {
+  el('pMelding').textContent = bericht;
+  el('pMelding').classList.remove('goed');
+}
+
+el('werkprocessenKnop').addEventListener('click', tekenWerkprocessen);
+
 // ── Bordinstellingen ─────────────────────────────────────────────────────
 let instellingenBordId = null;
 
@@ -935,12 +1120,18 @@ async function tekenTeam(bericht = null) {
       <h3>Teamleden</h3>
       <div class="melding" id="herstelMelding" style="margin-bottom:12px"></div>
       <table>
-        <thead><tr><th>Naam</th><th>E-mail</th><th>Rol</th><th>Status</th>${beheerder ? '<th></th>' : ''}</tr></thead>
+        <thead><tr><th>Naam</th><th>E-mail</th><th>Rol</th><th>Werkprocessen</th><th>Status</th>${beheerder ? '<th></th>' : ''}</tr></thead>
         <tbody>${staat.gebruikers.map(g => `
           <tr>
             <td><strong>${esc(g.naam)}</strong>${g.id === staat.ik.id ? ' <span class="zacht">(jij)</span>' : ''}</td>
             <td>${esc(g.email)}</td>
             <td>${g.rol === 'beheerder' ? 'Beheerder' : 'Lid'}</td>
+            <td>${g.rol === 'beheerder'
+              ? '<span class="zacht" title="Beheerders mogen dit altijd">altijd</span>'
+              : `<label style="display:flex;align-items:center;gap:6px;font-size:.82rem;${beheerder ? 'cursor:pointer' : ''}">
+                   <input type="checkbox" data-proc-recht="${g.id}" ${g.mag_werkprocessen ? 'checked' : ''} ${beheerder ? '' : 'disabled'} />
+                   mag beheren
+                 </label>`}</td>
             <td>${g.actief ? 'Actief' : '<span class="zacht">Uitgeschakeld</span>'}</td>
             ${beheerder ? `<td><div class="acties">
               <button class="btn btn-secondary btn-sm" data-rol="${g.id}" data-nieuw="${g.rol === 'beheerder' ? 'lid' : 'beheerder'}">
@@ -1024,6 +1215,20 @@ function koppelTeamKnoppen() {
         await api('/gebruikers/' + knop.dataset.rol, { method: 'PATCH', body: { rol: knop.dataset.nieuw } });
         tekenTeam();
       } catch (fout) { alert(fout.message); }
+    });
+  });
+
+  el('inhoud').querySelectorAll('[data-proc-recht]').forEach(vinkje => {
+    vinkje.addEventListener('change', async () => {
+      try {
+        await api('/gebruikers/' + vinkje.dataset.procRecht, {
+          method: 'PATCH',
+          body: { mag_werkprocessen: vinkje.checked },
+        });
+      } catch (fout) {
+        vinkje.checked = !vinkje.checked;
+        alert(fout.message);
+      }
     });
   });
 

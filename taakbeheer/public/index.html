@@ -24,7 +24,14 @@
 
     <div class="zijbalk-kop">Beheer</div>
     <nav>
-      <a id="teamKnop"><span>Team</span></a>
+      <a id="werkprocessenKnop">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>Werkprocessen</span>
+      </a>
+      <a id="teamKnop">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+        <span>Team</span>
+      </a>
     </nav>
 
     <div class="zijbalk-voet">
@@ -77,6 +84,48 @@
     </div>
 
     <div class="inhoud" id="inhoud"></div>
+  </div>
+</div>
+
+<!-- ── VENSTER: werkproces aanmaken/bewerken ── -->
+<div class="overlay" id="procesVenster">
+  <div class="venster">
+    <div class="venster-kop">
+      <h2 id="procesVensterTitel">Nieuw werkproces</h2>
+      <button class="venster-sluit" data-sluit>&times;</button>
+    </div>
+    <div class="venster-lijf">
+      <div class="veld">
+        <label for="pNaam">Naam</label>
+        <input type="text" id="pNaam" placeholder="Keuring gasflessen" />
+      </div>
+
+      <div class="veld" style="margin-top:14px">
+        <label for="pToelichting">Toelichting <span class="zacht">(optioneel)</span></label>
+        <input type="text" id="pToelichting" placeholder="Wanneer gebruik je dit werkproces?" />
+      </div>
+
+      <div class="veld" style="margin-top:14px">
+        <label for="pTekst">Plak hier je procedure — één stap per regel</label>
+        <textarea id="pTekst" rows="7" placeholder="1. Controleer de flesdruk&#10;2. Noteer het serienummer&#10;3. Plak de keuringssticker"></textarea>
+        <small class="zacht" style="font-size:.75rem">
+          Nummers en opsommingstekens haalt de app er zelf af. Let op: plakken vervangt de stappen hieronder.
+        </small>
+      </div>
+
+      <div class="blok-kop" style="margin-top:20px">
+        Voorvertoning <span class="zacht" id="pAantal" style="font-weight:400"></span>
+      </div>
+      <div id="pStappen" class="stappenlijst"></div>
+      <button class="btn btn-secondary btn-sm" id="pStapErbij" style="margin-top:8px">Stap toevoegen</button>
+
+      <div class="melding" id="pMelding" style="margin-top:14px"></div>
+    </div>
+    <div class="venster-voet">
+      <button class="btn btn-danger links" id="pVerwijder">Verwijderen</button>
+      <button class="btn btn-secondary" data-sluit>Annuleren</button>
+      <button class="btn btn-primary" id="pOpslaan">Opslaan</button>
+    </div>
   </div>
 </div>
 
@@ -202,6 +251,6 @@
   </div>
 </div>
 
-<script src="/app.js"></script>
+<script type="module" src="/app.js"></script>
 </body>
 </html>

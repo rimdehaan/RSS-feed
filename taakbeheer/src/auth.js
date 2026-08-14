@@ -73,14 +73,17 @@ export function metGebruiker(req, res, next) {
 
   if (token) {
     const rij = db.prepare(
-      `SELECT g.id, g.email, g.naam, g.rol, s.verloopt_op
+      `SELECT g.id, g.email, g.naam, g.rol, g.mag_werkprocessen, s.verloopt_op
          FROM sessies s
          JOIN gebruikers g ON g.id = s.gebruiker_id
         WHERE s.token = ? AND g.actief = 1`
     ).get(token);
 
     if (rij && new Date(rij.verloopt_op) > new Date()) {
-      req.gebruiker = { id: rij.id, email: rij.email, naam: rij.naam, rol: rij.rol };
+      req.gebruiker = {
+        id: rij.id, email: rij.email, naam: rij.naam, rol: rij.rol,
+        mag_werkprocessen: Boolean(rij.mag_werkprocessen),
+      };
     } else if (rij) {
       db.prepare('DELETE FROM sessies WHERE token = ?').run(token);
     }

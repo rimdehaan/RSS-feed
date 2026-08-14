@@ -9,6 +9,7 @@ import { mkdtempSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { splitsStappen } from '../public/stappen.js';
 
 const hier = dirname(fileURLToPath(import.meta.url));
 const werkmap = mkdtempSync(join(tmpdir(), 'taakbeheer-test-'));
@@ -545,6 +546,124 @@ try {
 
   check('prioriteit gaat mee bij verplaatsen naar een ander project',
     (await rim(`/taken/${spoed}`, { method: 'PATCH', body: { bord_id: projectA } })).data.prioriteit === 'High');
+
+  // ── Werkprocessen ───────────────────────────────────────────────────────
+  groep('Tekst knippen in stappen');
+
+  const knip = (tekst) => splitsStappen(tekst);
+
+  check('genummerd met punt',
+    JSON.stringify(knip('1. Controleer de druk\n2. Noteer het nummer')) ===
+    JSON.stringify(['Controleer de druk', 'Noteer het nummer']));
+
+  check('genummerd met haakje',
+    JSON.stringify(knip('1) Controleer de druk\n2) Noteer het nummer')) ===
+    JSON.stringify(['Controleer de druk', 'Noteer het nummer']));
+
+  check('met het woord stap ervoor',
+    JSON.stringify(knip('Stap 1: Controleer de druk\nStap 2: Noteer het nummer')) ===
+    JSON.stringify(['Controleer de druk', 'Noteer het nummer']));
+
+  check('met streepjes',
+    JSON.stringify(knip('- Controleer de druk\n- Noteer het nummer')) ===
+    JSON.stringify(['Controleer de druk', 'Noteer het nummer']));
+
+  check('met bolletjes en inspringing',
+    JSON.stringify(knip('  • Controleer de druk\n   • Noteer het nummer')) ===
+    JSON.stringify(['Controleer de druk', 'Noteer het nummer']));
+
+  check('kale regels blijven zoals ze zijn',
+    JSON.stringify(knip('Controleer de druk\nNoteer het nummer')) ===
+    JSON.stringify(['Controleer de druk', 'Noteer het nummer']));
+
+  check('lege regels vallen weg', knip('Eerste\n\n\nTweede\n   \n').length === 2);
+  check('streepje én nummer allebei weg', knip('- 1. Controleer de druk')[0] === 'Controleer de druk');
+
+  // Hier gaat een te gretige regel de mist in.
+  check('een reeks als 10-15 blijft heel', knip('10-15 flessen tellen')[0] === '10-15 flessen tellen');
+  check('een temperatuur als -15 blijft heel', knip('-15 graden aanhouden')[0] === '-15 graden aanhouden');
+  check('lopende tekst wordt één stap',
+    knip('Controleer eerst de druk, noteer daarna het nummer en plak tot slot de sticker.').length === 1);
+
+  check('te lange stap wordt afgekapt', knip('x'.repeat(700))[0].length === 500);
+  check('lege invoer geeft niets', knip('').length === 0 && knip('   \n  ').length === 0);
+
+  groep('Werkprocessen aanmaken');
+  r = await rim('/werkprocessen', { method: 'POST', body: {
+    naam: 'Keuring gasflessen',
+    toelichting: 'Voor de jaarlijkse keuring',
+    stappen: ['Controleer de druk', 'Noteer het serienummer', 'Plak de sticker'],
+  } });
+  check('werkproces aangemaakt', r.status === 200 && r.data.versie === 1, JSON.stringify(r.data));
+  const keuring = r.data.id;
+
+  r = await rim('/werkprocessen/' + keuring);
+  check('stappen in de juiste volgorde',
+    JSON.stringify(r.data.stappen) === JSON.stringify(['Controleer de druk', 'Noteer het serienummer', 'Plak de sticker']),
+    JSON.stringify(r.data.stappen));
+  check('toelichting bewaard', r.data.toelichting === 'Voor de jaarlijkse keuring');
+
+  check('zonder naam geweigerd',
+    (await rim('/werkprocessen', { method: 'POST', body: { naam: '  ', stappen: ['Iets'] } })).status === 400);
+  check('zonder stappen geweigerd',
+    (await rim('/werkprocessen', { method: 'POST', body: { naam: 'Leeg proces', stappen: [] } })).status === 400);
+  check('alleen lege stappen geweigerd',
+    (await rim('/werkprocessen', { method: 'POST', body: { naam: 'Leeg proces', stappen: ['', '   '] } })).status === 400);
+
+  r = await rim('/werkprocessen', { method: 'POST', body: { naam: 'KEURING GASFLESSEN', stappen: ['Iets'] } });
+  check('dubbele naam geweigerd, ook met andere hoofdletters', r.status === 409, JSON.stringify(r.data));
+  check('met de naam in de melding', /Keuring gasflessen/i.test(r.data.fout ?? ''), r.data.fout);
+
+  r = await rim('/werkprocessen', { method: 'POST', body: {
+    naam: 'Veel te lang', stappen: Array.from({ length: 250 }, (_, i) => 'Stap ' + i) } });
+  check('meer dan 200 stappen geweigerd', r.status === 400);
+  check('met het gevonden aantal erbij', /250/.test(r.data.fout ?? ''), r.data.fout);
+
+  groep('Werkprocessen wijzigen en versies');
+  check('naam wijzigen hoogt de versie niet op',
+    (await rim('/werkprocessen/' + keuring, { method: 'PATCH', body: { naam: 'Keuring gasflessen 2026' } })).data.versie === 1);
+  check('dezelfde stappen opnieuw sturen ook niet',
+    (await rim('/werkprocessen/' + keuring, { method: 'PATCH', body: {
+      stappen: ['Controleer de druk', 'Noteer het serienummer', 'Plak de sticker'] } })).data.versie === 1);
+
+  r = await rim('/werkprocessen/' + keuring, { method: 'PATCH', body: {
+    stappen: ['Controleer de druk', 'Noteer het serienummer', 'Plak de sticker', 'Meld af bij de klant'] } });
+  check('een stap erbij hoogt de versie wel op', r.data.versie === 2, JSON.stringify(r.data));
+  check('de nieuwe stap staat erin', (await rim('/werkprocessen/' + keuring)).data.stappen.length === 4);
+
+  check('alleen de volgorde wijzigen hoogt ook op',
+    (await rim('/werkprocessen/' + keuring, { method: 'PATCH', body: {
+      stappen: ['Noteer het serienummer', 'Controleer de druk', 'Plak de sticker', 'Meld af bij de klant'] } })).data.versie === 3);
+
+  groep('Rechten op werkprocessen');
+  check('een lid ziet de bibliotheek', (await carla('/werkprocessen')).status === 200);
+  check('maar mag niet beheren', (await carla('/werkprocessen')).data.mag_beheren === false);
+  check('aanmaken wordt geweigerd',
+    (await carla('/werkprocessen', { method: 'POST', body: { naam: 'Van Carla', stappen: ['Iets'] } })).status === 403);
+  check('wijzigen ook',
+    (await carla('/werkprocessen/' + keuring, { method: 'PATCH', body: { naam: 'Gekaapt' } })).status === 403);
+  check('en verwijderen ook',
+    (await carla('/werkprocessen/' + keuring, { method: 'DELETE' })).status === 403);
+
+  check('beheerder geeft het recht',
+    (await rim('/gebruikers/' + carlaId, { method: 'PATCH', body: { mag_werkprocessen: true } })).status === 200);
+  check('nu mag Carla het wel', (await carla('/werkprocessen')).data.mag_beheren === true);
+  check('en lukt aanmaken',
+    (await carla('/werkprocessen', { method: 'POST', body: { naam: 'Van Carla', stappen: ['Iets'] } })).status === 200);
+  check('het recht staat ook in haar eigen gegevens', (await carla('/ik')).data.mag_werkprocessen === true);
+
+  check('het recht weer intrekken kan',
+    (await rim('/gebruikers/' + carlaId, { method: 'PATCH', body: { mag_werkprocessen: false } })).status === 200);
+  check('en dan mag ze niets meer',
+    (await carla('/werkprocessen', { method: 'POST', body: { naam: 'Nog een', stappen: ['Iets'] } })).status === 403);
+  check('een lid kan zichzelf het recht niet geven',
+    (await carla('/gebruikers/' + carlaId, { method: 'PATCH', body: { mag_werkprocessen: true } })).status === 403);
+
+  groep('Werkprocessen verwijderen');
+  const aantalVoor = (await rim('/werkprocessen')).data.werkprocessen.length;
+  check('verwijderen lukt', (await rim('/werkprocessen/' + keuring, { method: 'DELETE' })).status === 200);
+  check('en hij is weg', (await rim('/werkprocessen')).data.werkprocessen.length === aantalVoor - 1);
+  check('opvragen geeft niet gevonden', (await rim('/werkprocessen/' + keuring)).status === 404);
 
   groep('Uitloggen');
   await rim('/uitloggen', { method: 'POST' });
