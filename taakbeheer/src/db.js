@@ -92,6 +92,32 @@ db.exec(`
     aangemaakt_op TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Een werkproces dat aan een taak hangt. Naam en versie staan hier los
+  -- opgeslagen: wijzigt of verdwijnt het origineel in de bibliotheek, dan blijft
+  -- zichtbaar welke werkwijze deze taak heeft gevolgd.
+  CREATE TABLE IF NOT EXISTS taak_processen (
+    id             INTEGER PRIMARY KEY,
+    taak_id        INTEGER NOT NULL REFERENCES taken(id) ON DELETE CASCADE,
+    werkproces_id  INTEGER REFERENCES werkprocessen(id) ON DELETE SET NULL,
+    naam           TEXT NOT NULL,
+    versie         INTEGER NOT NULL,
+    positie        REAL NOT NULL DEFAULT 0,
+    gekoppeld_door INTEGER REFERENCES gebruikers(id) ON DELETE SET NULL,
+    aangemaakt_op  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS taak_stappen (
+    id             INTEGER PRIMARY KEY,
+    taak_proces_id INTEGER NOT NULL REFERENCES taak_processen(id) ON DELETE CASCADE,
+    tekst          TEXT NOT NULL,
+    positie        INTEGER NOT NULL DEFAULT 0,
+    afgevinkt_door INTEGER REFERENCES gebruikers(id) ON DELETE SET NULL,
+    afgevinkt_op   TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_taakprocessen_taak  ON taak_processen(taak_id);
+  CREATE INDEX IF NOT EXISTS idx_taakstappen_proces  ON taak_stappen(taak_proces_id);
+
   CREATE TABLE IF NOT EXISTS bijlagen (
     id             INTEGER PRIMARY KEY,
     taak_id        INTEGER NOT NULL REFERENCES taken(id) ON DELETE CASCADE,

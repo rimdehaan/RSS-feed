@@ -659,6 +659,113 @@ try {
   check('een lid kan zichzelf het recht niet geven',
     (await carla('/gebruikers/' + carlaId, { method: 'PATCH', body: { mag_werkprocessen: true } })).status === 403);
 
+  // ── Koppelen aan taken ──────────────────────────────────────────────────
+  groep('Werkproces koppelen aan een taak');
+
+  const klus = (await rim(`/borden/${bordId}/taken`, { method: 'POST', body: { opdracht: 'Keuring uitvoeren' } })).data.id;
+
+  r = await rim(`/taken/${klus}/processen`, { method: 'POST', body: { werkproces_id: keuring } });
+  check('gekoppeld', r.status === 200 && r.data.aantal_stappen === 4, JSON.stringify(r.data));
+  const gekoppeld = r.data.id;
+
+  r = await rim('/taken/' + klus);
+  check('staat bij de taak', r.data.processen.length === 1);
+  check('met naam en versie van dat moment',
+    r.data.processen[0].naam === 'Keuring gasflessen 2026' && r.data.processen[0].versie === 3,
+    JSON.stringify(r.data.processen[0]));
+  check('de stappen zijn gekopieerd', r.data.processen[0].stappen.length === 4);
+  check('nog niets afgevinkt', r.data.processen[0].stappen.every((s) => s.afgevinkt_op === null));
+  check('koppelen staat in de historie', r.data.historie.some((h) => h.veld === 'werkproces gekoppeld'));
+
+  check('onbekend werkproces geweigerd',
+    (await rim(`/taken/${klus}/processen`, { method: 'POST', body: { werkproces_id: 999999 } })).status === 404);
+
+  groep('Afvinken');
+  const eersteStap = (await rim('/taken/' + klus)).data.processen[0].stappen[0];
+  r = await rim('/taak-stappen/' + eersteStap.id, { method: 'PATCH', body: { afgevinkt: true } });
+  check('stap afgevinkt', r.status === 200 && r.data.afgevinkt_op !== null);
+  check('met wie het deed', r.data.afgevinkt_door_naam === 'Rim de Haan');
+
+  r = await rim(`/borden/${bordId}/taken`);
+  let opLijst = r.data.find((t) => t.id === klus);
+  check('voortgang staat op de taak', opLijst.aantal_afgevinkt === 1 && opLijst.aantal_stappen === 4,
+    JSON.stringify({ af: opLijst.aantal_afgevinkt, totaal: opLijst.aantal_stappen }));
+
+  check('uitvinken kan ook',
+    (await rim('/taak-stappen/' + eersteStap.id, { method: 'PATCH', body: { afgevinkt: false } })).data.afgevinkt_op === null);
+  await rim('/taak-stappen/' + eersteStap.id, { method: 'PATCH', body: { afgevinkt: true } });
+
+  groep('Twee werkprocessen op één taak');
+  const tweede = (await rim(`/taken/${klus}/processen`, { method: 'POST', body: { werkproces_id: keuring } })).data.id;
+  check('hetzelfde werkproces mag twee keer',
+    (await rim('/taken/' + klus)).data.processen.length === 2);
+  check('elk met eigen voortgang',
+    (await rim('/taken/' + klus)).data.processen[1].stappen.every((s) => s.afgevinkt_op === null));
+
+  r = await rim(`/taken/${klus}/processen/volgorde`, { method: 'POST', body: { volgorde: [tweede, gekoppeld] } });
+  check('volgorde omgedraaid', r.status === 200);
+  check('en die blijft staan', (await rim('/taken/' + klus)).data.processen[0].id === tweede);
+
+  check('een volgorde met vreemde ids wordt geweigerd',
+    (await rim(`/taken/${klus}/processen/volgorde`, { method: 'POST', body: { volgorde: [tweede] } })).status === 400);
+
+  groep('De kopie staat los van de bibliotheek');
+  await rim('/werkprocessen/' + keuring, { method: 'PATCH', body: {
+    stappen: ['Heel andere stap', 'En nog een'] } });
+
+  r = await rim('/taken/' + klus);
+  check('de taak houdt zijn eigen stappen', r.data.processen[1].stappen.length === 4,
+    JSON.stringify(r.data.processen[1].stappen.map((s) => s.tekst)));
+  check('en zijn eigen versienummer', r.data.processen[1].versie === 3);
+  check('het afgevinkte werk staat er nog', r.data.processen[1].stappen[0].afgevinkt_op !== null);
+
+  check('een nieuwe koppeling krijgt wél de nieuwe versie',
+    (await rim(`/taken/${klus}/processen`, { method: 'POST', body: { werkproces_id: keuring } })).data.versie === 4);
+
+  // Een wegwerpproces, zodat het verwijderen hieronder de rest niet raakt.
+  const wegwerp = (await rim('/werkprocessen', { method: 'POST', body: {
+    naam: 'Tijdelijk proces', stappen: ['Eén stap'] } })).data.id;
+  await rim(`/taken/${klus}/processen`, { method: 'POST', body: { werkproces_id: wegwerp } });
+  await rim('/werkprocessen/' + wegwerp, { method: 'DELETE' });
+
+  r = await rim('/taken/' + klus);
+  check('na verwijderen uit de bibliotheek blijft de kopie bestaan', r.data.processen.length === 4);
+  check('inclusief de naam van toen', r.data.processen.at(-1).naam === 'Tijdelijk proces');
+  check('en de verwijzing naar het origineel is leeg', r.data.processen.at(-1).werkproces_id === null);
+
+  groep('Verplaatsen en afschermen');
+  check('werkprocessen gaan mee naar een ander project',
+    (await rim(`/taken/${klus}`, { method: 'PATCH', body: { bord_id: projectA } })).status === 200);
+  check('en staan er nog', (await rim('/taken/' + klus)).data.processen.length === 4);
+
+  const stapVanKlus = (await rim('/taken/' + klus)).data.processen[0].stappen[0].id;
+  const procesVanKlus = (await rim('/taken/' + klus)).data.processen[0].id;
+
+  // Carla mag Project D niet zien; daar een taak met werkproces op zetten.
+  const vertrouwelijkProces = (await rim('/werkprocessen', { method: 'POST', body: {
+    naam: 'Directieprocedure', stappen: ['Stukken klaarleggen', 'Notulen archiveren'] } })).data.id;
+
+  const geheim2 = (await rim(`/borden/${projectD}/taken`, { method: 'POST', body: { opdracht: 'Vertrouwelijk' } })).data.id;
+  const geheimProces = (await rim(`/taken/${geheim2}/processen`, { method: 'POST', body: { werkproces_id: vertrouwelijkProces } })).data.id;
+  const geheimeStap = (await rim('/taken/' + geheim2)).data.processen[0].stappen[0].id;
+
+  check('een lid kan niet koppelen aan een taak die hij niet ziet',
+    (await carla(`/taken/${geheim2}/processen`, { method: 'POST', body: { werkproces_id: vertrouwelijkProces } })).status === 404);
+  check('en kan er niets afvinken',
+    (await carla('/taak-stappen/' + geheimeStap, { method: 'PATCH', body: { afgevinkt: true } })).status === 404);
+  check('en niets ontkoppelen',
+    (await carla('/taak-processen/' + geheimProces, { method: 'DELETE' })).status === 404);
+  check('en de volgorde niet omgooien',
+    (await carla(`/taken/${geheim2}/processen/volgorde`, { method: 'POST', body: { volgorde: [geheimProces] } })).status === 404);
+  check('het staat er allemaal nog', (await rim('/taken/' + geheim2)).data.processen.length === 1);
+
+  groep('Ontkoppelen');
+  check('ontkoppelen lukt', (await rim('/taak-processen/' + procesVanKlus, { method: 'DELETE' })).status === 200);
+  check('het blok is weg', (await rim('/taken/' + klus)).data.processen.length === 3);
+  check('en de stap ook', (await rim('/taak-stappen/' + stapVanKlus, { method: 'PATCH', body: { afgevinkt: true } })).status === 404);
+  check('ontkoppelen staat in de historie',
+    (await rim('/taken/' + klus)).data.historie.some((h) => h.veld === 'werkproces ontkoppeld'));
+
   groep('Werkprocessen verwijderen');
   const aantalVoor = (await rim('/werkprocessen')).data.werkprocessen.length;
   check('verwijderen lukt', (await rim('/werkprocessen/' + keuring, { method: 'DELETE' })).status === 200);

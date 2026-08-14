@@ -44,6 +44,7 @@ administratie — zie *Back-ups* verderop.
 | Deadline-alarm | Taken lichten rood op zodra de deadline dichtbij is en er nog niet aan gewerkt wordt |
 | Kanban | De zes statussen als kolommen, kaarten ertussen slepen |
 | Werkprocessen | Bibliotheek met vaste werkwijzen. Je maakt er een door een procedure te plakken; de app knipt hem in stappen |
+| Werkproces op een taak | Eén of meer werkprocessen aan een taak hangen, met afvinkbare stappen en voortgang per proces |
 | Overdragen | Een taak naar een ander project verplaatsen via **Bewerken → Project**. Opmerkingen, historie en bijlagen gaan mee |
 | Bijlagen | Bestanden bij een taak, zodat de uitvoerder alles bij de hand heeft. Staan op je eigen server, niet bij een externe dienst |
 | Opmerkingen | Een gesprek per taak, met naam en tijdstip |
@@ -144,6 +145,39 @@ Twee dingen om te weten:
   gevolgd is.
 
 Grenzen: 200 stappen per werkproces, 500 tekens per stap.
+
+### Een werkproces aan een taak hangen
+
+In het taakvenster staat een blok **Werkprocessen**. Kies er een uit de lijst en
+klik **Koppelen**. Elk gekoppeld proces krijgt een eigen blok met de naam, het
+versienummer, een voortgangsbalk en afvinkbare stappen.
+
+**De taak krijgt een kopie**, geen verwijzing. Dat is de kern van de opzet:
+
+- Wijzig je het werkproces later in de bibliotheek, dan verandert er niets aan
+  lopende taken. Die houden de stappen én het versienummer waarmee ze begonnen.
+- Verwijder je het uit de bibliotheek, dan blijft de kopie op de taak gewoon
+  staan, met de naam van toen.
+
+Zo is achteraf te zien welke werkwijze er werkelijk is gevolgd, en niet welke er
+vandaag toevallig in de bibliotheek staat.
+
+Verder:
+
+- **Meerdere processen per taak**, elk met eigen nummering vanaf 1 en eigen
+  voortgang. Je versleept ze aan de hendel in de kop.
+- **Hetzelfde werkproces mag twee keer** aan één taak — handig als je dezelfde
+  procedure voor twee installaties doorloopt.
+- **Afvinken legt vast wie en wanneer.** Dat zie je door de stap aan te wijzen.
+- **De taakstatus verandert niet vanzelf** als alles is afgevinkt. Klaar met het
+  werk is niet hetzelfde als *Done*; daar zit vaak nog controle of facturatie
+  tussen. Je ziet alleen `12 van 12 ✓`.
+- **Op de kaart en in de tabel** staat de totale voortgang als `☑ 7/12`.
+- **Ontkoppelen wist de voortgang** van dat blok, met een waarschuwing vooraf.
+
+Stappen zijn op de taak niet te wijzigen. Zou dat wel kunnen, dan is de kopie
+niet langer "versie 3 van de procedure" en weet je achteraf niet meer wat er is
+gevolgd. Wijkt het werk af, gebruik dan een opmerking.
 
 ### Wie mag werkprocessen beheren
 

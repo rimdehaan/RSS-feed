@@ -419,6 +419,7 @@ function rijHtml(taak) {
         <button class="knop-link" data-detail="${taak.id}">Bekijk</button>
         ${taak.aantal_opmerkingen ? `<span class="zacht" title="opmerkingen" style="margin-left:6px">💬 ${taak.aantal_opmerkingen}</span>` : ''}
         ${taak.aantal_bijlagen ? `<span class="zacht" title="bijlagen" style="margin-left:4px">📎 ${taak.aantal_bijlagen}</span>` : ''}
+        ${taak.aantal_stappen ? `<span class="zacht" title="stappen uit werkprocessen" style="margin-left:4px">☑ ${taak.aantal_afgevinkt}/${taak.aantal_stappen}</span>` : ''}
       </td>
       <td><div class="acties">
         <button class="btn btn-secondary btn-sm" data-bewerk="${taak.id}">Bewerken</button>
@@ -469,6 +470,7 @@ function kaartHtml(taak) {
           : ''}
         ${taak.aantal_opmerkingen ? `<span title="opmerkingen">💬 ${taak.aantal_opmerkingen}</span>` : ''}
         ${taak.aantal_bijlagen ? `<span title="bijlagen">📎 ${taak.aantal_bijlagen}</span>` : ''}
+        ${taak.aantal_stappen ? `<span title="stappen uit werkprocessen" class="${taak.aantal_afgevinkt === taak.aantal_stappen ? 'klaar' : ''}">☑ ${taak.aantal_afgevinkt}/${taak.aantal_stappen}</span>` : ''}
       </div>
     </div>`;
 }
@@ -646,6 +648,7 @@ async function openDetail(id) {
   el('detailWaarschuwing').textContent = vraagtAandacht(taak) ? waaromRood(taak) : '';
   el('detailWaarschuwing').hidden = !vraagtAandacht(taak);
 
+  tekenTaakProcessen(taak.processen);
   tekenBijlagen(taak.bijlagen);
   tekenOpmerkingen(taak.opmerkingen);
 
@@ -664,6 +667,12 @@ async function openDetail(id) {
         if (regel.veld === 'bijlage verwijderd') {
           return `<li><b>${wie}</b> verwijderde de bijlage <b>${esc(regel.oude_waarde)}</b> — ${wanneer}</li>`;
         }
+        if (regel.veld === 'werkproces gekoppeld') {
+          return `<li><b>${wie}</b> koppelde het werkproces <b>${esc(regel.nieuwe_waarde)}</b> — ${wanneer}</li>`;
+        }
+        if (regel.veld === 'werkproces ontkoppeld') {
+          return `<li><b>${wie}</b> ontkoppelde het werkproces <b>${esc(regel.oude_waarde)}</b> — ${wanneer}</li>`;
+        }
         if (regel.veld === 'project') {
           return `<li><b>${wie}</b> verplaatste deze taak van <b>${esc(regel.oude_waarde)}</b>
             naar <b>${esc(regel.nieuwe_waarde)}</b> — ${wanneer}</li>`;
@@ -676,6 +685,148 @@ async function openDetail(id) {
   el('nieuweOpmerking').value = '';
   openVenster('detailVenster');
 }
+
+// ── Werkprocessen op een taak ────────────────────────────────────────────
+
+function tekenTaakProcessen(processen) {
+  el('taakProcessen').innerHTML = processen.length === 0
+    ? '<p class="zacht" style="font-size:.85rem">Nog geen werkprocessen gekoppeld.</p>'
+    : processen.map(procesBlokHtml).join('');
+
+  koppelProcesKnoppen();
+  vulProcesKeuze(processen);
+}
+
+function procesBlokHtml(proces) {
+  const af = proces.stappen.filter(stap => stap.afgevinkt_op).length;
+  const totaal = proces.stappen.length;
+  const klaar = af === totaal && totaal > 0;
+
+  return `
+    <div class="taak-proces" data-proces="${proces.id}">
+      <div class="taak-proces-kop">
+        <span class="hendel" title="Sleep om te verplaatsen">${GRIJPER}</span>
+        <span class="naam">${esc(proces.naam)}</span>
+        <span class="versie">versie ${proces.versie}</span>
+        <span class="voortgang ${klaar ? 'klaar' : ''}">${af} van ${totaal}${klaar ? ' ✓' : ''}</span>
+        <button class="weg" data-ontkoppel="${proces.id}" title="Ontkoppelen">✕</button>
+      </div>
+      <div class="balkje"><span style="width:${totaal ? Math.round((af / totaal) * 100) : 0}%"></span></div>
+      <div>
+        ${proces.stappen.map((stap, index) => `
+          <label class="proces-stap ${stap.afgevinkt_op ? 'af' : ''}"
+                 ${stap.afgevinkt_op ? `title="Afgevinkt door ${esc(stap.afgevinkt_door_naam || 'onbekend')} op ${momentNL(stap.afgevinkt_op)}"` : ''}>
+            <input type="checkbox" data-taakstap="${stap.id}" ${stap.afgevinkt_op ? 'checked' : ''} />
+            <span class="nr">${index + 1}.</span>
+            <span class="tekst">${esc(stap.tekst)}</span>
+          </label>`).join('')}
+      </div>
+    </div>`;
+}
+
+/** De keuzelijst toont wat er in de bibliotheek staat; dubbel koppelen mag. */
+async function vulProcesKeuze() {
+  try {
+    const { werkprocessen } = await api('/werkprocessen');
+
+    el('procesKeuze').innerHTML = werkprocessen.length === 0
+      ? '<option value="">— de bibliotheek is leeg —</option>'
+      : werkprocessen.map(p => `<option value="${p.id}">${esc(p.naam)} (${p.aantal_stappen} stappen)</option>`).join('');
+
+    const leeg = werkprocessen.length === 0;
+    el('procesKeuze').disabled = leeg;
+    el('procesKoppel').disabled = leeg;
+    el('procesHint').textContent = leeg ? 'Maak er eerst een via Werkprocessen in de zijbalk.' : '';
+  } catch {
+    el('procesHint').textContent = 'De werkprocessen konden niet worden opgehaald.';
+  }
+}
+
+function koppelProcesKnoppen() {
+  el('taakProcessen').querySelectorAll('[data-taakstap]').forEach(vinkje => {
+    vinkje.addEventListener('change', async () => {
+      try {
+        await api('/taak-stappen/' + vinkje.dataset.taakstap, {
+          method: 'PATCH',
+          body: { afgevinkt: vinkje.checked },
+        });
+        openDetail(staat.detailId);
+        herlaadTaken();
+      } catch (fout) {
+        vinkje.checked = !vinkje.checked;
+        alert(fout.message);
+      }
+    });
+  });
+
+  el('taakProcessen').querySelectorAll('[data-ontkoppel]').forEach(knop => {
+    knop.addEventListener('click', async () => {
+      const blok = knop.closest('.taak-proces');
+      const naam = blok.querySelector('.naam').textContent;
+      if (!confirm(`"${naam}" ontkoppelen? Wat er is afgevinkt gaat verloren.`)) return;
+
+      await api('/taak-processen/' + knop.dataset.ontkoppel, { method: 'DELETE' });
+      openDetail(staat.detailId);
+      herlaadTaken();
+    });
+  });
+
+  koppelProcesSlepen();
+}
+
+/** Slepen aan de hendel in de kop, net als bij de stappen in de bibliotheek. */
+function koppelProcesSlepen() {
+  let gesleept = null;
+
+  el('taakProcessen').querySelectorAll('.taak-proces').forEach(blok => {
+    const hendel = blok.querySelector('.hendel');
+    if (!hendel) return;
+
+    hendel.addEventListener('mousedown', () => { blok.draggable = true; });
+
+    blok.addEventListener('dragstart', (gebeurtenis) => {
+      gesleept = blok;
+      blok.classList.add('sleept');
+      gebeurtenis.dataTransfer.effectAllowed = 'move';
+    });
+
+    blok.addEventListener('dragend', async () => {
+      blok.draggable = false;
+      blok.classList.remove('sleept');
+      gesleept = null;
+
+      const volgorde = [...el('taakProcessen').querySelectorAll('.taak-proces')]
+        .map(b => Number(b.dataset.proces));
+
+      await api(`/taken/${staat.detailId}/processen/volgorde`, { method: 'POST', body: { volgorde } });
+      openDetail(staat.detailId);
+    });
+
+    blok.addEventListener('dragover', (gebeurtenis) => {
+      if (!gesleept || gesleept === blok) return;
+      gebeurtenis.preventDefault();
+
+      const vak = blok.getBoundingClientRect();
+      const bovenhelft = gebeurtenis.clientY < vak.top + vak.height / 2;
+      blok.parentNode.insertBefore(gesleept, bovenhelft ? blok : blok.nextSibling);
+    });
+  });
+
+  el('taakProcessen').addEventListener('drop', (gebeurtenis) => gebeurtenis.preventDefault());
+}
+
+el('procesKoppel').addEventListener('click', async () => {
+  const werkprocesId = el('procesKeuze').value;
+  if (!werkprocesId) return;
+
+  try {
+    await api(`/taken/${staat.detailId}/processen`, { method: 'POST', body: { werkproces_id: Number(werkprocesId) } });
+    openDetail(staat.detailId);
+    herlaadTaken();
+  } catch (fout) {
+    el('procesHint').textContent = fout.message;
+  }
+});
 
 // ── Bijlagen ─────────────────────────────────────────────────────────────
 

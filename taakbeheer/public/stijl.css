@@ -376,6 +376,52 @@ tbody tr.let-op td { color: #7d2431; }
 }
 .opmerking .weg:hover { color: var(--rood); }
 
+/* ── Werkprocessen op een taak ── */
+.taak-proces {
+  border: 1px solid var(--lijn); border-radius: 8px; margin-bottom: 10px;
+  background: #fff; overflow: hidden;
+}
+.taak-proces.sleept { opacity: 0.35; }
+.taak-proces-kop {
+  display: flex; align-items: center; gap: 8px;
+  background: #f8f9fb; border-bottom: 1px solid var(--lijn); padding: 9px 11px;
+}
+.taak-proces-kop .naam { font-size: 0.88rem; font-weight: 700; color: var(--donker); }
+.taak-proces-kop .versie {
+  background: #fff; border: 1px solid var(--lijn); border-radius: 20px;
+  padding: 1px 8px; font-size: 0.68rem; font-weight: 700; color: var(--blauw); white-space: nowrap;
+}
+.taak-proces-kop .voortgang {
+  margin-left: auto; font-size: 0.76rem; font-weight: 700; color: var(--blauw); white-space: nowrap;
+}
+.taak-proces-kop .voortgang.klaar { color: #27AE60; }
+.taak-proces-kop .weg {
+  background: none; border: none; color: var(--grijs); cursor: pointer;
+  font-size: 0.85rem; padding: 2px 4px; border-radius: 4px;
+}
+.taak-proces-kop .weg:hover { color: var(--rood); background: var(--lijn); }
+
+.balkje { height: 3px; background: var(--lijn); }
+.balkje span { display: block; height: 100%; background: #27AE60; transition: width 0.2s; }
+
+.proces-stap {
+  display: flex; align-items: flex-start; gap: 9px; padding: 7px 12px;
+  font-size: 0.86rem; color: var(--donker); cursor: pointer;
+  border-bottom: 1px solid #f4f5f7; line-height: 1.5;
+}
+.proces-stap:last-child { border-bottom: none; }
+.proces-stap:hover { background: #fafbfc; }
+.proces-stap input { margin-top: 3px; flex-shrink: 0; cursor: pointer; }
+.proces-stap .nr { color: var(--blauw); font-weight: 700; font-size: 0.76rem; margin-top: 2px; flex-shrink: 0; }
+.proces-stap.af .tekst { color: var(--grijs); text-decoration: line-through; }
+
+.proces-koppelen { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.proces-koppelen select {
+  padding: 6px 10px; border: 1px solid var(--grijs); border-radius: 6px;
+  font-size: 0.85rem; font-family: inherit; background: #f8f9fb; color: var(--donker);
+  outline: none; max-width: 320px;
+}
+
 /* ── Bijlagen ── */
 .bijlage {
   display: flex; align-items: center; gap: 10px; padding: 9px 0;

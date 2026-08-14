@@ -444,12 +444,22 @@ api.delete('/borden/:id', vereistLogin, (req, res) => {
 
 // ── Taken ────────────────────────────────────────────────────────────────
 
+// Voortgang van de gekoppelde werkprocessen, om op de kaart en in de tabel te tonen.
+const STAP_TELLERS = `
+  (SELECT COUNT(*) FROM taak_stappen ts
+     JOIN taak_processen tp ON tp.id = ts.taak_proces_id
+    WHERE tp.taak_id = t.id) AS aantal_stappen,
+  (SELECT COUNT(*) FROM taak_stappen ts
+     JOIN taak_processen tp ON tp.id = ts.taak_proces_id
+    WHERE tp.taak_id = t.id AND ts.afgevinkt_op IS NOT NULL) AS aantal_afgevinkt`;
+
 const TAAK_SELECT = `
   SELECT t.id, t.bord_id, t.opdracht, t.uitvoerend_id, t.status, t.prioriteit, t.deadline,
          t.omschrijving, t.positie, t.aangemaakt_op, t.gewijzigd_op,
          g.naam AS uitvoerend_naam,
          (SELECT COUNT(*) FROM opmerkingen o WHERE o.taak_id = t.id) AS aantal_opmerkingen,
-         (SELECT COUNT(*) FROM bijlagen bl WHERE bl.taak_id = t.id) AS aantal_bijlagen
+         (SELECT COUNT(*) FROM bijlagen bl WHERE bl.taak_id = t.id) AS aantal_bijlagen,
+         ${STAP_TELLERS}
     FROM taken t
     LEFT JOIN gebruikers g ON g.id = t.uitvoerend_id
 `;
@@ -472,7 +482,9 @@ api.get('/mijn-taken', vereistLogin, (req, res) => {
             t.omschrijving, t.positie, t.aangemaakt_op, t.gewijzigd_op,
             g.naam AS uitvoerend_naam,
             b.naam AS bord_naam,
-            (SELECT COUNT(*) FROM opmerkingen o WHERE o.taak_id = t.id) AS aantal_opmerkingen
+            (SELECT COUNT(*) FROM opmerkingen o WHERE o.taak_id = t.id) AS aantal_opmerkingen,
+            (SELECT COUNT(*) FROM bijlagen bl WHERE bl.taak_id = t.id) AS aantal_bijlagen,
+            ${STAP_TELLERS}
        FROM taken t
        JOIN borden b ON b.id = t.bord_id
        LEFT JOIN gebruikers g ON g.id = t.uitvoerend_id
@@ -522,6 +534,8 @@ api.get('/taken/:id', vereistLogin, (req, res) => {
        FROM opmerkingen o LEFT JOIN gebruikers g ON g.id = o.gebruiker_id
       WHERE o.taak_id = ? ORDER BY o.aangemaakt_op, o.id`
   ).all(id);
+
+  taak.processen = processenVan(id);
 
   taak.bijlagen = db.prepare(
     `SELECT b.id, b.bestandsnaam, b.type, b.grootte, b.aangemaakt_op,
@@ -669,6 +683,120 @@ api.delete('/taken/:id', vereistLogin, (req, res) => {
   bestanden.forEach((b) => verwijderBestand(b.opslagnaam));
 
   res.json({ ok: true });
+});
+
+// ── Werkprocessen op een taak ────────────────────────────────────────────
+// Koppelen maakt een kopie van de stappen zoals ze op dat moment zijn. Wijzigt
+// of verdwijnt het origineel daarna, dan verandert er niets aan lopende taken.
+
+function zichtbaarTaakProces(gebruiker, id) {
+  const proces = db.prepare('SELECT * FROM taak_processen WHERE id = ?').get(Number(id));
+  if (!proces) return null;
+  return zichtbareTaak(gebruiker, proces.taak_id) ? proces : null;
+}
+
+const processenVan = (taakId) => {
+  const processen = db.prepare(
+    `SELECT p.id, p.werkproces_id, p.naam, p.versie, p.positie, p.aangemaakt_op,
+            g.naam AS gekoppeld_door_naam
+       FROM taak_processen p
+       LEFT JOIN gebruikers g ON g.id = p.gekoppeld_door
+      WHERE p.taak_id = ? ORDER BY p.positie, p.id`
+  ).all(taakId);
+
+  const stappenVanProces = db.prepare(
+    `SELECT s.id, s.tekst, s.positie, s.afgevinkt_op, s.afgevinkt_door,
+            g.naam AS afgevinkt_door_naam
+       FROM taak_stappen s
+       LEFT JOIN gebruikers g ON g.id = s.afgevinkt_door
+      WHERE s.taak_proces_id = ? ORDER BY s.positie, s.id`
+  );
+
+  return processen.map((proces) => ({ ...proces, stappen: stappenVanProces.all(proces.id) }));
+};
+
+api.post('/taken/:id/processen', vereistLogin, (req, res) => {
+  const taak = zichtbareTaak(req.gebruiker, req.params.id);
+  if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
+
+  const werkproces = db.prepare('SELECT * FROM werkprocessen WHERE id = ?').get(Number(req.body.werkproces_id));
+  if (!werkproces) return res.status(404).json({ fout: 'Werkproces niet gevonden.' });
+
+  const stappen = db.prepare(
+    'SELECT tekst FROM werkproces_stappen WHERE werkproces_id = ? ORDER BY positie, id'
+  ).all(werkproces.id);
+
+  if (stappen.length === 0) {
+    return res.status(400).json({ fout: 'Dit werkproces heeft geen stappen.' });
+  }
+
+  const id = db.transaction(() => {
+    const onderaan = db.prepare(
+      'SELECT COALESCE(MAX(positie), 0) + 1 AS p FROM taak_processen WHERE taak_id = ?'
+    ).get(taak.id).p;
+
+    const r = db.prepare(
+      `INSERT INTO taak_processen (taak_id, werkproces_id, naam, versie, positie, gekoppeld_door)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(taak.id, werkproces.id, werkproces.naam, werkproces.versie, onderaan, req.gebruiker.id);
+
+    const voegToe = db.prepare('INSERT INTO taak_stappen (taak_proces_id, tekst, positie) VALUES (?, ?, ?)');
+    stappen.forEach((stap, index) => voegToe.run(r.lastInsertRowid, stap.tekst, index + 1));
+
+    return r.lastInsertRowid;
+  })();
+
+  logHistorie(taak.id, req.gebruiker.id, 'werkproces gekoppeld', null, `${werkproces.naam} (versie ${werkproces.versie})`);
+  res.json({ id, naam: werkproces.naam, versie: werkproces.versie, aantal_stappen: stappen.length });
+});
+
+api.delete('/taak-processen/:id', vereistLogin, (req, res) => {
+  const proces = zichtbaarTaakProces(req.gebruiker, req.params.id);
+  if (!proces) return res.status(404).json({ fout: 'Werkproces niet gevonden bij deze taak.' });
+
+  db.prepare('DELETE FROM taak_processen WHERE id = ?').run(proces.id);
+  logHistorie(proces.taak_id, req.gebruiker.id, 'werkproces ontkoppeld', proces.naam, null);
+
+  res.json({ ok: true });
+});
+
+/** De browser stuurt de nieuwe volgorde als lijst met ids. */
+api.post('/taken/:id/processen/volgorde', vereistLogin, (req, res) => {
+  const taak = zichtbareTaak(req.gebruiker, req.params.id);
+  if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
+
+  const eigen = new Set(
+    db.prepare('SELECT id FROM taak_processen WHERE taak_id = ?').all(taak.id).map((r) => r.id)
+  );
+  const volgorde = (req.body.volgorde ?? []).map(Number).filter((id) => eigen.has(id));
+
+  if (volgorde.length !== eigen.size) {
+    return res.status(400).json({ fout: 'De volgorde klopt niet met de gekoppelde werkprocessen.' });
+  }
+
+  const zet = db.prepare('UPDATE taak_processen SET positie = ? WHERE id = ?');
+  db.transaction(() => volgorde.forEach((id, index) => zet.run(index + 1, id)))();
+
+  res.json({ ok: true });
+});
+
+api.patch('/taak-stappen/:id', vereistLogin, (req, res) => {
+  const stap = db.prepare('SELECT * FROM taak_stappen WHERE id = ?').get(Number(req.params.id));
+  if (!stap || !zichtbaarTaakProces(req.gebruiker, stap.taak_proces_id)) {
+    return res.status(404).json({ fout: 'Stap niet gevonden.' });
+  }
+
+  if (req.body.afgevinkt) {
+    db.prepare("UPDATE taak_stappen SET afgevinkt_door = ?, afgevinkt_op = datetime('now') WHERE id = ?")
+      .run(req.gebruiker.id, stap.id);
+  } else {
+    db.prepare('UPDATE taak_stappen SET afgevinkt_door = NULL, afgevinkt_op = NULL WHERE id = ?').run(stap.id);
+  }
+
+  res.json(db.prepare(
+    `SELECT s.id, s.afgevinkt_op, s.afgevinkt_door, g.naam AS afgevinkt_door_naam
+       FROM taak_stappen s LEFT JOIN gebruikers g ON g.id = s.afgevinkt_door WHERE s.id = ?`
+  ).get(stap.id));
 });
 
 // ── Bijlagen ─────────────────────────────────────────────────────────────
