@@ -34,6 +34,10 @@ const PRIO_KLEUREN = {
   '': '#eceef1',
 };
 
+// Op geel en op lichtgrijs zijn witte letters onleesbaar; daar donkere letters.
+const LETTER_OP = { '#F2C94C': '#5a4000', '#eceef1': '#8b8f98' };
+const optieStijl = (achtergrond) => `background:${achtergrond};color:${LETTER_OP[achtergrond] ?? '#fff'}`;
+
 const el = (id) => document.getElementById(id);
 const statusKlasse = (status) => 's-' + status.toLowerCase().replace(/\s+/g, '-');
 const prioKlasse = (prioriteit) => 'p-' + (prioriteit ? prioriteit.toLowerCase() : 'geen');
@@ -153,12 +157,15 @@ async function start() {
 }
 
 function vulStatusKeuzes() {
-  const opties = staat.statussen.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  const opties = staat.statussen
+    .map(s => `<option value="${esc(s)}" style="${optieStijl(KLEUREN[s])}">${esc(s)}</option>`).join('');
   el('vStatus').innerHTML = opties;
   el('filterStatus').innerHTML = '<option value="">Alle statussen</option>' + opties;
 
-  const prio = staat.prioriteiten.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
-  el('vPrioriteit').innerHTML = '<option value="">— geen —</option>' + prio;
+  const prio = staat.prioriteiten
+    .map(p => `<option value="${esc(p)}" style="${optieStijl(PRIO_KLEUREN[p])}">${esc(p)}</option>`).join('');
+  el('vPrioriteit').innerHTML =
+    `<option value="" style="${optieStijl(PRIO_KLEUREN[''])}">— geen —</option>` + prio;
   el('filterPrioriteit').innerHTML = '<option value="">Alle prioriteiten</option>' + prio +
     '<option value="geen">Zonder prioriteit</option>';
 }
@@ -393,11 +400,14 @@ function tekenTabel() {
 
 function rijHtml(taak) {
   const opties = staat.statussen
-    .map(s => `<option value="${esc(s)}" ${s === taak.status ? 'selected' : ''}>${esc(s)}</option>`).join('');
+    .map(s => `<option value="${esc(s)}" ${s === taak.status ? 'selected' : ''}
+                       style="${optieStijl(KLEUREN[s])}">${esc(s)}</option>`).join('');
 
-  const prioOpties = `<option value="" ${!taak.prioriteit ? 'selected' : ''}>—</option>` +
+  const prioOpties =
+    `<option value="" ${!taak.prioriteit ? 'selected' : ''} style="${optieStijl(PRIO_KLEUREN[''])}">—</option>` +
     staat.prioriteiten.map(p =>
-      `<option value="${esc(p)}" ${p === taak.prioriteit ? 'selected' : ''}>${esc(prioTekst(p))}</option>`).join('');
+      `<option value="${esc(p)}" ${p === taak.prioriteit ? 'selected' : ''}
+               style="${optieStijl(PRIO_KLEUREN[p])}">${esc(prioTekst(p))}</option>`).join('');
 
   const aandacht = vraagtAandacht(taak);
   const deadline = taak.deadline
