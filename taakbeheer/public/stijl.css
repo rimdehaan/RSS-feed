@@ -58,6 +58,7 @@ body {
   background: #fdecec; color: #a03030; border: 1px solid #f5c6c6;
 }
 .melding.goed { background: #e8f6ee; color: #1c6b3f; border-color: #bfe3ce; }
+.melding.oranje { background: #fff7e6; color: #7a4a06; border-color: #f2d09a; }
 .melding:empty { display: none; }
 
 /* ── Statuskleuren ── */
@@ -210,11 +211,28 @@ tbody tr:hover { background: #f8f9fb; }
 tbody td { padding: 10px 16px; font-size: 0.87rem; color: var(--donker); vertical-align: middle; }
 .leeg td { text-align: center; color: var(--grijs); padding: 44px; font-size: 0.9rem; }
 
-/* Deadline morgen of eerder, en er wordt nog niet aan gewerkt. */
-tbody tr.let-op { background: #fdecec; box-shadow: inset 3px 0 0 var(--rood); }
-tbody tr.let-op:hover { background: #fbe2e2; }
-tbody tr.let-op td { color: #7d2431; }
-.let-op-teken { color: var(--rood); margin-right: 2px; }
+/* Twee losse signalen. Rood: de deadline is verstreken en de taak is nog niet
+   afgerond — dat blijft staan, ook als er al aan gewerkt wordt. Oranje: de
+   deadline is vandaag of morgen en er is nog niet begonnen. */
+tbody tr.te-laat { background: #fbe0e4; box-shadow: inset 4px 0 0 #C4314B; }
+tbody tr.te-laat:hover { background: #f8d3d9; }
+tbody tr.te-laat td { color: #7d2431; }
+
+tbody tr.komt-eraan { background: #fff7e6; box-shadow: inset 4px 0 0 #F2994A; }
+tbody tr.komt-eraan:hover { background: #fdf0d5; }
+tbody tr.komt-eraan td { color: #7a4a06; }
+
+.teken-te-laat { color: #C4314B; margin-right: 2px; }
+.teken-eraan   { color: #F2994A; margin-right: 2px; }
+
+/* Hoeveel te laat. Staat onder de opdracht en niet onder de datum: daar is
+   ruimte zat, en het is de eerste plek waar je oog landt. */
+.te-laat-tekst {
+  margin-top: 3px; font-size: 0.72rem; font-weight: 600; color: #C4314B;
+}
+
+.datum-te-laat { color: #C4314B; font-weight: 700; }
+.datum-eraan   { color: #a15c00; font-weight: 700; }
 .acties { display: flex; gap: 6px; align-items: center; }
 .zacht { color: var(--grijs); }
 
@@ -232,13 +250,13 @@ tbody tr.let-op td { color: #7d2431; }
 .tabel-omhulsel { overflow-x: auto; }
 /* De ondergrens houdt Opdracht breder dan elke andere kolom; is er minder
    ruimte, dan schuift de tabel zijwaarts in plaats van hem plat te drukken. */
-.tabel-omhulsel table { table-layout: fixed; min-width: 1300px; }
+.tabel-omhulsel table { table-layout: fixed; min-width: 1325px; }
 
 col.k-opdracht   { width: auto; }
 col.k-uitvoerend { width: 150px; }
 col.k-prioriteit { width: 128px; }  /* inclusief het waarschuwingsteken bij Critical */
 col.k-status     { width: 158px; }  /* 'Working on it' past hier net in */
-col.k-deadline   { width: 105px; }
+col.k-deadline   { width: 130px; }  /* "31 dec 2026" past hier op één regel */
 col.k-bijlagen   { width: 95px; }
 col.k-stappen    { width: 100px; }
 col.k-details    { width: 150px; }
@@ -281,18 +299,26 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
 }
 .kaart:active { cursor: grabbing; }
 .kaart.sleept { opacity: 0.4; }
-.kaart.let-op {
-  background: #fdecec; border-color: #f0b6b6;
-  box-shadow: 0 1px 3px rgba(196,49,75,0.18), inset 3px 0 0 var(--rood);
+.kaart.te-laat {
+  background: #fbe0e4; border-color: #eda9b3;
+  box-shadow: 0 1px 3px rgba(196,49,75,0.18), inset 4px 0 0 #C4314B;
 }
-.kaart.let-op .kaart-titel { color: #7d2431; }
+.kaart.te-laat .kaart-titel { color: #7d2431; }
+
+.kaart.komt-eraan {
+  background: #fff7e6; border-color: #f2d09a;
+  box-shadow: 0 1px 3px rgba(242,153,74,0.18), inset 4px 0 0 #F2994A;
+}
+.kaart.komt-eraan .kaart-titel { color: #7a4a06; }
 .kaart-titel { font-weight: 600; color: var(--donker); margin-bottom: 7px; line-height: 1.35; }
 .prio-vlag {
   display: inline-block; margin-bottom: 6px; padding: 2px 9px; border-radius: 12px;
   font-size: 0.7rem; font-weight: 700; letter-spacing: 0.2px;
 }
 .kaart-voet { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--blauw); flex-wrap: wrap; }
-.kaart-voet .verlopen { color: var(--rood); font-weight: 600; }
+.kaart-voet .datum-te-laat { color: #C4314B; font-weight: 700; }
+.kaart-voet .datum-eraan   { color: #a15c00; font-weight: 700; }
+.kaart .te-laat-tekst { margin: -3px 0 7px; }
 
 .bolletje {
   width: 22px; height: 22px; border-radius: 50%; background: var(--blauw);

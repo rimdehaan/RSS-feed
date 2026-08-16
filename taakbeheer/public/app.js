@@ -81,24 +81,41 @@ function morgen() {
 // Af of vervallen: dan hoeft een deadline geen aandacht meer te vragen.
 const AFGEROND = ['Done', 'Cancelled'];
 
-function isVerlopen(taak) {
+/**
+ * Te laat: de deadline ligt achter ons en de taak is nog niet afgerond.
+ * Of er al aan gewerkt wordt doet er bewust niet toe — te laat is te laat,
+ * en dat blijft zo tot de taak op Done of Cancelled staat.
+ */
+function isTeLaat(taak) {
   if (!taak.deadline || AFGEROND.includes(taak.status)) return false;
   return taak.deadline < vandaag();
 }
 
 /**
- * Springt eruit als de deadline morgen of eerder is terwijl er nog niet aan
- * gewerkt wordt. "Working on it" telt als opgepakt, "Done" en "Cancelled" zijn
- * klaar; de rest — ook On Hold en Validating — vraagt dan om aandacht.
+ * Komt eraan: de deadline is vandaag of morgen terwijl er nog niet aan gewerkt
+ * wordt. "Working on it" telt als opgepakt, "Done" en "Cancelled" zijn klaar;
+ * de rest — ook On Hold en Validating — vraagt dan om aandacht.
+ * Een taak is nooit tegelijk te laat en komt-eraan.
  */
-function vraagtAandacht(taak) {
-  if (!taak.deadline) return false;
+function komtEraan(taak) {
+  if (!taak.deadline || isTeLaat(taak)) return false;
   if (taak.status === 'Working on it' || AFGEROND.includes(taak.status)) return false;
   return taak.deadline <= morgen();
 }
 
-function waaromRood(taak) {
-  if (taak.deadline < vandaag()) return 'De deadline is verstreken en er wordt nog niet aan gewerkt.';
+/** Hele kalenderdagen tussen de deadline en vandaag. */
+function dagenTeLaat(taak) {
+  const dag = 24 * 60 * 60 * 1000;
+  return Math.round((new Date(vandaag()) - new Date(taak.deadline)) / dag);
+}
+
+function teLaatTekst(taak) {
+  const dagen = dagenTeLaat(taak);
+  return `${dagen} ${dagen === 1 ? 'dag' : 'dagen'} te laat`;
+}
+
+function waaromAandacht(taak) {
+  if (isTeLaat(taak)) return `Deze taak is ${teLaatTekst(taak)}.`;
   if (taak.deadline === vandaag()) return 'De deadline is vandaag en er wordt nog niet aan gewerkt.';
   return 'De deadline is morgen en er wordt nog niet aan gewerkt.';
 }
@@ -409,14 +426,20 @@ function rijHtml(taak) {
       `<option value="${esc(p)}" ${p === taak.prioriteit ? 'selected' : ''}
                style="${optieStijl(PRIO_KLEUREN[p])}">${esc(prioTekst(p))}</option>`).join('');
 
-  const aandacht = vraagtAandacht(taak);
+  const teLaat = isTeLaat(taak);
+  const eraan = komtEraan(taak);
   const deadline = taak.deadline
-    ? `<span style="${aandacht || isVerlopen(taak) ? 'color:#C4314B;font-weight:700' : ''}">${datumNL(taak.deadline)}</span>`
+    ? `<span class="${teLaat ? 'datum-te-laat' : (eraan ? 'datum-eraan' : '')}">${datumNL(taak.deadline)}</span>`
     : '<span class="zacht">—</span>';
 
   return `
-    <tr class="${aandacht ? 'let-op' : ''}" ${aandacht ? `title="${esc(waaromRood(taak))}"` : ''}>
-      <td class="c-opdracht"><strong>${aandacht ? '<span class="let-op-teken" aria-hidden="true">⚠</span> ' : ''}${esc(taak.opdracht)}</strong></td>
+    <tr class="${teLaat ? 'te-laat' : (eraan ? 'komt-eraan' : '')}"
+        ${teLaat || eraan ? `title="${esc(waaromAandacht(taak))}"` : ''}>
+      <td class="c-opdracht">
+        <strong>${teLaat ? '<span class="teken-te-laat" aria-hidden="true">⚠</span> '
+                : (eraan ? '<span class="teken-eraan" aria-hidden="true">⏱</span> ' : '')}${esc(taak.opdracht)}</strong>
+        ${teLaat ? `<div class="te-laat-tekst">${esc(teLaatTekst(taak))}</div>` : ''}
+      </td>
       <td class="c-kort" ${taak.uitvoerend_naam ? `title="${esc(taak.uitvoerend_naam)}"` : ''}>${
         taak.uitvoerend_naam ? esc(taak.uitvoerend_naam) : '<span class="zacht">—</span>'}</td>
       <td>
@@ -470,21 +493,25 @@ function tekenKanban() {
 }
 
 function kaartHtml(taak) {
-  const aandacht = vraagtAandacht(taak);
+  const teLaat = isTeLaat(taak);
+  const eraan = komtEraan(taak);
   return `
-    <div class="kaart ${aandacht ? 'let-op' : ''}" draggable="true" data-taak="${taak.id}"
+    <div class="kaart ${teLaat ? 'te-laat' : (eraan ? 'komt-eraan' : '')}" draggable="true" data-taak="${taak.id}"
          data-detail="${taak.id}" data-bord="${taak.bord_id}"
-         ${aandacht ? `title="${esc(waaromRood(taak))}"` : ''}>
+         ${teLaat || eraan ? `title="${esc(waaromAandacht(taak))}"` : ''}>
       ${taak.prioriteit
         ? `<span class="prio-vlag ${prioKlasse(taak.prioriteit)}">${esc(prioTekst(taak.prioriteit))}</span>`
         : ''}
-      <div class="kaart-titel">${esc(taak.opdracht)}</div>
+      <div class="kaart-titel">${
+        teLaat ? '<span class="teken-te-laat" aria-hidden="true">⚠</span> '
+               : (eraan ? '<span class="teken-eraan" aria-hidden="true">⏱</span> ' : '')}${esc(taak.opdracht)}</div>
+      ${teLaat ? `<div class="te-laat-tekst">${esc(teLaatTekst(taak))}</div>` : ''}
       <div class="kaart-voet">
         ${taak.uitvoerend_naam && !isPersoonlijk()
           ? `<span class="bolletje" title="${esc(taak.uitvoerend_naam)}">${esc(initialen(taak.uitvoerend_naam))}</span>`
           : ''}
         ${taak.deadline
-          ? `<span class="${aandacht || isVerlopen(taak) ? 'verlopen' : ''}">${datumNL(taak.deadline)}</span>`
+          ? `<span class="${teLaat ? 'datum-te-laat' : (eraan ? 'datum-eraan' : '')}">${datumNL(taak.deadline)}</span>`
           : ''}
         ${taak.aantal_opmerkingen ? `<span title="opmerkingen">💬 ${taak.aantal_opmerkingen}</span>` : ''}
         ${taak.aantal_bijlagen ? `<span title="bijlagen">📎 ${taak.aantal_bijlagen}</span>` : ''}
@@ -669,11 +696,14 @@ async function openDetail(id) {
     <div><span class="naam">Prioriteit</span><span class="waarde">
       <span class="status-select ${prioKlasse(taak.prioriteit)}" style="background:${PRIO_KLEUREN[taak.prioriteit ?? '']};display:inline-block;cursor:default;min-width:auto">${esc(prioTekst(taak.prioriteit))}</span>
     </span></div>
-    <div><span class="naam">Deadline</span><span class="waarde"
-      style="${vraagtAandacht(taak) ? 'color:#C4314B;font-weight:700' : ''}">${taak.deadline ? datumNL(taak.deadline) : '—'}</span></div>`;
+    <div><span class="naam">Deadline</span><span class="waarde ${
+      isTeLaat(taak) ? 'datum-te-laat' : (komtEraan(taak) ? 'datum-eraan' : '')
+    }">${taak.deadline ? datumNL(taak.deadline) : '—'}</span></div>`;
 
-  el('detailWaarschuwing').textContent = vraagtAandacht(taak) ? waaromRood(taak) : '';
-  el('detailWaarschuwing').hidden = !vraagtAandacht(taak);
+  const aandacht = isTeLaat(taak) || komtEraan(taak);
+  el('detailWaarschuwing').textContent = aandacht ? waaromAandacht(taak) : '';
+  el('detailWaarschuwing').classList.toggle('oranje', komtEraan(taak));
+  el('detailWaarschuwing').hidden = !aandacht;
 
   tekenTaakProcessen(taak.processen);
   tekenBijlagen(taak.bijlagen);
