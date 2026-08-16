@@ -198,10 +198,12 @@ body {
   overflow: hidden; box-shadow: 0 1px 4px rgba(0,41,68,0.06);
 }
 table { width: 100%; border-collapse: collapse; }
-thead tr { background: var(--donker); }
+/* De kopbalk is blauwgrijs. Witte letters zijn daarop slecht leesbaar
+   (verhouding 2,3 op 1), donkerblauwe letters goed (6,5 op 1). */
+thead tr { background: var(--blauw); }
 thead th {
-  padding: 12px 16px; text-align: left; font-size: 0.8rem; font-weight: 600;
-  color: rgba(255,255,255,0.85); letter-spacing: 0.4px; white-space: nowrap;
+  padding: 12px 16px; text-align: left; font-size: 0.8rem; font-weight: 700;
+  color: var(--donker); letter-spacing: 0.4px; white-space: nowrap;
 }
 tbody tr { border-bottom: 1px solid #f0f1f3; }
 tbody tr:last-child { border-bottom: none; }
