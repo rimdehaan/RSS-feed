@@ -108,8 +108,8 @@ body {
   display: flex; flex-direction: column; flex-shrink: 0;
 }
 /* Het logo is een SVG en schaalt mee; hij vult de zijbalk minus de ruimte
-   ernaast. Twee bestanden: wit voor de donkere zijbalk, donkerblauw voor het
-   inlogscherm. */
+   ernaast. Twee bestanden: wit voor de donkere zijbalk, en de versie in de
+   huisstijlkleuren voor het witte inlogscherm. */
 .zijbalk-logo {
   padding: 22px 20px 18px;
   border-bottom: 1px solid rgba(255,255,255,0.1);
