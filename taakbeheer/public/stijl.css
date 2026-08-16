@@ -415,6 +415,25 @@ tbody tr.let-op td { color: #7d2431; }
 .proces-stap .nr { color: var(--blauw); font-weight: 700; font-size: 0.76rem; margin-top: 2px; flex-shrink: 0; }
 .proces-stap.af .tekst { color: var(--grijs); text-decoration: line-through; }
 
+/* Gekozen werkprocessen in het bewerkvenster */
+.proces-regel {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  background: #f8f9fb; border: 1px solid var(--lijn); border-radius: 6px; padding: 7px 9px;
+  font-size: 0.85rem;
+}
+.proces-regel.sleept { opacity: 0.35; }
+.proces-regel .naam { font-weight: 600; color: var(--donker); }
+.proces-regel .versie {
+  background: #fff; border: 1px solid var(--lijn); border-radius: 20px;
+  padding: 1px 8px; font-size: 0.68rem; font-weight: 700; color: var(--blauw); white-space: nowrap;
+}
+.proces-regel .bij { margin-left: auto; font-size: 0.75rem; color: var(--grijs); white-space: nowrap; }
+.proces-regel .weg {
+  background: none; border: none; color: var(--grijs); cursor: pointer;
+  font-size: 0.8rem; padding: 2px 4px; border-radius: 4px;
+}
+.proces-regel .weg:hover { color: var(--rood); background: var(--lijn); }
+
 .proces-koppelen { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .proces-koppelen select {
   padding: 6px 10px; border: 1px solid var(--grijs); border-radius: 6px;

@@ -595,6 +595,9 @@ async function openTaakVenster(id = null) {
 
   openVenster('taakVenster');
   el('vOpdracht').focus();
+
+  // Werkprocessen erna, want die haalt gegevens op. Het venster staat dan al open.
+  await vulProcesVeld(taak);
 }
 
 el('taakOpslaan').addEventListener('click', async () => {
@@ -613,12 +616,17 @@ el('taakOpslaan').addEventListener('click', async () => {
   }
 
   try {
-    if (staat.bewerktId) {
+    let taakId = staat.bewerktId;
+
+    if (taakId) {
       if (!el('vProjectVeld').hidden) gegevens.bord_id = Number(el('vProject').value);
-      await api(`/taken/${staat.bewerktId}`, { method: 'PATCH', body: gegevens });
+      await api(`/taken/${taakId}`, { method: 'PATCH', body: gegevens });
     } else {
-      await api(`/borden/${staat.bordId}/taken`, { method: 'POST', body: gegevens });
+      taakId = (await api(`/borden/${staat.bordId}/taken`, { method: 'POST', body: gegevens })).id;
     }
+
+    await bewaarProcessen(taakId, oorspronkelijkeProcessen);
+
     sluitVenster('taakVenster');
     herlaadTaken();
   } catch (fout) {
@@ -688,13 +696,14 @@ async function openDetail(id) {
 
 // ── Werkprocessen op een taak ────────────────────────────────────────────
 
+// In het detailvenster kun je afvinken, meer niet. Welke werkprocessen aan een
+// taak hangen is een instelling, en die staat bij Bewerken.
 function tekenTaakProcessen(processen) {
   el('taakProcessen').innerHTML = processen.length === 0
-    ? '<p class="zacht" style="font-size:.85rem">Nog geen werkprocessen gekoppeld.</p>'
+    ? '<p class="zacht" style="font-size:.85rem">Nog geen werkprocessen gekoppeld. Voeg ze toe via <strong>Bewerken</strong>.</p>'
     : processen.map(procesBlokHtml).join('');
 
   koppelProcesKnoppen();
-  vulProcesKeuze(processen);
 }
 
 function procesBlokHtml(proces) {
@@ -705,11 +714,9 @@ function procesBlokHtml(proces) {
   return `
     <div class="taak-proces" data-proces="${proces.id}">
       <div class="taak-proces-kop">
-        <span class="hendel" title="Sleep om te verplaatsen">${GRIJPER}</span>
         <span class="naam">${esc(proces.naam)}</span>
         <span class="versie">versie ${proces.versie}</span>
         <span class="voortgang ${klaar ? 'klaar' : ''}">${af} van ${totaal}${klaar ? ' ✓' : ''}</span>
-        <button class="weg" data-ontkoppel="${proces.id}" title="Ontkoppelen">✕</button>
       </div>
       <div class="balkje"><span style="width:${totaal ? Math.round((af / totaal) * 100) : 0}%"></span></div>
       <div>
@@ -722,24 +729,6 @@ function procesBlokHtml(proces) {
           </label>`).join('')}
       </div>
     </div>`;
-}
-
-/** De keuzelijst toont wat er in de bibliotheek staat; dubbel koppelen mag. */
-async function vulProcesKeuze() {
-  try {
-    const { werkprocessen } = await api('/werkprocessen');
-
-    el('procesKeuze').innerHTML = werkprocessen.length === 0
-      ? '<option value="">— de bibliotheek is leeg —</option>'
-      : werkprocessen.map(p => `<option value="${p.id}">${esc(p.naam)} (${p.aantal_stappen} stappen)</option>`).join('');
-
-    const leeg = werkprocessen.length === 0;
-    el('procesKeuze').disabled = leeg;
-    el('procesKoppel').disabled = leeg;
-    el('procesHint').textContent = leeg ? 'Maak er eerst een via Werkprocessen in de zijbalk.' : '';
-  } catch {
-    el('procesHint').textContent = 'De werkprocessen konden niet worden opgehaald.';
-  }
 }
 
 function koppelProcesKnoppen() {
@@ -759,74 +748,155 @@ function koppelProcesKnoppen() {
     });
   });
 
-  el('taakProcessen').querySelectorAll('[data-ontkoppel]').forEach(knop => {
-    knop.addEventListener('click', async () => {
-      const blok = knop.closest('.taak-proces');
-      const naam = blok.querySelector('.naam').textContent;
-      if (!confirm(`"${naam}" ontkoppelen? Wat er is afgevinkt gaat verloren.`)) return;
+}
 
-      await api('/taak-processen/' + knop.dataset.ontkoppel, { method: 'DELETE' });
-      openDetail(staat.detailId);
-      herlaadTaken();
+// ── Werkprocessen kiezen in het bewerkvenster ────────────────────────────
+// Hier bepaal je wélke werkprocessen aan de taak hangen. De wijzigingen worden
+// pas doorgevoerd als je opslaat, zodat Annuleren ook echt annuleert.
+
+let conceptProcessen = [];       // { taakProcesId | null, werkprocesId, naam, versie, stappen, af }
+let oorspronkelijkeProcessen = [];   // wat er bij het openen op de taak stond
+let bibliotheek = [];
+
+async function vulProcesVeld(taak) {
+  try {
+    bibliotheek = (await api('/werkprocessen')).werkprocessen;
+  } catch {
+    bibliotheek = [];
+  }
+
+  conceptProcessen = [];
+  if (taak) {
+    const detail = await api('/taken/' + taak.id);
+    conceptProcessen = detail.processen.map(proces => ({
+      taakProcesId: proces.id,
+      werkprocesId: proces.werkproces_id,
+      naam: proces.naam,
+      versie: proces.versie,
+      stappen: proces.stappen.length,
+      af: proces.stappen.filter(stap => stap.afgevinkt_op).length,
+    }));
+  }
+  oorspronkelijkeProcessen = conceptProcessen.map(proces => ({ ...proces }));
+
+  const leeg = bibliotheek.length === 0;
+  el('vProcesKeuze').innerHTML = leeg
+    ? '<option value="">— de bibliotheek is leeg —</option>'
+    : bibliotheek.map(p => `<option value="${p.id}">${esc(p.naam)} (${p.aantal_stappen} stappen)</option>`).join('');
+
+  el('vProcesKeuze').disabled = leeg;
+  el('vProcesToevoegen').disabled = leeg;
+  el('vProcesHint').textContent = leeg ? 'Maak er eerst een via Werkprocessen in de zijbalk.' : '';
+
+  tekenConceptProcessen();
+}
+
+function tekenConceptProcessen() {
+  el('vProcessen').innerHTML = conceptProcessen.length === 0
+    ? '<p class="zacht" style="font-size:.82rem;margin-bottom:4px">Nog geen werkprocessen gekozen.</p>'
+    : conceptProcessen.map((proces, index) => `
+        <div class="proces-regel" data-concept="${index}">
+          <span class="hendel" title="Sleep om te verplaatsen">${GRIJPER}</span>
+          <span class="naam">${esc(proces.naam)}</span>
+          <span class="versie">versie ${proces.versie}</span>
+          <span class="bij">${proces.stappen} stappen${proces.af ? ` · ${proces.af} afgevinkt` : ''}</span>
+          <button type="button" class="weg" data-conceptweg="${index}" title="Verwijderen">✕</button>
+        </div>`).join('');
+
+  el('vProcessen').querySelectorAll('[data-conceptweg]').forEach(knop => {
+    knop.addEventListener('click', () => {
+      const proces = conceptProcessen[Number(knop.dataset.conceptweg)];
+
+      // Alleen waarschuwen als er werk verloren gaat.
+      if (proces.af > 0 &&
+          !confirm(`"${proces.naam}" verwijderen? Er zijn ${proces.af} stappen afgevinkt; die gaan verloren.`)) return;
+
+      conceptProcessen.splice(Number(knop.dataset.conceptweg), 1);
+      tekenConceptProcessen();
     });
   });
 
-  koppelProcesSlepen();
+  koppelConceptSlepen();
 }
 
-/** Slepen aan de hendel in de kop, net als bij de stappen in de bibliotheek. */
-function koppelProcesSlepen() {
+function koppelConceptSlepen() {
   let gesleept = null;
 
-  el('taakProcessen').querySelectorAll('.taak-proces').forEach(blok => {
-    const hendel = blok.querySelector('.hendel');
-    if (!hendel) return;
+  el('vProcessen').querySelectorAll('.proces-regel').forEach(regel => {
+    regel.querySelector('.hendel').addEventListener('mousedown', () => { regel.draggable = true; });
 
-    hendel.addEventListener('mousedown', () => { blok.draggable = true; });
-
-    blok.addEventListener('dragstart', (gebeurtenis) => {
-      gesleept = blok;
-      blok.classList.add('sleept');
+    regel.addEventListener('dragstart', (gebeurtenis) => {
+      gesleept = regel;
+      regel.classList.add('sleept');
       gebeurtenis.dataTransfer.effectAllowed = 'move';
     });
 
-    blok.addEventListener('dragend', async () => {
-      blok.draggable = false;
-      blok.classList.remove('sleept');
+    regel.addEventListener('dragend', () => {
+      regel.draggable = false;
+      regel.classList.remove('sleept');
       gesleept = null;
 
-      const volgorde = [...el('taakProcessen').querySelectorAll('.taak-proces')]
-        .map(b => Number(b.dataset.proces));
-
-      await api(`/taken/${staat.detailId}/processen/volgorde`, { method: 'POST', body: { volgorde } });
-      openDetail(staat.detailId);
+      conceptProcessen = [...el('vProcessen').querySelectorAll('.proces-regel')]
+        .map(r => conceptProcessen[Number(r.dataset.concept)]);
+      tekenConceptProcessen();
     });
 
-    blok.addEventListener('dragover', (gebeurtenis) => {
-      if (!gesleept || gesleept === blok) return;
+    regel.addEventListener('dragover', (gebeurtenis) => {
+      if (!gesleept || gesleept === regel) return;
       gebeurtenis.preventDefault();
 
-      const vak = blok.getBoundingClientRect();
+      const vak = regel.getBoundingClientRect();
       const bovenhelft = gebeurtenis.clientY < vak.top + vak.height / 2;
-      blok.parentNode.insertBefore(gesleept, bovenhelft ? blok : blok.nextSibling);
+      regel.parentNode.insertBefore(gesleept, bovenhelft ? regel : regel.nextSibling);
     });
   });
-
-  el('taakProcessen').addEventListener('drop', (gebeurtenis) => gebeurtenis.preventDefault());
 }
 
-el('procesKoppel').addEventListener('click', async () => {
-  const werkprocesId = el('procesKeuze').value;
-  if (!werkprocesId) return;
+el('vProcesToevoegen').addEventListener('click', () => {
+  const gekozen = bibliotheek.find(p => p.id === Number(el('vProcesKeuze').value));
+  if (!gekozen) return;
 
-  try {
-    await api(`/taken/${staat.detailId}/processen`, { method: 'POST', body: { werkproces_id: Number(werkprocesId) } });
-    openDetail(staat.detailId);
-    herlaadTaken();
-  } catch (fout) {
-    el('procesHint').textContent = fout.message;
-  }
+  conceptProcessen.push({
+    taakProcesId: null,
+    werkprocesId: gekozen.id,
+    naam: gekozen.naam,
+    versie: gekozen.versie,
+    stappen: gekozen.aantal_stappen,
+    af: 0,
+  });
+  tekenConceptProcessen();
 });
+
+/**
+ * Brengt de gekozen werkprocessen in overeenstemming met wat er op de taak
+ * staat. Wordt pas bij het opslaan aangeroepen.
+ */
+async function bewaarProcessen(taakId, oorspronkelijk) {
+  const behouden = new Set(conceptProcessen.map(p => p.taakProcesId).filter(Boolean));
+
+  for (const proces of oorspronkelijk) {
+    if (!behouden.has(proces.taakProcesId)) {
+      await api('/taak-processen/' + proces.taakProcesId, { method: 'DELETE' });
+    }
+  }
+
+  const volgorde = [];
+  for (const proces of conceptProcessen) {
+    if (proces.taakProcesId) {
+      volgorde.push(proces.taakProcesId);
+    } else {
+      const nieuw = await api(`/taken/${taakId}/processen`, {
+        method: 'POST',
+        body: { werkproces_id: proces.werkprocesId },
+      });
+      volgorde.push(nieuw.id);
+    }
+  }
+
+  if (volgorde.length > 1) {
+    await api(`/taken/${taakId}/processen/volgorde`, { method: 'POST', body: { volgorde } });
+  }
+}
 
 // ── Bijlagen ─────────────────────────────────────────────────────────────
 

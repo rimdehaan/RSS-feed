@@ -203,6 +203,16 @@
           <label for="vOmschrijving">Omschrijving</label>
           <textarea id="vOmschrijving" placeholder="Typ hier een uitgebreide omschrijving..."></textarea>
         </div>
+
+        <div class="veld breed">
+          <label>Werkprocessen</label>
+          <div id="vProcessen"></div>
+          <div class="proces-koppelen">
+            <select id="vProcesKeuze"></select>
+            <button type="button" class="btn btn-secondary btn-sm" id="vProcesToevoegen">Toevoegen</button>
+            <span class="bijlage-hint" id="vProcesHint"></span>
+          </div>
+        </div>
       </div>
       <div class="melding" id="taakMelding" style="margin-top:14px"></div>
     </div>
@@ -227,11 +237,6 @@
 
       <div class="blok-kop">Werkprocessen</div>
       <div id="taakProcessen"></div>
-      <div class="proces-koppelen">
-        <select id="procesKeuze"></select>
-        <button class="btn btn-secondary btn-sm" id="procesKoppel">Koppelen</button>
-        <span class="bijlage-hint" id="procesHint"></span>
-      </div>
 
       <div class="blok-kop" style="margin-top:24px">Bijlagen</div>
       <div id="bijlagenLijst"></div>

@@ -148,8 +148,18 @@ Grenzen: 200 stappen per werkproces, 500 tekens per stap.
 
 ### Een werkproces aan een taak hangen
 
-In het taakvenster staat een blok **Werkprocessen**. Kies er een uit de lijst en
-klik **Koppelen**. Elk gekoppeld proces krijgt een eigen blok met de naam, het
+**Instellen doe je bij Bewerken, afwerken bij Bekijk.** Die scheiding is bewust:
+
+| Waar | Wat je er doet |
+|---|---|
+| **Nieuw item** en **Bewerken** | Kiezen wélke werkprocessen aan de taak hangen, en in welke volgorde |
+| **Bekijk** | De stappen afvinken en de voortgang zien — verder alleen lezen |
+
+Bij een nieuwe taak kies je de werkprocessen dus meteen mee, voordat de taak
+bestaat. Wijzigingen gaan pas in als je op **Opslaan** klikt; **Annuleren**
+annuleert ook echt.
+
+Elk gekoppeld proces krijgt in Bekijk een eigen blok met de naam, het
 versienummer, een voortgangsbalk en afvinkbare stappen.
 
 **De taak krijgt een kopie**, geen verwijzing. Dat is de kern van de opzet:
@@ -165,7 +175,8 @@ vandaag toevallig in de bibliotheek staat.
 Verder:
 
 - **Meerdere processen per taak**, elk met eigen nummering vanaf 1 en eigen
-  voortgang. Je versleept ze aan de hendel in de kop.
+  voortgang. De volgorde bepaal je bij Bewerken, door ze aan hun hendel te
+  verslepen.
 - **Hetzelfde werkproces mag twee keer** aan één taak — handig als je dezelfde
   procedure voor twee installaties doorloopt.
 - **Afvinken legt vast wie en wanneer.** Dat zie je door de stap aan te wijzen.
