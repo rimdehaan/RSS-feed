@@ -1493,6 +1493,57 @@ el('bVerwijder').addEventListener('click', async () => {
 
 el('bordInstellingenKnop').addEventListener('click', openBordVenster);
 
+// ── Mijn account ─────────────────────────────────────────────────────────
+el('wieBenIk').addEventListener('click', () => {
+  el('aNaam').value = staat.ik.naam;
+  el('aEmail').value = staat.ik.email;
+  el('aHuidig').value = '';
+  el('aNieuw').value = '';
+  for (const id of ['aNaamMelding', 'aWachtwoordMelding']) {
+    el(id).textContent = '';
+    el(id).classList.remove('goed');
+  }
+  openVenster('accountVenster');
+});
+
+el('aNaamKnop').addEventListener('click', async () => {
+  const melding = el('aNaamMelding');
+  melding.classList.remove('goed');
+  try {
+    const { naam } = await api('/mij', { method: 'PATCH', body: { naam: el('aNaam').value } });
+
+    // Overal waar je naam staat opnieuw ophalen: de zijbalk, de keuzelijsten
+    // en de taken die al in beeld staan.
+    staat.ik.naam = naam;
+    el('wieBenIk').textContent = naam;
+    staat.gebruikers = await api('/gebruikers');
+    vulGebruikerKeuzes();
+    await herlaadTaken();
+
+    melding.textContent = 'Je naam is gewijzigd.';
+    melding.classList.add('goed');
+  } catch (fout) {
+    melding.textContent = fout.message;
+  }
+});
+
+el('aWachtwoordKnop').addEventListener('click', async () => {
+  const melding = el('aWachtwoordMelding');
+  melding.classList.remove('goed');
+  try {
+    await api('/wachtwoord', {
+      method: 'POST',
+      body: { huidig: el('aHuidig').value, nieuw: el('aNieuw').value },
+    });
+    el('aHuidig').value = '';
+    el('aNieuw').value = '';
+    melding.textContent = 'Je wachtwoord is gewijzigd. Je blijft gewoon ingelogd.';
+    melding.classList.add('goed');
+  } catch (fout) {
+    melding.textContent = fout.message;
+  }
+});
+
 // De twee tellers sluiten elkaar uit: een taak is nooit tegelijk te laat en
 // komt-eraan, dus samen aanzetten zou altijd een leeg scherm geven.
 for (const [id, soort] of [['teLaatKnop', 'te-laat'], ['komtEraanKnop', 'komt-eraan']]) {
@@ -1568,6 +1619,7 @@ async function tekenTeam(bericht = null) {
               <button class="btn btn-secondary btn-sm" data-rol="${g.id}" data-nieuw="${g.rol === 'beheerder' ? 'lid' : 'beheerder'}">
                 Maak ${g.rol === 'beheerder' ? 'lid' : 'beheerder'}
               </button>
+              <button class="btn btn-secondary btn-sm" data-naam="${g.id}">Naam wijzigen</button>
               <button class="btn btn-secondary btn-sm" data-herstel="${g.id}">Wachtwoord herstellen</button>
               <button class="btn ${g.actief ? 'btn-danger' : 'btn-secondary'} btn-sm" data-actief="${g.id}" data-waarde="${g.actief ? 0 : 1}">
                 ${g.actief ? 'Uitschakelen' : 'Inschakelen'}
@@ -1575,22 +1627,11 @@ async function tekenTeam(bericht = null) {
             </div></td>` : ''}
           </tr>`).join('')}</tbody>
       </table>
-    </div>
-
-    <div class="kaartje">
-      <h3>Mijn wachtwoord wijzigen</h3>
-      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-        <div class="veld" style="flex:1;min-width:180px">
-          <label for="wwHuidig">Huidig wachtwoord</label>
-          <input type="password" id="wwHuidig" autocomplete="current-password" />
-        </div>
-        <div class="veld" style="flex:1;min-width:180px">
-          <label for="wwNieuw">Nieuw wachtwoord</label>
-          <input type="password" id="wwNieuw" autocomplete="new-password" />
-        </div>
-        <button class="btn btn-primary" id="wwKnop">Wijzigen</button>
-      </div>
-      <div class="melding" id="wwMelding" style="margin-top:12px"></div>
+      ${beheerder ? `<p class="hint" style="margin-top:12px">
+        Is iemand zijn wachtwoord kwijt? Klik op <strong>Wachtwoord herstellen</strong>.
+        Je krijgt dan een link die je persoonlijk doorgeeft; je collega kiest daarmee
+        zelf een nieuw wachtwoord. Zo weet jij zijn wachtwoord niet.
+      </p>` : ''}
     </div>`;
 
   if (bericht) {
@@ -1690,20 +1731,34 @@ function koppelTeamKnoppen() {
     });
   });
 
-  el('wwKnop')?.addEventListener('click', async () => {
-    const melding = el('wwMelding');
-    melding.classList.remove('goed');
-    try {
-      await api('/wachtwoord', {
-        method: 'POST',
-        body: { huidig: el('wwHuidig').value, nieuw: el('wwNieuw').value },
-      });
-      melding.textContent = 'Je wachtwoord is gewijzigd.';
-      melding.classList.add('goed');
-      el('wwHuidig').value = el('wwNieuw').value = '';
-    } catch (fout) {
-      melding.textContent = fout.message;
-    }
+  // Een beheerder kan de naam van een collega herstellen, bijvoorbeeld na een
+  // typefout bij het aanmaken van het account.
+  el('inhoud').querySelectorAll('[data-naam]').forEach(knop => {
+    knop.addEventListener('click', async () => {
+      const gebruiker = staat.gebruikers.find(g => g.id === Number(knop.dataset.naam));
+      const nieuw = prompt(`Nieuwe naam voor ${gebruiker.naam}:`, gebruiker.naam);
+      if (nieuw === null) return;
+
+      const melding = el('herstelMelding');
+      melding.classList.remove('goed');
+      try {
+        await api(`/gebruikers/${gebruiker.id}`, { method: 'PATCH', body: { naam: nieuw } });
+        staat.gebruikers = await api('/gebruikers');
+        if (gebruiker.id === staat.ik.id) {
+          staat.ik.naam = nieuw.trim();
+          el('wieBenIk').textContent = staat.ik.naam;
+        }
+        vulGebruikerKeuzes();
+
+        // Opnieuw tekenen gooit de melding weg, dus die zetten we erna terug —
+        // en tekenTeam is async, dus wachten tot hij klaar is.
+        await tekenTeam();
+        el('herstelMelding').textContent = `De naam is gewijzigd in ${nieuw.trim()}.`;
+        el('herstelMelding').classList.add('goed');
+      } catch (fout) {
+        melding.textContent = fout.message;
+      }
+    });
   });
 }
 

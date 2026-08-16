@@ -149,6 +149,14 @@ body {
 .zijbalk-voet a { color: rgba(255,255,255,0.5); cursor: pointer; text-decoration: none; }
 .zijbalk-voet a:hover { color: #fff; }
 
+/* Je eigen naam is een knop naar je account. Iets lichter dan 'Uitloggen',
+   zodat te zien is dat er iets te doen valt. */
+#wieBenIk {
+  color: rgba(255,255,255,0.75); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#wieBenIk:hover { color: #fff; text-decoration: underline; }
+
 .hoofd { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
 .kop {

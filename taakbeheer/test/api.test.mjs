@@ -293,6 +293,44 @@ try {
   check('herstellink is eenmalig',
     (await anoniem('/herstel', { method: 'POST', body: { token: herstel, wachtwoord: 'WeerEenWachtwoord' } })).status === 404);
 
+  // ── Je eigen naam wijzigen ──────────────────────────────────────────────
+  groep('Eigen naam wijzigen');
+  check('naam wijzigen lukt',
+    (await anna('/mij', { method: 'PATCH', body: { naam: 'Anna de Jong' } })).data.naam === 'Anna de Jong');
+  check('en staat meteen in je eigen gegevens',
+    (await anna('/ik')).data.gebruiker.naam === 'Anna de Jong');
+  check('ook een collega ziet de nieuwe naam',
+    (await rim('/gebruikers')).data.find(g => g.id === annaId).naam === 'Anna de Jong');
+
+  check('lege naam geweigerd',
+    (await anna('/mij', { method: 'PATCH', body: { naam: '   ' } })).status === 400);
+  check('en de naam is dan niet veranderd',
+    (await anna('/ik')).data.gebruiker.naam === 'Anna de Jong');
+  check('een te lange naam wordt afgekapt op 80 tekens',
+    (await anna('/mij', { method: 'PATCH', body: { naam: 'A'.repeat(200) } })).data.naam.length === 80);
+  await anna('/mij', { method: 'PATCH', body: { naam: 'Anna Jansen' } });
+
+  // Een verse client: `anoniem` heeft hierboven ingelogd en draagt dus een koekje.
+  const buitenstaander = client();
+  check('uitgelogd mag je niets wijzigen',
+    (await buitenstaander('/mij', { method: 'PATCH', body: { naam: 'Indringer' } })).status === 401);
+
+  // Een beheerder mag de naam van een ander herstellen; een lid niet.
+  check('beheerder wijzigt de naam van een collega',
+    (await rim(`/gebruikers/${annaId}`, { method: 'PATCH', body: { naam: 'Anna Janssen' } })).status === 200);
+  check('en dat is echt doorgevoerd',
+    (await anna('/ik')).data.gebruiker.naam === 'Anna Janssen');
+  check('lege naam ook daar geweigerd',
+    (await rim(`/gebruikers/${annaId}`, { method: 'PATCH', body: { naam: '' } })).status === 400);
+  const rimId = (await rim('/ik')).data.gebruiker.id;
+  check('een lid mag de naam van een ander niet wijzigen',
+    (await anna(`/gebruikers/${rimId}`, { method: 'PATCH', body: { naam: 'Gekaapt' } })).status === 403);
+  check('en die naam is ongemoeid',
+    (await rim('/ik')).data.gebruiker.naam === 'Rim de Haan');
+
+  check('rol en rechten blijven staan bij een naamwijziging',
+    (await rim('/gebruikers')).data.find(g => g.id === annaId).rol === 'lid');
+
   // ── Uitschakelen en verwijderen ─────────────────────────────────────────
   groep('Uitschakelen en verwijderen');
   check('Anna uitgeschakeld', (await rim('/gebruikers/' + annaId, { method: 'PATCH', body: { actief: false } })).status === 200);

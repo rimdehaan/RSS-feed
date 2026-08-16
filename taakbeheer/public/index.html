@@ -35,7 +35,7 @@
     </nav>
 
     <div class="zijbalk-voet">
-      <span id="wieBenIk"></span>
+      <a id="wieBenIk" title="Mijn account"></a>
       <a id="uitlogKnop" title="Uitloggen">Uitloggen</a>
     </div>
   </aside>
@@ -164,6 +164,53 @@
       <button class="btn btn-danger links" id="bVerwijder">Bord verwijderen</button>
       <button class="btn btn-secondary" data-sluit>Annuleren</button>
       <button class="btn btn-primary" id="bOpslaan">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── VENSTER: je eigen account ── -->
+<div class="overlay" id="accountVenster">
+  <div class="venster">
+    <div class="venster-kop">
+      <h2>Mijn account</h2>
+      <button class="venster-sluit" data-sluit>&times;</button>
+    </div>
+    <div class="venster-lijf">
+      <div class="veld" style="margin-bottom:6px">
+        <label for="aNaam">Naam</label>
+        <input type="text" id="aNaam" maxlength="80" autocomplete="name" />
+      </div>
+      <p class="hint">Zo sta je bij taken, opmerkingen en in het team.</p>
+      <div style="display:flex;justify-content:flex-end;margin:10px 0 6px">
+        <button class="btn btn-primary" id="aNaamKnop">Naam opslaan</button>
+      </div>
+      <div class="melding" id="aNaamMelding" style="margin-bottom:20px"></div>
+
+      <div class="veld" style="margin-bottom:6px">
+        <label for="aEmail">E-mailadres</label>
+        <input type="text" id="aEmail" disabled />
+      </div>
+      <p class="hint" style="margin-bottom:20px">
+        Hiermee log je in. Dit kan niet gewijzigd worden.
+      </p>
+
+      <div class="blok-kop">Wachtwoord wijzigen</div>
+      <div class="veld" style="margin-bottom:12px">
+        <label for="aHuidig">Huidig wachtwoord</label>
+        <input type="password" id="aHuidig" autocomplete="current-password" />
+      </div>
+      <div class="veld" style="margin-bottom:6px">
+        <label for="aNieuw">Nieuw wachtwoord</label>
+        <input type="password" id="aNieuw" autocomplete="new-password" />
+      </div>
+      <p class="hint">Minstens 10 tekens.</p>
+      <div style="display:flex;justify-content:flex-end;margin:10px 0 6px">
+        <button class="btn btn-primary" id="aWachtwoordKnop">Wachtwoord wijzigen</button>
+      </div>
+      <div class="melding" id="aWachtwoordMelding"></div>
+    </div>
+    <div class="venster-voet">
+      <button class="btn btn-secondary" data-sluit>Sluiten</button>
     </div>
   </div>
 </div>

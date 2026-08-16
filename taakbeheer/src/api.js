@@ -257,8 +257,15 @@ api.patch('/gebruikers/:id', vereistBeheerder, (req, res) => {
     ? gebruiker.mag_werkprocessen
     : (req.body.mag_werkprocessen ? 1 : 0);
 
-  db.prepare('UPDATE gebruikers SET rol = ?, actief = ?, mag_werkprocessen = ? WHERE id = ?')
-    .run(rol, actief, magWerkprocessen, id);
+  // Een beheerder mag de naam van een collega herstellen; een lege naam niet.
+  let naam = gebruiker.naam;
+  if (req.body.naam !== undefined) {
+    naam = tekst(req.body.naam, 80);
+    if (!naam) return res.status(400).json({ fout: 'Vul een naam in.' });
+  }
+
+  db.prepare('UPDATE gebruikers SET naam = ?, rol = ?, actief = ?, mag_werkprocessen = ? WHERE id = ?')
+    .run(naam, rol, actief, magWerkprocessen, id);
 
   if (!actief) db.prepare('DELETE FROM sessies WHERE gebruiker_id = ?').run(id);
 
@@ -316,6 +323,16 @@ api.post('/herstel', (req, res) => {
 
   maakSessie(res, rij.gebruiker_id);
   res.json({ ok: true });
+});
+
+// Je eigen naam wijzigen. De naam staat op één plek en wordt overal live
+// opgehaald, dus een wijziging werkt meteen door bij taken en opmerkingen.
+api.patch('/mij', vereistLogin, (req, res) => {
+  const naam = tekst(req.body.naam, 80);
+  if (!naam) return res.status(400).json({ fout: 'Vul je naam in.' });
+
+  db.prepare('UPDATE gebruikers SET naam = ? WHERE id = ?').run(naam, req.gebruiker.id);
+  res.json({ naam });
 });
 
 api.post('/wachtwoord', vereistLogin, (req, res) => {
