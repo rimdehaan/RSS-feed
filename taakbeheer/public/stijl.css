@@ -230,15 +230,19 @@ tbody tr.let-op td { color: #7d2431; }
    projecten niet meer onder elkaar uitgelijnd. Opdracht krijgt wat overblijft,
    want dat is de belangrijkste kolom. */
 .tabel-omhulsel { overflow-x: auto; }
-.tabel-omhulsel table { table-layout: fixed; min-width: 1040px; }
+/* De ondergrens houdt Opdracht breder dan elke andere kolom; is er minder
+   ruimte, dan schuift de tabel zijwaarts in plaats van hem plat te drukken. */
+.tabel-omhulsel table { table-layout: fixed; min-width: 1300px; }
 
 col.k-opdracht   { width: auto; }
 col.k-uitvoerend { width: 150px; }
 col.k-prioriteit { width: 128px; }  /* inclusief het waarschuwingsteken bij Critical */
 col.k-status     { width: 158px; }  /* 'Working on it' past hier net in */
-col.k-deadline   { width: 120px; }
+col.k-deadline   { width: 105px; }
+col.k-bijlagen   { width: 95px; }
+col.k-stappen    { width: 100px; }
 col.k-details    { width: 150px; }
-col.k-acties     { width: 185px; }
+col.k-acties     { width: 200px; }
 
 /* De opdracht loopt door op een volgende regel; ook één heel lang woord
    blijft binnen de kolom. */
@@ -247,6 +251,10 @@ td.c-opdracht { overflow-wrap: anywhere; }
 /* Een lange naam kapt af met … ; de hele naam verschijnt bij het aanwijzen. */
 td.c-kort { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 td.c-details { line-height: 1.9; }
+
+/* Bijlagen en stappen: een streepje als er niets is, groen als alles af is. */
+td.c-teller { white-space: nowrap; color: var(--blauw); font-size: 0.82rem; }
+td.c-teller .klaar { color: #27AE60; font-weight: 600; }
 
 /* De gekleurde rondjes vullen hun kolom in plaats van hem op te rekken. */
 .tabel-omhulsel .status-select { width: 100%; min-width: 0; }
