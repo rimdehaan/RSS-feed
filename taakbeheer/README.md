@@ -34,14 +34,15 @@ administratie — zie *Back-ups* verderop.
 |---|---|
 | Accounts | Inloggen met e-mail en wachtwoord. Wachtwoorden worden versleuteld opgeslagen (scrypt), nooit leesbaar |
 | Uitnodigen | Alleen een beheerder voegt mensen toe. Je krijgt een link die je zelf doorstuurt |
-| Rollen | *Beheerder* mag uitnodigen en accounts beheren, *lid* werkt gewoon mee |
+| Rollen | *Beheerder* mag uitnodigen en accounts beheren, *lid* werkt gewoon mee. Je eigen rol kun je niet wijzigen — dat doet een collega-beheerder |
 | Wachtwoord kwijt | Een beheerder maakt een eenmalige herstellink, twee dagen geldig |
+| Mijn account | Klik linksonder op je naam om je eigen naam en wachtwoord te wijzigen |
 | Mijn taken | Je persoonlijke bord: alles wat aan jou is toegewezen, uit alle projecten, gegroepeerd per project en daarbinnen per status. Alleen jij ziet het |
 | Projecten | Meerdere borden naast elkaar, bijvoorbeeld per project of per klant |
 | Wie ziet wat | Per project in te stellen: iedereen, of alleen gekozen mensen |
 | Tabelweergave | Zoals je prototype: opdracht, uitvoerend, status, deadline, omschrijving |
 | Prioriteit | Critical, High, Medium of Low — of geen. Klik en kies, net als bij status. Ook te filteren |
-| Deadline-alarm | Taken lichten rood op zodra de deadline dichtbij is en er nog niet aan gewerkt wordt |
+| Deadline-alarm | Rood als de deadline voorbij is, oranje als hij eraan komt. Met tellers bovenaan om erop te filteren |
 | Kanban | De zes statussen als kolommen, kaarten ertussen slepen |
 | Werkprocessen | Bibliotheek met vaste werkwijzen. Je maakt er een door een procedure te plakken; de app knipt hem in stappen |
 | Werkproces op een taak | Eén of meer werkprocessen aan een taak hangen, met afvinkbare stappen en voortgang per proces |
@@ -54,22 +55,27 @@ administratie — zie *Back-ups* verderop.
 De zes statussen zijn ongewijzigd: Not Started, Working on it, Validating, Done,
 On Hold, Cancelled.
 
-### Wanneer een taak rood oplicht
+### Wanneer een taak oplicht
 
-Een taak springt eruit — rode regel of rode kaart, met een ⚠ ervoor — zodra
-**de deadline morgen of eerder is en er nog niet aan gewerkt wordt**.
+Er zijn twee losse signalen. Een taak krijgt er hoogstens één.
 
-Wat telt als "er wordt aan gewerkt": alleen de status **Working on it**. Klaar
-(*Done*) en vervallen (*Cancelled*) vragen geen aandacht meer. Alle andere
-statussen wel, dus ook *On Hold* en *Validating*: die zijn niet af, en de
-deadline komt eraan.
+| | Wanneer | Hoe het eruitziet |
+|---|---|---|
+| **Te laat** | De deadline is gisteren of eerder, en de taak is niet *Done* of *Cancelled* | Rode regel of kaart met ⚠, en eronder "N dagen te laat" |
+| **Komt eraan** | De deadline is vandaag of morgen, en er wordt nog niet aan gewerkt | Oranje regel of kaart met ⏱ |
 
-Twee keuzes die afwijken van een letterlijke lezing van "de deadline is morgen":
+Het verschil dat het meeste uitmaakt: **te laat blijft te laat, ook als iemand er
+al aan werkt.** Zet je een te late taak op *Working on it*, dan blijft hij rood.
+Pas bij *Done* of *Cancelled* verdwijnt het. Bij "komt eraan" is dat wél anders:
+zodra je hem oppakt is de waarschuwing overbodig en gaat het oranje uit.
 
-- **Ook vandaag en te laat lichten op.** Een taak die vandaag af moet en nog niet
-  is opgepakt is dringender dan een van morgen, niet minder.
-- **Af en vervallen lichten niet op.** Anders zou elke afgeronde taak met een
-  deadline van morgen rood worden.
+Wat telt als "er wordt aan gewerkt": alleen de status **Working on it**. Alle
+andere statussen niet, dus ook *On Hold* en *Validating*: die zijn niet af.
+
+Boven het overzicht staan twee tellers, maar alleen als er iets te tellen valt:
+**⚠ 3 taken te laat** en **⏱ 2 taken komen eraan**. Klik erop en je ziet alleen
+die taken; nog een keer klikken zet het uit. Ze sluiten elkaar uit, want een taak
+is nooit allebei.
 
 De vergelijking gebruikt de datum van de kijker, niet die van de server. Om
 middernacht in Nederland verspringt het dus ook echt.
@@ -351,6 +357,7 @@ Twee pakketten van buiten, verder niets:
 | `DATABASE_PAD` | Waar het databasebestand staat | `./data/taakbeheer.db` |
 | `NODE_ENV` | Zet op `production` zodra je live staat | leeg |
 | `MAX_BIJLAGE_MB` | Grootste bestand dat je mag uploaden | `10` |
+| `HERSTEL_BEHEERDER` | Noodluik: e-mailadres dat bij het opstarten beheerder wordt | leeg |
 
 ---
 
@@ -359,6 +366,23 @@ Twee pakketten van buiten, verder niets:
 | Melding | Wat te doen |
 |---|---|
 | `EADDRINUSE` | De app draait al. Sluit dat venster, of start met `PORT=3001 node server.js` |
-| Je komt niet meer binnen | Vraag een andere beheerder om een herstellink. Is er geen andere beheerder, dan is de database het enige aanknopingspunt |
+| Je komt niet meer binnen | Vraag een andere beheerder om een herstellink |
+| Je bent geen beheerder meer | Vraag een andere beheerder om je terug te zetten. Is die er niet, gebruik dan het noodluik hieronder |
 | Alles is leeg na een nieuwe versie online | Dan staat het volume niet goed — zie *Hosting*, punt 1 |
 | `Cannot find module` | `npm install` vergeten |
+
+### Noodluik: jezelf weer beheerder maken
+
+Is er niemand meer die beheerder is, of ben je het per ongeluk zelf niet meer?
+Dan hoef je geen nieuw account aan te maken.
+
+1. Ga in Railway naar je service → **Variables**.
+2. Voeg toe: `HERSTEL_BEHEERDER` met als waarde je e-mailadres.
+3. Sla op. Railway start de app opnieuw op.
+4. Log in — je bent weer beheerder.
+5. **Haal de variabele daarna weer weg.** Zolang hij er staat, wordt dat account
+   bij elke herstart opnieuw op beheerder gezet.
+
+In de logboeken van Railway zie je wat er gebeurd is. Alleen wie bij de
+instellingen van de server kan, kan dit gebruiken — en die kan sowieso al bij
+de database.

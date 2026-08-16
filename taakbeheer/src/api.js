@@ -246,6 +246,18 @@ api.patch('/gebruikers/:id', vereistBeheerder, (req, res) => {
   const rol = req.body.rol === 'beheerder' ? 'beheerder' : req.body.rol === 'lid' ? 'lid' : gebruiker.rol;
   const actief = req.body.actief === undefined ? gebruiker.actief : (req.body.actief ? 1 : 0);
 
+  // Jezelf degraderen of uitschakelen is een deur die maar één kant op gaat:
+  // daarna heb je de rechten niet meer om het terug te draaien. Een collega-
+  // beheerder kan het wel.
+  if (id === req.gebruiker.id) {
+    if (rol !== gebruiker.rol) {
+      return res.status(400).json({ fout: 'Je kunt je eigen rol niet wijzigen. Vraag een andere beheerder.' });
+    }
+    if (!actief) {
+      return res.status(400).json({ fout: 'Je kunt jezelf niet uitschakelen. Vraag een andere beheerder.' });
+    }
+  }
+
   // Voorkom dat de laatste beheerder zichzelf buitensluit.
   const beheerders = db.prepare("SELECT COUNT(*) AS n FROM gebruikers WHERE rol = 'beheerder' AND actief = 1").get().n;
   const verliestRechten = gebruiker.rol === 'beheerder' && gebruiker.actief && (rol !== 'beheerder' || !actief);

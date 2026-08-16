@@ -1616,14 +1616,16 @@ async function tekenTeam(bericht = null) {
                  </label>`}</td>
             <td>${g.actief ? 'Actief' : '<span class="zacht">Uitgeschakeld</span>'}</td>
             ${beheerder ? `<td><div class="acties">
-              <button class="btn btn-secondary btn-sm" data-rol="${g.id}" data-nieuw="${g.rol === 'beheerder' ? 'lid' : 'beheerder'}">
-                Maak ${g.rol === 'beheerder' ? 'lid' : 'beheerder'}
-              </button>
+              ${g.id === staat.ik.id ? '' : `
+                <button class="btn btn-secondary btn-sm" data-rol="${g.id}" data-nieuw="${g.rol === 'beheerder' ? 'lid' : 'beheerder'}">
+                  Maak ${g.rol === 'beheerder' ? 'lid' : 'beheerder'}
+                </button>`}
               <button class="btn btn-secondary btn-sm" data-naam="${g.id}">Naam wijzigen</button>
               <button class="btn btn-secondary btn-sm" data-herstel="${g.id}">Wachtwoord herstellen</button>
-              <button class="btn ${g.actief ? 'btn-danger' : 'btn-secondary'} btn-sm" data-actief="${g.id}" data-waarde="${g.actief ? 0 : 1}">
-                ${g.actief ? 'Uitschakelen' : 'Inschakelen'}
-              </button>
+              ${g.id === staat.ik.id ? '' : `
+                <button class="btn ${g.actief ? 'btn-danger' : 'btn-secondary'} btn-sm" data-actief="${g.id}" data-waarde="${g.actief ? 0 : 1}">
+                  ${g.actief ? 'Uitschakelen' : 'Inschakelen'}
+                </button>`}
             </div></td>` : ''}
           </tr>`).join('')}</tbody>
       </table>

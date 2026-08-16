@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import api from './src/api.js';
 import { metGebruiker, ruimOp } from './src/auth.js';
-import { aantalGebruikers } from './src/db.js';
+import { db, aantalGebruikers } from './src/db.js';
 
 const hier = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -53,6 +53,29 @@ app.use((err, req, res, next) => {
   res.status(500).json({ fout: 'Er ging iets mis op de server.' });
 });
 
+/**
+ * Noodluik voor als er niemand meer beheerder is, of jezelf per ongeluk hebt
+ * gedegradeerd. Zet op de hostingomgeving HERSTEL_BEHEERDER op je e-mailadres
+ * en start opnieuw op; dat account wordt dan beheerder en weer actief gezet.
+ * Haal de variabele daarna weg — bij elke start doet hij het opnieuw.
+ * Alleen wie bij de instellingen van de server kan, kan dit gebruiken.
+ */
+function herstelBeheerder() {
+  const email = String(process.env.HERSTEL_BEHEERDER ?? '').trim().toLowerCase();
+  if (!email) return;
+
+  const gebruiker = db.prepare('SELECT id, naam, rol, actief FROM gebruikers WHERE email = ?').get(email);
+  if (!gebruiker) {
+    console.log(`HERSTEL_BEHEERDER: geen account gevonden met ${email}. Er is niets gewijzigd.`);
+    return;
+  }
+
+  db.prepare("UPDATE gebruikers SET rol = 'beheerder', actief = 1 WHERE id = ?").run(gebruiker.id);
+  console.log(`HERSTEL_BEHEERDER: ${gebruiker.naam} (${email}) is nu beheerder en actief.`);
+  console.log('Haal de variabele HERSTEL_BEHEERDER weg nu het gelukt is.');
+}
+
+herstelBeheerder();
 ruimOp();
 
 app.listen(PORT, () => {
