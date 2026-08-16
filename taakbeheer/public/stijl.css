@@ -93,11 +93,8 @@ body {
   box-shadow: 0 4px 24px rgba(0,41,68,0.08);
   width: 400px; max-width: 100%; padding: 32px;
 }
-.inlog-logo {
-  font-size: 1.4rem; font-weight: 700; color: var(--blauw);
-  margin-bottom: 4px; letter-spacing: 0.5px;
-}
-.inlog-logo span { color: var(--donker); }
+.inlog-logo { margin-bottom: 18px; }
+.inlog-logo img { display: block; width: 200px; max-width: 100%; }
 .inlog-kaart h1 { font-size: 1rem; color: var(--donker); margin-bottom: 22px; font-weight: 600; }
 .inlog-kaart form { display: flex; flex-direction: column; gap: 14px; }
 .inlog-kaart .btn { justify-content: center; padding: 10px; }
@@ -110,12 +107,14 @@ body {
   width: 230px; background: var(--donker); color: #fff;
   display: flex; flex-direction: column; flex-shrink: 0;
 }
+/* Het logo is een SVG en schaalt mee; hij vult de zijbalk minus de ruimte
+   ernaast. Twee bestanden: wit voor de donkere zijbalk, donkerblauw voor het
+   inlogscherm. */
 .zijbalk-logo {
-  padding: 22px 20px 18px; font-size: 1.2rem; font-weight: 700;
-  letter-spacing: 0.5px; color: var(--blauw);
+  padding: 22px 20px 18px;
   border-bottom: 1px solid rgba(255,255,255,0.1);
 }
-.zijbalk-logo span { color: #fff; }
+.zijbalk-logo img { display: block; width: 100%; }
 
 .zijbalk-kop {
   padding: 18px 20px 6px; font-size: 0.7rem; font-weight: 700;
