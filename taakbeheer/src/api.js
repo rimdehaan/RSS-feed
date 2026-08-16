@@ -3,7 +3,8 @@
 
 import { Router } from 'express';
 import { randomBytes } from 'node:crypto';
-import { createWriteStream, createReadStream, unlinkSync, statSync } from 'node:fs';
+import { createWriteStream, createReadStream, unlinkSync, statSync, readFileSync } from 'node:fs';
+import { maakZip } from './zip.js';
 import { join } from 'node:path';
 import { db, BIJLAGEMAP, STATUSSEN, PRIORITEITEN, aantalGebruikers, logHistorie } from './db.js';
 import { splitsStappen, MAX_STAPPEN, MAX_STAP_TEKENS } from '../public/stappen.js';
@@ -926,6 +927,52 @@ api.post('/taken/:id/bijlagen', vereistLogin, (req, res) => {
   });
 
   req.pipe(schrijver);
+});
+
+/** Alle bijlagen van één taak in één ZIP. */
+api.get('/taken/:id/bijlagen.zip', vereistLogin, (req, res) => {
+  const taak = zichtbareTaak(req.gebruiker, req.params.id);
+  if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
+
+  const bijlagen = db.prepare(
+    'SELECT bestandsnaam, opslagnaam, grootte FROM bijlagen WHERE taak_id = ? ORDER BY aangemaakt_op, id'
+  ).all(taak.id);
+
+  if (bijlagen.length === 0) {
+    return res.status(404).json({ fout: 'Deze taak heeft geen bijlagen.' });
+  }
+
+  // Alles gaat door het geheugen, dus een bovengrens is op zijn plaats.
+  const totaal = bijlagen.reduce((som, b) => som + b.grootte, 0);
+  if (totaal > 200 * 1024 * 1024) {
+    return res.status(413).json({ fout: 'De bijlagen zijn samen te groot om in één keer te downloaden. Haal ze los op.' });
+  }
+
+  const bestanden = [];
+  for (const bijlage of bijlagen) {
+    try {
+      bestanden.push({ naam: bijlage.bestandsnaam, inhoud: readFileSync(join(BIJLAGEMAP, bijlage.opslagnaam)) });
+    } catch {
+      // Bestand ontbreekt op schijf; de rest hoeft er niet onder te lijden.
+    }
+  }
+
+  if (bestanden.length === 0) {
+    return res.status(404).json({ fout: 'De bestanden staan niet meer op de server.' });
+  }
+
+  const zip = maakZip(bestanden);
+  const naam = `${taak.opdracht.replace(/[^\p{L}\p{N} _-]/gu, '').trim() || 'taak'} - bijlagen.zip`;
+
+  res.setHeader('content-type', 'application/zip');
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('content-length', zip.length);
+  res.setHeader(
+    'content-disposition',
+    `attachment; filename="${naam.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(naam)}`
+  );
+
+  res.end(zip);
 });
 
 api.get('/bijlagen/:id', vereistLogin, (req, res) => {

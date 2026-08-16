@@ -152,8 +152,8 @@ Grenzen: 200 stappen per werkproces, 500 tekens per stap.
 
 | Waar | Wat je er doet |
 |---|---|
-| **Nieuw item** en **Bewerken** | Kiezen wélke werkprocessen aan de taak hangen, en in welke volgorde |
-| **Bekijk** | De stappen afvinken en de voortgang zien — verder alleen lezen |
+| **Nieuw item** en **Bewerken** | Kiezen wélke werkprocessen aan de taak hangen en in welke volgorde, en welke bijlagen erbij horen |
+| **Bekijk** | De stappen afvinken, bijlagen openen en de voortgang zien — verder alleen lezen |
 
 Bij een nieuwe taak kies je de werkprocessen dus meteen mee, voordat de taak
 bestaat. Wijzigingen gaan pas in als je op **Opslaan** klikt; **Annuleren**
@@ -213,6 +213,16 @@ mail. Je bestanden blijven op je eigen server.
 
 **Voor je back-up betekent dit: kopieer de hele `/data`-map, niet alleen het
 databasebestand.** Anders heb je straks wel je taken terug, maar geen bijlagen.
+
+**Toevoegen en verwijderen doe je bij Bewerken**, net als bij werkprocessen. In
+Bekijk open je ze alleen. Staan er twee of meer, dan verschijnt daar de knop
+**Alles downloaden (ZIP)** die ze in één bestand ophaalt.
+
+Die ZIP wordt door de app zelf samengesteld — zonder extra pakket, want het
+samendrukken zit al in Node. De code staat in `src/zip.js` en is het meest
+technische stukje van de app. De tests controleren hem niet door hem opnieuw met
+dezelfde code te lezen, maar door hem door **Python** te laten uitpakken: een
+volstrekt losse implementatie. Zegt die dat het bestand klopt, dan klopt het.
 
 Drie dingen die de opslag veilig houden:
 

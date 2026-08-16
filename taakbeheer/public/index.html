@@ -213,6 +213,16 @@
             <span class="bijlage-hint" id="vProcesHint"></span>
           </div>
         </div>
+
+        <div class="veld breed">
+          <label>Bijlagen</label>
+          <div id="vBijlagen"></div>
+          <div class="bijlage-toevoegen">
+            <label class="btn btn-secondary btn-sm" for="vBijlageInvoer">Bestand kiezen…</label>
+            <input type="file" id="vBijlageInvoer" multiple hidden />
+            <span class="bijlage-hint" id="vBijlageHint"></span>
+          </div>
+        </div>
       </div>
       <div class="melding" id="taakMelding" style="margin-top:14px"></div>
     </div>
@@ -238,13 +248,11 @@
       <div class="blok-kop">Werkprocessen</div>
       <div id="taakProcessen"></div>
 
-      <div class="blok-kop" style="margin-top:24px">Bijlagen</div>
-      <div id="bijlagenLijst"></div>
-      <div class="bijlage-toevoegen">
-        <label class="btn btn-secondary btn-sm" for="bijlageInvoer">Bestand kiezen…</label>
-        <input type="file" id="bijlageInvoer" multiple hidden />
-        <span class="bijlage-hint" id="bijlageHint"></span>
+      <div class="blok-kop" style="margin-top:24px;display:flex;align-items:center;gap:10px">
+        Bijlagen
+        <button class="btn btn-secondary btn-sm" id="allesDownloaden" hidden>Alles downloaden (ZIP)</button>
       </div>
+      <div id="bijlagenLijst"></div>
 
       <div class="blok-kop" style="margin-top:24px">Opmerkingen</div>
       <div id="opmerkingenLijst"></div>

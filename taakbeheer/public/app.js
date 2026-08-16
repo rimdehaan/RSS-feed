@@ -626,6 +626,7 @@ el('taakOpslaan').addEventListener('click', async () => {
     }
 
     await bewaarProcessen(taakId, oorspronkelijkeProcessen);
+    await bewaarBijlagen(taakId);
 
     sluitVenster('taakVenster');
     herlaadTaken();
@@ -766,8 +767,11 @@ async function vulProcesVeld(taak) {
   }
 
   conceptProcessen = [];
+  conceptBijlagen = [];
+
   if (taak) {
     const detail = await api('/taken/' + taak.id);
+
     conceptProcessen = detail.processen.map(proces => ({
       taakProcesId: proces.id,
       werkprocesId: proces.werkproces_id,
@@ -776,8 +780,19 @@ async function vulProcesVeld(taak) {
       stappen: proces.stappen.length,
       af: proces.stappen.filter(stap => stap.afgevinkt_op).length,
     }));
+
+    conceptBijlagen = detail.bijlagen.map(bijlage => ({
+      id: bijlage.id,
+      naam: bijlage.bestandsnaam,
+      grootte: bijlage.grootte,
+      bestand: null,
+    }));
   }
+
   oorspronkelijkeProcessen = conceptProcessen.map(proces => ({ ...proces }));
+  oorspronkelijkeBijlagen = conceptBijlagen.map(bijlage => ({ ...bijlage }));
+  el('vBijlageHint').textContent = '';
+  tekenConceptBijlagen();
 
   const leeg = bibliotheek.length === 0;
   el('vProcesKeuze').innerHTML = leeg
@@ -908,31 +923,32 @@ function leesbareGrootte(bytes) {
 
 const PAPERCLIP = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`;
 
+// In het detailvenster open je bijlagen; toevoegen en verwijderen hoort bij
+// Bewerken, net als bij de werkprocessen.
 function tekenBijlagen(bijlagen) {
   el('bijlagenLijst').innerHTML = bijlagen.length === 0
-    ? '<p class="zacht" style="font-size:.85rem">Nog geen bijlagen.</p>'
+    ? '<p class="zacht" style="font-size:.85rem">Nog geen bijlagen. Voeg ze toe via <strong>Bewerken</strong>.</p>'
     : bijlagen.map(b => `
         <div class="bijlage">
           ${PAPERCLIP}
           <a href="/api/bijlagen/${b.id}" download>${esc(b.bestandsnaam)}</a>
           <span class="bij">${leesbareGrootte(b.grootte)} · ${esc(b.geupload_door_naam || 'onbekend')}</span>
-          ${(b.geupload_door === staat.ik.id || staat.ik.rol === 'beheerder')
-            ? `<button class="weg" data-bijlage="${b.id}" title="Verwijderen">verwijder</button>` : ''}
         </div>`).join('');
 
-  el('bijlagenLijst').querySelectorAll('[data-bijlage]').forEach(knop => {
-    knop.addEventListener('click', async () => {
-      if (!confirm('Deze bijlage verwijderen?')) return;
-      await api('/bijlagen/' + knop.dataset.bijlage, { method: 'DELETE' });
-      openDetail(staat.detailId);
-      herlaadTaken();
-    });
-  });
+  el('allesDownloaden').hidden = bijlagen.length < 2;
 }
 
+el('allesDownloaden').addEventListener('click', () => {
+  // Een gewone link naar de server; die stuurt de ZIP als download terug.
+  const link = document.createElement('a');
+  link.href = `/api/taken/${staat.detailId}/bijlagen.zip`;
+  link.download = '';
+  link.click();
+});
+
 /** Stuurt het bestand als kale stroom; de naam gaat mee in een header. */
-async function uploadBijlage(bestand) {
-  const antwoord = await fetch(`/api/taken/${staat.detailId}/bijlagen`, {
+async function uploadBijlage(taakId, bestand) {
+  const antwoord = await fetch(`/api/taken/${taakId}/bijlagen`, {
     method: 'POST',
     headers: {
       'content-type': 'application/octet-stream',
@@ -947,41 +963,68 @@ async function uploadBijlage(bestand) {
   return data;
 }
 
-el('bijlageInvoer').addEventListener('change', async (gebeurtenis) => {
-  const bestanden = [...gebeurtenis.target.files];
-  gebeurtenis.target.value = '';          // zodat hetzelfde bestand opnieuw kan
-  if (bestanden.length === 0) return;
+// ── Bijlagen kiezen in het bewerkvenster ─────────────────────────────────
+// Net als bij de werkprocessen: de keuzes gaan pas bij Opslaan naar de server,
+// zodat je bij een nieuwe taak alvast bestanden kunt aanwijzen en Annuleren
+// werkelijk annuleert.
 
-  const hint = el('bijlageHint');
+let conceptBijlagen = [];            // { id | null, naam, grootte, bestand | null }
+let oorspronkelijkeBijlagen = [];
+
+function tekenConceptBijlagen() {
+  el('vBijlagen').innerHTML = conceptBijlagen.length === 0
+    ? '<p class="zacht" style="font-size:.82rem;margin-bottom:4px">Nog geen bijlagen.</p>'
+    : conceptBijlagen.map((bijlage, index) => `
+        <div class="bijlage">
+          ${PAPERCLIP}
+          <span style="flex:1;min-width:0;word-break:break-all">${esc(bijlage.naam)}</span>
+          <span class="bij">${leesbareGrootte(bijlage.grootte)}${bijlage.id ? '' : ' · nieuw'}</span>
+          <button type="button" class="weg" data-bijlageweg="${index}" title="Verwijderen">✕</button>
+        </div>`).join('');
+
+  el('vBijlagen').querySelectorAll('[data-bijlageweg]').forEach(knop => {
+    knop.addEventListener('click', () => {
+      conceptBijlagen.splice(Number(knop.dataset.bijlageweg), 1);
+      tekenConceptBijlagen();
+    });
+  });
+}
+
+el('vBijlageInvoer').addEventListener('change', (gebeurtenis) => {
+  const hint = el('vBijlageHint');
   hint.classList.remove('fout');
+  hint.textContent = '';
 
-  for (const [nummer, bestand] of bestanden.entries()) {
+  for (const bestand of gebeurtenis.target.files) {
     // Zelf al kijken hoe groot het is: dan hoeft een te groot bestand niet
     // eerst helemaal naar de server voordat je hoort dat het niet past.
     if (bestand.size > staat.maxBijlageMB * 1024 * 1024) {
       hint.textContent = `${bestand.name} is ${leesbareGrootte(bestand.size)}. ` +
         `Maximaal ${staat.maxBijlageMB} MB per bestand.`;
       hint.classList.add('fout');
-      break;
+      continue;
     }
-
-    hint.textContent = bestanden.length > 1
-      ? `Bezig met ${nummer + 1} van ${bestanden.length}: ${bestand.name}…`
-      : `Bezig met ${bestand.name}…`;
-
-    try {
-      await uploadBijlage(bestand);
-    } catch (fout) {
-      hint.textContent = `${bestand.name}: ${fout.message}`;
-      hint.classList.add('fout');
-      break;
-    }
+    conceptBijlagen.push({ id: null, naam: bestand.name, grootte: bestand.size, bestand });
   }
 
-  if (!hint.classList.contains('fout')) hint.textContent = '';
-  openDetail(staat.detailId);
-  herlaadTaken();
+  gebeurtenis.target.value = '';        // zodat hetzelfde bestand opnieuw kan
+  tekenConceptBijlagen();
 });
+
+/** Voert de gekozen bijlagen door. Wordt pas bij het opslaan aangeroepen. */
+async function bewaarBijlagen(taakId) {
+  const behouden = new Set(conceptBijlagen.map(b => b.id).filter(Boolean));
+
+  for (const bijlage of oorspronkelijkeBijlagen) {
+    if (!behouden.has(bijlage.id)) await api('/bijlagen/' + bijlage.id, { method: 'DELETE' });
+  }
+
+  for (const bijlage of conceptBijlagen) {
+    if (!bijlage.bestand) continue;
+    el('taakMelding').textContent = `Bezig met uploaden van ${bijlage.naam}…`;
+    await uploadBijlage(taakId, bijlage.bestand);
+  }
+}
 
 function tekenOpmerkingen(opmerkingen) {
   el('opmerkingenLijst').innerHTML = opmerkingen.length === 0

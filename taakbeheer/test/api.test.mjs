@@ -3,9 +3,9 @@
 //
 // Draaien:  npm test
 
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtempSync, rmSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -93,7 +93,8 @@ function bestandenInMap() {
  */
 function client() {
   let cookie = '';
-  return async (pad, opties = {}) => {
+
+  const stuur = async (pad, opties = {}) => {
     const res = await fetch(BASIS + pad, {
       method: opties.method,
       headers: {
@@ -114,6 +115,10 @@ function client() {
     }
     return { status: res.status, data: await res.json().catch(() => ({})) };
   };
+
+  // Handig voor het ophalen van een bestand buiten deze helper om.
+  stuur.cookie = () => cookie;
+  return stuur;
 }
 
 const rim = client();
@@ -442,6 +447,44 @@ try {
   check('padnamen worden onschadelijk gemaakt', r.status === 200 && !r.data.bestandsnaam.includes('/'),
     r.data.bestandsnaam);
   await rim('/bijlagen/' + r.data.id, { method: 'DELETE' });
+
+  groep('Alle bijlagen als ZIP');
+  await upload(rim, metBijlage, 'plattegrond.png', 'net alsof dit een plaatje is');
+  await upload(rim, metBijlage, 'keuringsrapport.pdf', 'tweede met dezelfde naam');
+
+  r = await rim(`/taken/${metBijlage}/bijlagen.zip`, { rauwAntwoord: true });
+  check('zip opgehaald', r.status === 200, JSON.stringify(r.tekst).slice(0, 80));
+  check('als download aangeboden', /^attachment;/.test(r.headers['content-disposition'] ?? ''));
+  check('met de opdrachtnaam in de bestandsnaam',
+    /Keuring met papieren/.test(decodeURIComponent(r.headers['content-disposition'] ?? '')),
+    r.headers['content-disposition']);
+  check('inhoudstype is zip', r.headers['content-type'] === 'application/zip');
+
+  // De zip wordt hieronder door Python uitgepakt; dat is een losse controle.
+  const zipPad = join(werkmap, 'controle.zip');
+  writeFileSync(zipPad, Buffer.from(await (await fetch(`${BASIS}/taken/${metBijlage}/bijlagen.zip`, {
+    headers: { cookie: rim.cookie() } })).arrayBuffer()));
+
+  const uitPython = execFileSync('python3', ['-c', `
+import zipfile, json
+with zipfile.ZipFile(${JSON.stringify(zipPad)}) as z:
+    print(json.dumps({
+        'kapot': z.testzip(),
+        'namen': z.namelist(),
+        'eerste': z.read(z.namelist()[0]).decode('utf-8', 'replace'),
+    }))
+`]).toString();
+
+  const zipInhoud = JSON.parse(uitPython);
+  check('zip is niet beschadigd', zipInhoud.kapot === null, JSON.stringify(zipInhoud.kapot));
+  check('alle drie de bestanden zitten erin', zipInhoud.namen.length === 3, JSON.stringify(zipInhoud.namen));
+  check('dubbele naam kreeg een nummer',
+    zipInhoud.namen.includes('keuringsrapport (2).pdf'), JSON.stringify(zipInhoud.namen));
+  check('de inhoud klopt', zipInhoud.eerste === 'dit stelt een pdf voor', zipInhoud.eerste);
+
+  const zonderBijlagen = (await rim(`/borden/${bordId}/taken`, { method: 'POST', body: { opdracht: 'Kaal' } })).data.id;
+  check('taak zonder bijlagen geeft niets terug',
+    (await rim(`/taken/${zonderBijlagen}/bijlagen.zip`)).status === 404);
 
   groep('Bijlagen en afgeschermde borden');
   const geheimeTaak = (await rim(`/borden/${projectD}/taken`, { method: 'POST', body: { opdracht: 'Vertrouwelijk' } })).data.id;
