@@ -219,11 +219,11 @@ tbody tr.let-op td { color: #7d2431; }
 .zacht { color: var(--grijs); }
 
 .knop-link {
-  background: var(--blauw); color: #fff; border: none; border-radius: 5px;
+  background: var(--donker); color: #fff; border: none; border-radius: 5px;
   padding: 4px 10px; font-size: 0.76rem; font-weight: 600; cursor: pointer;
   white-space: nowrap; font-family: inherit;
 }
-.knop-link:hover { background: var(--donker); }
+.knop-link:hover { background: #003d6b; }   /* zelfde oplichting als de hoofdknoppen */
 
 /* Vaste kolombreedtes. Op het persoonlijke bord krijgt elk project zijn eigen
    tabel; zonder vaste maten kiest elke tabel zijn eigen breedtes en staan de
