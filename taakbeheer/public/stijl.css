@@ -225,6 +225,32 @@ tbody tr.let-op td { color: #7d2431; }
 }
 .knop-link:hover { background: var(--donker); }
 
+/* Vaste kolombreedtes. Op het persoonlijke bord krijgt elk project zijn eigen
+   tabel; zonder vaste maten kiest elke tabel zijn eigen breedtes en staan de
+   projecten niet meer onder elkaar uitgelijnd. Opdracht krijgt wat overblijft,
+   want dat is de belangrijkste kolom. */
+.tabel-omhulsel { overflow-x: auto; }
+.tabel-omhulsel table { table-layout: fixed; min-width: 1040px; }
+
+col.k-opdracht   { width: auto; }
+col.k-uitvoerend { width: 150px; }
+col.k-prioriteit { width: 128px; }  /* inclusief het waarschuwingsteken bij Critical */
+col.k-status     { width: 158px; }  /* 'Working on it' past hier net in */
+col.k-deadline   { width: 120px; }
+col.k-details    { width: 150px; }
+col.k-acties     { width: 185px; }
+
+/* De opdracht loopt door op een volgende regel; ook één heel lang woord
+   blijft binnen de kolom. */
+td.c-opdracht { overflow-wrap: anywhere; }
+
+/* Een lange naam kapt af met … ; de hele naam verschijnt bij het aanwijzen. */
+td.c-kort { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+td.c-details { line-height: 1.9; }
+
+/* De gekleurde rondjes vullen hun kolom in plaats van hem op te rekken. */
+.tabel-omhulsel .status-select { width: 100%; min-width: 0; }
+
 /* ── Kanban ── */
 .kanban { display: flex; gap: 14px; align-items: flex-start; min-height: 100%; }
 .kolom {

@@ -352,14 +352,15 @@ function tekenMijnTaken() {
   koppelTaakKnoppen(el('inhoud'));
 }
 
+// De breedtes zelf staan in stijl.css, zodat elke tabel ze deelt.
+const KOLOMMEN = ['Opdracht', 'Uitvoerend', 'Prioriteit', 'Status', 'Deadline', 'Details', 'Acties'];
+
 function tabelHtml(taken) {
   return `
     <div class="tabel-omhulsel">
       <table>
-        <thead><tr>
-          <th>Opdracht</th><th>Uitvoerend</th><th>Prioriteit</th><th>Status</th>
-          <th>Deadline</th><th>Details</th><th>Acties</th>
-        </tr></thead>
+        <colgroup>${KOLOMMEN.map(k => `<col class="k-${k.toLowerCase()}">`).join('')}</colgroup>
+        <thead><tr>${KOLOMMEN.map(k => `<th>${k}</th>`).join('')}</tr></thead>
         <tbody>${taken.length === 0
           ? '<tr class="leeg"><td colspan="7">Geen taken gevonden.</td></tr>'
           : taken.map(rijHtml).join('')}</tbody>
@@ -404,18 +405,19 @@ function rijHtml(taak) {
 
   return `
     <tr class="${aandacht ? 'let-op' : ''}" ${aandacht ? `title="${esc(waaromRood(taak))}"` : ''}>
-      <td><strong>${aandacht ? '<span class="let-op-teken" aria-hidden="true">⚠</span> ' : ''}${esc(taak.opdracht)}</strong></td>
-      <td>${taak.uitvoerend_naam ? esc(taak.uitvoerend_naam) : '<span class="zacht">—</span>'}</td>
+      <td class="c-opdracht"><strong>${aandacht ? '<span class="let-op-teken" aria-hidden="true">⚠</span> ' : ''}${esc(taak.opdracht)}</strong></td>
+      <td class="c-kort" ${taak.uitvoerend_naam ? `title="${esc(taak.uitvoerend_naam)}"` : ''}>${
+        taak.uitvoerend_naam ? esc(taak.uitvoerend_naam) : '<span class="zacht">—</span>'}</td>
       <td>
         <select class="status-select ${prioKlasse(taak.prioriteit)}" data-prio="${taak.id}"
-                style="background:${PRIO_KLEUREN[taak.prioriteit ?? '']};min-width:110px">${prioOpties}</select>
+                style="background:${PRIO_KLEUREN[taak.prioriteit ?? '']}">${prioOpties}</select>
       </td>
       <td>
         <select class="status-select ${statusKlasse(taak.status)}" data-taak="${taak.id}"
                 style="background:${KLEUREN[taak.status]}">${opties}</select>
       </td>
       <td>${deadline}</td>
-      <td>
+      <td class="c-details">
         <button class="knop-link" data-detail="${taak.id}">Bekijk</button>
         ${taak.aantal_opmerkingen ? `<span class="zacht" title="opmerkingen" style="margin-left:6px">💬 ${taak.aantal_opmerkingen}</span>` : ''}
         ${taak.aantal_bijlagen ? `<span class="zacht" title="bijlagen" style="margin-left:4px">📎 ${taak.aantal_bijlagen}</span>` : ''}
