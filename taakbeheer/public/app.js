@@ -13,6 +13,7 @@ const staat = {
   weergave: 'tabel',   // 'tabel' | 'kanban' | 'team' | 'werkprocessen'
   bewerktId: null,
   detailId: null,
+  alleenTeLaat: false,  // staat het te-laat-filter aan?
   toegestaneUitvoerders: null,   // null = iedereen mag; anders een Set met ids
 };
 
@@ -282,6 +283,10 @@ async function kiesBord(id) {
       : new Set((await api(`/borden/${id}/instellingen`)).leden);
   }
 
+  // Bij een ander project begin je met alles in beeld; anders sta je naar een
+  // leeg bord te kijken zonder te zien waarom.
+  staat.alleenTeLaat = false;
+
   el('werkbalk').hidden = false;
   werkbalkBijwerken();
   tekenZijbalk();
@@ -308,7 +313,8 @@ async function herlaadTaken() {
 }
 
 // ── Filteren ─────────────────────────────────────────────────────────────
-function gefilterdeTaken() {
+/** Alles wat het zoekvak en de drie keuzelijsten overlaten. */
+function basisTaken() {
   const zoek = el('zoek').value.trim().toLowerCase();
   const status = el('filterStatus').value;
   const prioriteit = el('filterPrioriteit').value;
@@ -325,10 +331,39 @@ function gefilterdeTaken() {
   });
 }
 
+/**
+ * De teller telt binnen de basis, dus zonder het te-laat-filter zelf. Anders
+ * zou het getal op nul springen zodra je erop klikt.
+ */
+function gefilterdeTaken() {
+  const basis = basisTaken();
+  return staat.alleenTeLaat ? basis.filter(isTeLaat) : basis;
+}
+
+function tekenTeLaatKnop() {
+  const knop = el('teLaatKnop');
+  const aantal = basisTaken().filter(isTeLaat).length;
+
+  // Niets te laat? Dan ook geen knop, en een eventueel filter gaat uit.
+  if (aantal === 0) {
+    if (staat.alleenTeLaat) { staat.alleenTeLaat = false; knop.classList.remove('actief'); }
+    knop.hidden = true;
+    return;
+  }
+
+  knop.hidden = false;
+  knop.textContent = `⚠ ${aantal} ${aantal === 1 ? 'taak' : 'taken'} te laat`;
+  knop.classList.toggle('actief', staat.alleenTeLaat);
+  knop.title = staat.alleenTeLaat
+    ? 'Klik om weer alle taken te tonen'
+    : 'Klik om alleen de te late taken te tonen';
+}
+
 // ── Tekenen ──────────────────────────────────────────────────────────────
 function teken() {
   if (staat.weergave === 'werkprocessen') return tekenWerkprocessen();
   if (staat.weergave === 'team') return tekenTeam();
+  tekenTeLaatKnop();
   if (isPersoonlijk()) return tekenMijnTaken();
   if (staat.weergave === 'kanban') return tekenKanban();
   tekenTabel();
@@ -1444,6 +1479,11 @@ el('bVerwijder').addEventListener('click', async () => {
 });
 
 el('bordInstellingenKnop').addEventListener('click', openBordVenster);
+
+el('teLaatKnop').addEventListener('click', () => {
+  staat.alleenTeLaat = !staat.alleenTeLaat;
+  teken();
+});
 
 // ── Teamscherm ───────────────────────────────────────────────────────────
 // `bericht` blijft staan nadat het scherm opnieuw is getekend — anders zou een

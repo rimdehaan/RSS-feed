@@ -181,6 +181,12 @@ body {
 }
 .weergave-knoppen button.actief { background: #fff; color: var(--donker); box-shadow: 0 1px 3px rgba(0,41,68,0.1); }
 
+/* Teller met filter: verschijnt alleen als er iets te laat is. */
+.te-laat-knop { background: #fbe0e4; color: #7d2431; border: 1px solid #eda9b3; }
+.te-laat-knop:hover { background: #f8d3d9; }
+.te-laat-knop.actief { background: #C4314B; color: #fff; border-color: #C4314B; }
+.te-laat-knop.actief:hover { background: #a92840; }
+
 .filters { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
 .filters label { font-size: 0.82rem; color: var(--blauw); font-weight: 600; }
 .filters select {
