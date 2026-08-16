@@ -13,7 +13,7 @@ const staat = {
   weergave: 'tabel',   // 'tabel' | 'kanban' | 'team' | 'werkprocessen'
   bewerktId: null,
   detailId: null,
-  alleenTeLaat: false,  // staat het te-laat-filter aan?
+  deadlineFilter: null,  // null | 'te-laat' | 'komt-eraan'
   toegestaneUitvoerders: null,   // null = iedereen mag; anders een Set met ids
 };
 
@@ -283,9 +283,8 @@ async function kiesBord(id) {
       : new Set((await api(`/borden/${id}/instellingen`)).leden);
   }
 
-  // Bij een ander project begin je met alles in beeld; anders sta je naar een
-  // leeg bord te kijken zonder te zien waarom.
-  staat.alleenTeLaat = false;
+  // Bij een ander project begin je met alles in beeld.
+  staat.deadlineFilter = null;
 
   el('werkbalk').hidden = false;
   werkbalkBijwerken();
@@ -331,39 +330,53 @@ function basisTaken() {
   });
 }
 
-/**
- * De teller telt binnen de basis, dus zonder het te-laat-filter zelf. Anders
- * zou het getal op nul springen zodra je erop klikt.
- */
 function gefilterdeTaken() {
   const basis = basisTaken();
-  return staat.alleenTeLaat ? basis.filter(isTeLaat) : basis;
+  if (staat.deadlineFilter === 'te-laat') return basis.filter(isTeLaat);
+  if (staat.deadlineFilter === 'komt-eraan') return basis.filter(komtEraan);
+  return basis;
 }
 
-function tekenTeLaatKnop() {
-  const knop = el('teLaatKnop');
-  const aantal = basisTaken().filter(isTeLaat).length;
+/**
+ * De twee tellers boven het overzicht. Ze tellen binnen de basis, dus zonder
+ * hun eigen filter; anders zou het getal op nul springen zodra je erop klikt.
+ */
+function tekenDeadlineKnoppen() {
+  const basis = basisTaken();
+  const aantal = (n) => (n === 1 ? 'taak' : 'taken');
 
-  // Niets te laat? Dan ook geen knop, en een eventueel filter gaat uit.
-  if (aantal === 0) {
-    if (staat.alleenTeLaat) { staat.alleenTeLaat = false; knop.classList.remove('actief'); }
+  tekenTeller('teLaatKnop', 'te-laat', basis.filter(isTeLaat).length,
+    (n) => `⚠ ${n} ${aantal(n)} te laat`, 'de te late taken');
+
+  tekenTeller('komtEraanKnop', 'komt-eraan', basis.filter(komtEraan).length,
+    (n) => `⏱ ${n} ${aantal(n)} ${n === 1 ? 'komt' : 'komen'} eraan`,
+    'de taken waarvan de deadline eraan komt');
+}
+
+function tekenTeller(id, soort, gevonden, tekst, waarover) {
+  const knop = el(id);
+
+  // Niets gevonden? Dan ook geen knop, en een eventueel filter gaat uit —
+  // anders sta je naar een leeg scherm te kijken zonder te zien waarom.
+  if (gevonden === 0) {
+    if (staat.deadlineFilter === soort) staat.deadlineFilter = null;
+    knop.classList.remove('actief');
     knop.hidden = true;
     return;
   }
 
+  const aan = staat.deadlineFilter === soort;
   knop.hidden = false;
-  knop.textContent = `⚠ ${aantal} ${aantal === 1 ? 'taak' : 'taken'} te laat`;
-  knop.classList.toggle('actief', staat.alleenTeLaat);
-  knop.title = staat.alleenTeLaat
-    ? 'Klik om weer alle taken te tonen'
-    : 'Klik om alleen de te late taken te tonen';
+  knop.textContent = tekst(gevonden);
+  knop.classList.toggle('actief', aan);
+  knop.title = aan ? 'Klik om weer alle taken te tonen' : `Klik om alleen ${waarover} te tonen`;
 }
 
 // ── Tekenen ──────────────────────────────────────────────────────────────
 function teken() {
   if (staat.weergave === 'werkprocessen') return tekenWerkprocessen();
   if (staat.weergave === 'team') return tekenTeam();
-  tekenTeLaatKnop();
+  tekenDeadlineKnoppen();
   if (isPersoonlijk()) return tekenMijnTaken();
   if (staat.weergave === 'kanban') return tekenKanban();
   tekenTabel();
@@ -1480,10 +1493,14 @@ el('bVerwijder').addEventListener('click', async () => {
 
 el('bordInstellingenKnop').addEventListener('click', openBordVenster);
 
-el('teLaatKnop').addEventListener('click', () => {
-  staat.alleenTeLaat = !staat.alleenTeLaat;
-  teken();
-});
+// De twee tellers sluiten elkaar uit: een taak is nooit tegelijk te laat en
+// komt-eraan, dus samen aanzetten zou altijd een leeg scherm geven.
+for (const [id, soort] of [['teLaatKnop', 'te-laat'], ['komtEraanKnop', 'komt-eraan']]) {
+  el(id).addEventListener('click', () => {
+    staat.deadlineFilter = staat.deadlineFilter === soort ? null : soort;
+    teken();
+  });
+}
 
 // ── Teamscherm ───────────────────────────────────────────────────────────
 // `bericht` blijft staan nadat het scherm opnieuw is getekend — anders zou een
