@@ -39,6 +39,12 @@ const PRIO_KLEUREN = {
 const LETTER_OP = { '#F2C94C': '#5a4000', '#eceef1': '#8b8f98' };
 const optieStijl = (achtergrond) => `background:${achtergrond};color:${LETTER_OP[achtergrond] ?? '#fff'}`;
 
+// Tekentjes voor bijlagen. Bewust getekend en geen emoji: een emoji ziet er
+// op elk apparaat anders uit — op Windows is de paperclip die van de oude
+// Office-assistent, mét oogjes — en hij kleurt niet mee met de tekst.
+const PAPERCLIP = `<svg class="teken" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`;
+const SCHAKEL = `<svg class="teken" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`;
+
 const el = (id) => document.getElementById(id);
 const statusKlasse = (status) => 's-' + status.toLowerCase().replace(/\s+/g, '-');
 const prioKlasse = (prioriteit) => 'p-' + (prioriteit ? prioriteit.toLowerCase() : 'geen');
@@ -500,7 +506,7 @@ function rijHtml(taak) {
       </td>
       <td>${deadline}</td>
       <td class="c-teller">${taak.aantal_bijlagen
-        ? `<span title="${taak.aantal_bijlagen} ${taak.aantal_bijlagen === 1 ? 'bijlage' : 'bijlagen'}">📎 ${taak.aantal_bijlagen}</span>`
+        ? `<span title="${taak.aantal_bijlagen} ${taak.aantal_bijlagen === 1 ? 'bijlage' : 'bijlagen'}">${PAPERCLIP} ${taak.aantal_bijlagen}</span>`
         : '<span class="zacht">—</span>'}</td>
       <td class="c-teller">${taak.aantal_stappen
         ? `<span title="afgevinkte stappen uit werkprocessen"
@@ -562,7 +568,7 @@ function kaartHtml(taak) {
           ? `<span class="${teLaat ? 'datum-te-laat' : (eraan ? 'datum-eraan' : '')}">${datumNL(taak.deadline)}</span>`
           : ''}
         ${taak.aantal_opmerkingen ? `<span title="opmerkingen">💬 ${taak.aantal_opmerkingen}</span>` : ''}
-        ${taak.aantal_bijlagen ? `<span title="bijlagen">📎 ${taak.aantal_bijlagen}</span>` : ''}
+        ${taak.aantal_bijlagen ? `<span title="bijlagen">${PAPERCLIP} ${taak.aantal_bijlagen}</span>` : ''}
         ${taak.aantal_stappen ? `<span title="stappen uit werkprocessen" class="${taak.aantal_afgevinkt === taak.aantal_stappen ? 'klaar' : ''}">☑ ${taak.aantal_afgevinkt}/${taak.aantal_stappen}</span>` : ''}
       </div>
     </div>`;
@@ -1020,7 +1026,6 @@ function leesbareGrootte(bytes) {
   return (bytes / 1024 / 1024).toFixed(1).replace('.', ',') + ' MB';
 }
 
-const PAPERCLIP = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`;
 
 // In het detailvenster open je bijlagen; toevoegen en verwijderen hoort bij
 // Bewerken, net als bij de werkprocessen.
@@ -1029,7 +1034,7 @@ function tekenBijlagen(bijlagen) {
     ? '<p class="zacht" style="font-size:.85rem">Nog geen bijlagen. Voeg ze toe via <strong>Bewerken</strong>.</p>'
     : bijlagen.map(b => `
         <div class="bijlage">
-          ${b.url ? '🔗' : PAPERCLIP}
+          ${b.url ? SCHAKEL : PAPERCLIP}
           ${b.url
             ? `<a href="${esc(b.url)}" target="_blank" rel="noopener noreferrer">${esc(b.bestandsnaam)}</a>`
             : `<a href="/api/bijlagen/${b.id}" download>${esc(b.bestandsnaam)}</a>`}
@@ -1082,7 +1087,7 @@ function tekenConceptBijlagen() {
     ? '<p class="zacht" style="font-size:.82rem;margin-bottom:4px">Nog geen bijlagen.</p>'
     : conceptBijlagen.map((bijlage, index) => `
         <div class="bijlage">
-          ${bijlage.url ? '🔗' : PAPERCLIP}
+          ${bijlage.url ? SCHAKEL : PAPERCLIP}
           <span style="flex:1;min-width:0;word-break:break-all">${esc(bijlage.naam)}</span>
           <span class="bij">${bijlage.url ? esc(bestemming(bijlage.url)) : leesbareGrootte(bijlage.grootte)}${bijlage.id ? '' : ' · nieuw'}</span>
           <button type="button" class="weg" data-bijlageweg="${index}" title="Verwijderen">✕</button>

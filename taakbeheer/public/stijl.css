@@ -292,6 +292,10 @@ td.c-details { line-height: 1.9; }
 
 /* Bijlagen en stappen: een streepje als er niets is, groen als alles af is. */
 td.c-teller { white-space: nowrap; color: var(--blauw); font-size: 0.82rem; }
+
+/* Getekende tekentjes zakken standaard naar de tekstregel; zo staan ze
+   midden naast het getal ernaast. */
+.teken { vertical-align: -3px; }
 td.c-teller .klaar { color: #27AE60; font-weight: 600; }
 
 /* De gekleurde rondjes vullen hun kolom in plaats van hem op te rekken. */
