@@ -48,6 +48,7 @@ administratie — zie *Back-ups* verderop.
 | Werkproces op een taak | Eén of meer werkprocessen aan een taak hangen, met afvinkbare stappen en voortgang per proces |
 | Overdragen | Een taak naar een ander project verplaatsen via **Bewerken → Project**. Opmerkingen, historie en bijlagen gaan mee |
 | Bijlagen | Bestanden bij een taak, zodat de uitvoerder alles bij de hand heeft. Staan op je eigen server, niet bij een externe dienst |
+| Link als bijlage | Voor grote bestanden: verwijs naar OneDrive in plaats van uploaden |
 | Opmerkingen | Een gesprek per taak, met naam en tijdstip |
 | Historie | Automatisch: wie veranderde welk veld, van wat naar wat |
 | CSV-export | Exporteert wat er op dat moment gefilterd op je scherm staat |
@@ -223,6 +224,30 @@ databasebestand.** Anders heb je straks wel je taken terug, maar geen bijlagen.
 **Toevoegen en verwijderen doe je bij Bewerken**, net als bij werkprocessen. In
 Bekijk open je ze alleen. Staan er twee of meer, dan verschijnt daar de knop
 **Alles downloaden (ZIP)** die ze in één bestand ophaalt.
+
+### Een link in plaats van een bestand
+
+Bij Bewerken kun je ook **Link toevoegen** kiezen. Handig voor bestanden die te
+groot zijn om te uploaden: je verwijst dan naar OneDrive of SharePoint in plaats
+van het bestand door de app te sturen. De link krijgt een naam naar keuze; laat
+je die leeg, dan gebruikt de app de bestemming (`onedrive.live.com`).
+
+In Bekijk staat een link tussen de bijlagen met een 🔗 en opent hij in een nieuw
+tabblad. Achter de naam staat waar hij heen gaat, zodat je dat ziet vóór je klikt.
+
+Drie dingen om te weten:
+
+- **Alleen `http://` en `https://`.** Andere adressen worden geweigerd. Dat is
+  geen formaliteit: een bijlage is zichtbaar voor iedereen die de taak mag zien,
+  en een `javascript:`-adres zou code kunnen uitvoeren in de browser van je
+  collega, binnen diens sessie.
+- **Bij Alles downloaden komen de links in een `Links.txt` in de ZIP.** Inpakken
+  kan niet, maar weglaten zou betekenen dat je informatie mist zonder het te
+  merken.
+- **De app controleert de link niet.** Hij haalt hem niet op om te kijken of hij
+  bestaat — dan zou je server verbinding maken met adressen die gebruikers
+  invoeren. Of je collega toegang heeft tot die OneDrive-map merk je dus pas bij
+  het klikken; regel dat delen in OneDrive zelf.
 
 Die ZIP wordt door de app zelf samengesteld — zonder extra pakket, want het
 samendrukken zit al in Node. De code staat in `src/zip.js` en is het meest

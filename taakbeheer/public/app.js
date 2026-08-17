@@ -882,12 +882,15 @@ async function vulProcesVeld(taak) {
       naam: bijlage.bestandsnaam,
       grootte: bijlage.grootte,
       bestand: null,
+      url: bijlage.url || null,
     }));
   }
 
   oorspronkelijkeProcessen = conceptProcessen.map(proces => ({ ...proces }));
   oorspronkelijkeBijlagen = conceptBijlagen.map(bijlage => ({ ...bijlage }));
   el('vBijlageHint').textContent = '';
+  el('vBijlageHint').classList.remove('fout');
+  sluitLinkVak();
   tekenConceptBijlagen();
 
   const leeg = bibliotheek.length === 0;
@@ -1026,9 +1029,11 @@ function tekenBijlagen(bijlagen) {
     ? '<p class="zacht" style="font-size:.85rem">Nog geen bijlagen. Voeg ze toe via <strong>Bewerken</strong>.</p>'
     : bijlagen.map(b => `
         <div class="bijlage">
-          ${PAPERCLIP}
-          <a href="/api/bijlagen/${b.id}" download>${esc(b.bestandsnaam)}</a>
-          <span class="bij">${leesbareGrootte(b.grootte)} · ${esc(b.geupload_door_naam || 'onbekend')}</span>
+          ${b.url ? '🔗' : PAPERCLIP}
+          ${b.url
+            ? `<a href="${esc(b.url)}" target="_blank" rel="noopener noreferrer">${esc(b.bestandsnaam)}</a>`
+            : `<a href="/api/bijlagen/${b.id}" download>${esc(b.bestandsnaam)}</a>`}
+          <span class="bij">${b.url ? esc(bestemming(b.url)) : leesbareGrootte(b.grootte)} · ${esc(b.geupload_door_naam || 'onbekend')}</span>
         </div>`).join('');
 
   el('allesDownloaden').hidden = bijlagen.length < 2;
@@ -1064,17 +1069,22 @@ async function uploadBijlage(taakId, bestand) {
 // zodat je bij een nieuwe taak alvast bestanden kunt aanwijzen en Annuleren
 // werkelijk annuleert.
 
-let conceptBijlagen = [];            // { id | null, naam, grootte, bestand | null }
+let conceptBijlagen = [];            // { id | null, naam, grootte, bestand | null, url | null }
 let oorspronkelijkeBijlagen = [];
+
+/** Waar een link heen gaat, zodat je dat ziet voordat je klikt. */
+function bestemming(url) {
+  try { return new URL(url).host; } catch { return url; }
+}
 
 function tekenConceptBijlagen() {
   el('vBijlagen').innerHTML = conceptBijlagen.length === 0
     ? '<p class="zacht" style="font-size:.82rem;margin-bottom:4px">Nog geen bijlagen.</p>'
     : conceptBijlagen.map((bijlage, index) => `
         <div class="bijlage">
-          ${PAPERCLIP}
+          ${bijlage.url ? '🔗' : PAPERCLIP}
           <span style="flex:1;min-width:0;word-break:break-all">${esc(bijlage.naam)}</span>
-          <span class="bij">${leesbareGrootte(bijlage.grootte)}${bijlage.id ? '' : ' · nieuw'}</span>
+          <span class="bij">${bijlage.url ? esc(bestemming(bijlage.url)) : leesbareGrootte(bijlage.grootte)}${bijlage.id ? '' : ' · nieuw'}</span>
           <button type="button" class="weg" data-bijlageweg="${index}" title="Verwijderen">✕</button>
         </div>`).join('');
 
@@ -1107,6 +1117,50 @@ el('vBijlageInvoer').addEventListener('change', (gebeurtenis) => {
   tekenConceptBijlagen();
 });
 
+// ── Een link als bijlage ─────────────────────────────────────────────────
+function sluitLinkVak() {
+  el('vLinkVak').hidden = true;
+  el('vLinkAdres').value = '';
+  el('vLinkNaam').value = '';
+}
+
+el('vLinkKnop').addEventListener('click', () => {
+  el('vBijlageHint').textContent = '';
+  el('vBijlageHint').classList.remove('fout');
+  el('vLinkVak').hidden = false;
+  el('vLinkAdres').focus();
+});
+
+el('vLinkAnnuleer').addEventListener('click', sluitLinkVak);
+
+el('vLinkOpslaan').addEventListener('click', () => {
+  const hint = el('vBijlageHint');
+  hint.classList.remove('fout');
+
+  // De server keurt het adres af als het niet deugt; hier alleen genoeg om
+  // meteen te kunnen laten zien wat je hebt gekozen.
+  let adres = el('vLinkAdres').value.trim();
+  if (!adres) {
+    hint.textContent = 'Vul een adres in.';
+    hint.classList.add('fout');
+    return;
+  }
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(adres)) adres = 'https://' + adres;
+  if (!/^https?:\/\//i.test(adres)) {
+    hint.textContent = 'Alleen adressen die met http:// of https:// beginnen.';
+    hint.classList.add('fout');
+    return;
+  }
+
+  hint.textContent = '';
+  conceptBijlagen.push({
+    id: null, naam: el('vLinkNaam').value.trim() || bestemming(adres),
+    grootte: 0, bestand: null, url: adres,
+  });
+  sluitLinkVak();
+  tekenConceptBijlagen();
+});
+
 /** Voert de gekozen bijlagen door. Wordt pas bij het opslaan aangeroepen. */
 async function bewaarBijlagen(taakId) {
   const behouden = new Set(conceptBijlagen.map(b => b.id).filter(Boolean));
@@ -1116,7 +1170,13 @@ async function bewaarBijlagen(taakId) {
   }
 
   for (const bijlage of conceptBijlagen) {
-    if (!bijlage.bestand) continue;
+    if (bijlage.id) continue;                 // stond er al
+    if (bijlage.url) {
+      await api(`/taken/${taakId}/bijlagen/link`, {
+        method: 'POST', body: { url: bijlage.url, naam: bijlage.naam },
+      });
+      continue;
+    }
     el('taakMelding').textContent = `Bezig met uploaden van ${bijlage.naam}…`;
     await uploadBijlage(taakId, bijlage.bestand);
   }

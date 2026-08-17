@@ -270,7 +270,16 @@
           <div class="bijlage-toevoegen">
             <label class="btn btn-secondary btn-sm" for="vBijlageInvoer">Bestand kiezen…</label>
             <input type="file" id="vBijlageInvoer" multiple hidden />
+            <button type="button" class="btn btn-secondary btn-sm" id="vLinkKnop">Link toevoegen…</button>
             <span class="bijlage-hint" id="vBijlageHint"></span>
+          </div>
+
+          <!-- Voor grote bestanden: verwijs naar OneDrive in plaats van uploaden. -->
+          <div class="link-invoer" id="vLinkVak" hidden>
+            <input type="url" id="vLinkAdres" placeholder="https://… (bijvoorbeeld je OneDrive-link)" />
+            <input type="text" id="vLinkNaam" maxlength="200" placeholder="Naam (mag je leeg laten)" />
+            <button type="button" class="btn btn-primary btn-sm" id="vLinkOpslaan">Toevoegen</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="vLinkAnnuleer">Annuleren</button>
           </div>
         </div>
       </div>

@@ -524,12 +524,60 @@ with zipfile.ZipFile(${JSON.stringify(zipPad)}) as z:
   check('taak zonder bijlagen geeft niets terug',
     (await rim(`/taken/${zonderBijlagen}/bijlagen.zip`)).status === 404);
 
+  // ── Een link als bijlage ────────────────────────────────────────────────
+  groep('Link als bijlage');
+  const link = (adres, naam) =>
+    rim(`/taken/${metBijlage}/bijlagen/link`, { method: 'POST', body: { url: adres, naam } });
+
+  r = await link('https://transafe-my.sharepoint.com/keuring-2026', "Foto's keuring");
+  check('link opgeslagen', r.status === 200 && r.data.url === 'https://transafe-my.sharepoint.com/keuring-2026',
+    JSON.stringify(r.data));
+  check('met de naam die je gaf', r.data.bestandsnaam === "Foto's keuring");
+  check('en zonder bestand op schijf', r.data.grootte === 0);
+  const linkId = r.data.id;
+  check('er kwam niets bij op schijf', bestandenInMap() === 3, String(bestandenInMap()));
+
+  r = await link('onedrive.live.com/map', '');
+  check('zonder https ervoor wordt aangevuld', r.data.url === 'https://onedrive.live.com/map', r.data.url);
+  check('en zonder naam pakt hij de bestemming', r.data.bestandsnaam === 'onedrive.live.com', r.data.bestandsnaam);
+
+  check('leeg adres geweigerd', (await link('', 'Niets')).status === 400);
+  for (const kwaad of ['javascript:alert(1)', 'data:text/html,<script>x</script>', 'file:///etc/passwd']) {
+    check(`${kwaad.split(':')[0]}: geweigerd`, (await link(kwaad, 'Kwaad')).status === 400);
+  }
+  check('geen van die adressen is opgeslagen',
+    (await rim('/taken/' + metBijlage)).data.bijlagen.filter(b => b.url).length === 2);
+
+  check('een link is geen bestand om te downloaden',
+    (await rim('/bijlagen/' + linkId)).status === 400);
+  // De ZIP moet de links meenemen als tekstbestand.
+  const zipMetLinks = join(werkmap, 'met-links.zip');
+  writeFileSync(zipMetLinks, Buffer.from(await (await fetch(`${BASIS}/taken/${metBijlage}/bijlagen.zip`, {
+    headers: { cookie: rim.cookie() } })).arrayBuffer()));
+  const metLinks = JSON.parse(execFileSync('python3', ['-c', `
+import zipfile, json
+with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
+    print(json.dumps({'namen': z.namelist(), 'links': z.read('Links.txt').decode('utf-8')}))
+`]).toString());
+  check('Links.txt zit in de zip', metLinks.namen.includes('Links.txt'), JSON.stringify(metLinks.namen));
+  check('de bestanden staan er nog steeds in', metLinks.namen.length === 4, JSON.stringify(metLinks.namen));
+  check('met het adres erin', metLinks.links.includes('https://transafe-my.sharepoint.com/keuring-2026'),
+    metLinks.links);
+  check('en de naam erbij', metLinks.links.includes("Foto's keuring"), metLinks.links);
+
+  check('link verwijderen lukt', (await rim('/bijlagen/' + linkId, { method: 'DELETE' })).status === 200);
+  check('en staat als link in de historie',
+    (await rim('/taken/' + metBijlage)).data.historie.some(h => h.veld === 'link verwijderd'));
+  check('de bestanden zijn ongemoeid', bestandenInMap() === 3, String(bestandenInMap()));
+
   groep('Bijlagen en afgeschermde borden');
   const geheimeTaak = (await rim(`/borden/${projectD}/taken`, { method: 'POST', body: { opdracht: 'Vertrouwelijk' } })).data.id;
   const geheimeBijlage = (await upload(rim, geheimeTaak, 'contract.pdf', 'geheime inhoud')).data.id;
 
   check('Carla kan er niet bij', (await carla('/bijlagen/' + geheimeBijlage)).status === 404);
   check('en kan er ook niet één toevoegen', (await upload(carla, geheimeTaak, 'eigen.txt', 'hoi')).status === 404);
+  check('ook geen link', (await carla(`/taken/${geheimeTaak}/bijlagen/link`,
+    { method: 'POST', body: { url: 'https://onedrive.live.com/stiekem' } })).status === 404);
   check('en niet verwijderen', (await carla('/bijlagen/' + geheimeBijlage, { method: 'DELETE' })).status === 404);
   check('het bestand is er nog', (await rim('/taken/' + geheimeTaak)).data.bijlagen.length === 1);
 

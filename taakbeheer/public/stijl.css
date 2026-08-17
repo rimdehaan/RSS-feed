@@ -542,6 +542,21 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
 .bijlage-hint { font-size: 0.78rem; color: var(--grijs); }
 .bijlage-hint.fout { color: var(--rood); }
 
+/* Het vakje om een link in te tikken. Klapt open onder de knoppen. */
+.link-invoer {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  margin-top: 10px; padding: 12px; border-radius: 8px;
+  background: var(--achtergrond); border: 1px solid var(--lijn);
+}
+.link-invoer input {
+  padding: 7px 11px; border: 1px solid var(--grijs); border-radius: 6px;
+  font-family: inherit; font-size: 0.85rem; color: var(--donker);
+  background: #fff; outline: none;
+}
+.link-invoer input:focus { border-color: var(--blauw); }
+.link-invoer #vLinkAdres { flex: 2; min-width: 220px; }
+.link-invoer #vLinkNaam  { flex: 1; min-width: 150px; }
+
 .nieuwe-opmerking { display: flex; gap: 8px; margin-top: 12px; }
 .nieuwe-opmerking textarea {
   flex: 1; min-height: 60px; padding: 9px 12px; border: 1px solid var(--grijs);

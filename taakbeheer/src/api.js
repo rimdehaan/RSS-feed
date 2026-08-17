@@ -475,6 +475,13 @@ api.delete('/borden/:id', vereistLogin, (req, res) => {
 // ── Taken ────────────────────────────────────────────────────────────────
 
 // Voortgang van de gekoppelde werkprocessen, om op de kaart en in de tabel te tonen.
+// Eén beschrijving van een bijlage, zodat url overal meekomt. Is url gevuld,
+// dan is het een link en niet een bestand.
+const BIJLAGE_SELECT = `
+  SELECT b.id, b.bestandsnaam, b.type, b.grootte, b.url, b.aangemaakt_op,
+         b.geupload_door, g.naam AS geupload_door_naam
+    FROM bijlagen b LEFT JOIN gebruikers g ON g.id = b.geupload_door`;
+
 const STAP_TELLERS = `
   (SELECT COUNT(*) FROM taak_stappen ts
      JOIN taak_processen tp ON tp.id = ts.taak_proces_id
@@ -568,10 +575,7 @@ api.get('/taken/:id', vereistLogin, (req, res) => {
   taak.processen = processenVan(id);
 
   taak.bijlagen = db.prepare(
-    `SELECT b.id, b.bestandsnaam, b.type, b.grootte, b.aangemaakt_op,
-            b.geupload_door, g.naam AS geupload_door_naam
-       FROM bijlagen b LEFT JOIN gebruikers g ON g.id = b.geupload_door
-      WHERE b.taak_id = ? ORDER BY b.aangemaakt_op, b.id`
+    `${BIJLAGE_SELECT} WHERE b.taak_id = ? ORDER BY b.aangemaakt_op, b.id`
   ).all(id);
 
   taak.historie = db.prepare(
@@ -949,13 +953,54 @@ api.post('/taken/:id/bijlagen', vereistLogin, (req, res) => {
     ).run(taak.id, bestandsnaam, opslagnaam, tekst(req.get('x-bestandstype'), 100) || null, bytes, req.gebruiker.id);
 
     logHistorie(taak.id, req.gebruiker.id, 'bijlage toegevoegd', null, bestandsnaam);
-    res.json(db.prepare(
-      `SELECT b.id, b.bestandsnaam, b.type, b.grootte, b.aangemaakt_op, g.naam AS geupload_door_naam
-         FROM bijlagen b LEFT JOIN gebruikers g ON g.id = b.geupload_door WHERE b.id = ?`
-    ).get(r.lastInsertRowid));
+    res.json(db.prepare(`${BIJLAGE_SELECT} WHERE b.id = ?`).get(r.lastInsertRowid));
   });
 
   req.pipe(schrijver);
+});
+
+/**
+ * Een link als bijlage, bijvoorbeeld naar OneDrive voor bestanden die te groot
+ * zijn om te uploaden. Alleen http en https: een bijlage is zichtbaar voor
+ * iedereen die de taak mag zien, en een 'javascript:'-adres zou code kunnen
+ * uitvoeren in de browser van je collega.
+ */
+function leesLink(waarde) {
+  let ruw = tekst(waarde, 2000);
+  if (!ruw) return { fout: 'Vul een adres in.' };
+
+  // Zonder protocol ervoor bedoelt bijna iedereen https.
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(ruw)) ruw = 'https://' + ruw;
+
+  let adres;
+  try {
+    adres = new URL(ruw);
+  } catch {
+    return { fout: 'Dit is geen geldig webadres.' };
+  }
+  if (adres.protocol !== 'http:' && adres.protocol !== 'https:') {
+    return { fout: 'Alleen adressen die met http:// of https:// beginnen.' };
+  }
+  return { url: adres.href, host: adres.host };
+}
+
+api.post('/taken/:id/bijlagen/link', vereistLogin, (req, res) => {
+  const taak = zichtbareTaak(req.gebruiker, req.params.id);
+  if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
+
+  const { url, host, fout } = leesLink(req.body.url);
+  if (fout) return res.status(400).json({ fout });
+
+  // Geen naam ingevuld? Dan zegt de bestemming genoeg.
+  const naam = tekst(req.body.naam, 200) || host;
+
+  const r = db.prepare(
+    `INSERT INTO bijlagen (taak_id, bestandsnaam, opslagnaam, type, grootte, url, geupload_door)
+     VALUES (?, ?, '', NULL, 0, ?, ?)`
+  ).run(taak.id, naam, url, req.gebruiker.id);
+
+  logHistorie(taak.id, req.gebruiker.id, 'link toegevoegd', null, naam);
+  res.json(db.prepare(`${BIJLAGE_SELECT} WHERE b.id = ?`).get(r.lastInsertRowid));
 });
 
 /** Alle bijlagen van één taak in één ZIP. */
@@ -964,7 +1009,7 @@ api.get('/taken/:id/bijlagen.zip', vereistLogin, (req, res) => {
   if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
 
   const bijlagen = db.prepare(
-    'SELECT bestandsnaam, opslagnaam, grootte FROM bijlagen WHERE taak_id = ? ORDER BY aangemaakt_op, id'
+    'SELECT bestandsnaam, opslagnaam, grootte, url FROM bijlagen WHERE taak_id = ? ORDER BY aangemaakt_op, id'
   ).all(taak.id);
 
   if (bijlagen.length === 0) {
@@ -978,12 +1023,21 @@ api.get('/taken/:id/bijlagen.zip', vereistLogin, (req, res) => {
   }
 
   const bestanden = [];
-  for (const bijlage of bijlagen) {
+  for (const bijlage of bijlagen.filter(b => !b.url)) {
     try {
       bestanden.push({ naam: bijlage.bestandsnaam, inhoud: readFileSync(join(BIJLAGEMAP, bijlage.opslagnaam)) });
     } catch {
       // Bestand ontbreekt op schijf; de rest hoeft er niet onder te lijden.
     }
+  }
+
+  // Een link kun je niet inpakken, maar hem stilzwijgend weglaten zou betekenen
+  // dat je informatie mist zonder het te merken. Vandaar een tekstbestandje.
+  const links = bijlagen.filter(b => b.url);
+  if (links.length > 0) {
+    const regels = ['Links bij deze taak', '='.repeat(19), ''];
+    for (const link of links) regels.push(link.bestandsnaam, link.url, '');
+    bestanden.push({ naam: 'Links.txt', inhoud: Buffer.from(regels.join('\r\n'), 'utf8') });
   }
 
   if (bestanden.length === 0) {
@@ -1008,6 +1062,9 @@ api.get('/bijlagen/:id', vereistLogin, (req, res) => {
   const bijlage = db.prepare('SELECT * FROM bijlagen WHERE id = ?').get(Number(req.params.id));
   if (!bijlage || !zichtbareTaak(req.gebruiker, bijlage.taak_id)) {
     return res.status(404).json({ fout: 'Bijlage niet gevonden.' });
+  }
+  if (bijlage.url) {
+    return res.status(400).json({ fout: 'Dit is een link, geen bestand. Open hem vanuit de taak.' });
   }
 
   const pad = join(BIJLAGEMAP, bijlage.opslagnaam);
@@ -1041,8 +1098,9 @@ api.delete('/bijlagen/:id', vereistLogin, (req, res) => {
   if (!taak) return res.status(404).json({ fout: 'Bijlage niet gevonden.' });
 
   db.prepare('DELETE FROM bijlagen WHERE id = ?').run(bijlage.id);
-  verwijderBestand(bijlage.opslagnaam);
-  logHistorie(taak.id, req.gebruiker.id, 'bijlage verwijderd', bijlage.bestandsnaam, null);
+  if (!bijlage.url) verwijderBestand(bijlage.opslagnaam);   // bij een link staat er niets op schijf
+  logHistorie(taak.id, req.gebruiker.id,
+    bijlage.url ? 'link verwijderd' : 'bijlage verwijderd', bijlage.bestandsnaam, null);
 
   res.json({ ok: true });
 });

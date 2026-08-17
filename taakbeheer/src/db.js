@@ -186,6 +186,10 @@ voegKolomToe('taken', 'prioriteit', 'TEXT');
 // het al via hun rol, dus niemand raakt hierdoor iets kwijt.
 voegKolomToe('gebruikers', 'mag_werkprocessen', 'INTEGER NOT NULL DEFAULT 0');
 
+// Een bijlage is een bestand óf een link. Is url gevuld, dan is het een link:
+// er staat dan niets op schijf, dus opslagnaam is leeg en grootte 0.
+voegKolomToe('bijlagen', 'url', 'TEXT');
+
 export const STATUSSEN = [
   'Not Started',
   'Working on it',
