@@ -225,7 +225,11 @@ function vulUitvoerendKeuze(toegestaan = staat.toegestaneUitvoerders) {
 }
 
 function vulProjectKeuze(huidigBordId) {
-  el('vProject').innerHTML = staat.borden
+  // Je eigen takenlijst kan wel een vertrekpunt zijn maar geen bestemming:
+  // anders kun je een taak die collega's zien voor iedereen laten verdwijnen.
+  const keuzes = staat.borden.filter(b => !b.prive_van || b.id === huidigBordId);
+
+  el('vProject').innerHTML = keuzes
     .map(b => `<option value="${b.id}" ${b.id === huidigBordId ? 'selected' : ''}>${esc(b.naam)}</option>`)
     .join('');
 }
@@ -241,21 +245,37 @@ el('vProject').addEventListener('change', async () => {
 
 const isPersoonlijk = () => staat.bordId === null;
 
+/** Je eigen takenlijst; die staat als enige bord met prive_van in de lijst. */
+const mijnTakenlijst = () => staat.borden.find(b => b.prive_van) ?? null;
+const isMijnTakenlijst = () => staat.bordId !== null && staat.bordId === mijnTakenlijst()?.id;
+
 function tekenZijbalk() {
   const opMijnBord = isPersoonlijk() && staat.weergave !== 'team';
+  const lijst = mijnTakenlijst();
 
   el('persoonlijkLijst').innerHTML = `
     <a data-mijn class="${opMijnBord ? 'actief' : ''}">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       <span>Mijn taken</span>
-    </a>`;
+    </a>
+    ${lijst ? `
+      <a data-bord="${lijst.id}" class="${lijst.id === staat.bordId && staat.weergave !== 'team' ? 'actief' : ''}">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></svg>
+        <span>${esc(lijst.naam)}</span>
+        <span class="telling">${lijst.aantal_taken}</span>
+      </a>` : ''}`;
 
   el('persoonlijkLijst').querySelector('[data-mijn]')
     .addEventListener('click', () => kiesBord(null));
+  el('persoonlijkLijst').querySelectorAll('[data-bord]').forEach(link => {
+    link.addEventListener('click', () => kiesBord(Number(link.dataset.bord)));
+  });
 
-  el('bordenLijst').innerHTML = staat.borden.length === 0
+  // De eigen takenlijst staat hierboven al; die hoort niet bij de projecten.
+  const projecten = staat.borden.filter(b => !b.prive_van);
+  el('bordenLijst').innerHTML = projecten.length === 0
     ? '<p style="padding:6px 20px;font-size:.8rem;color:rgba(255,255,255,.35)">Nog geen projecten.</p>'
-    : staat.borden.map(bord => `
+    : projecten.map(bord => `
         <a data-bord="${bord.id}" class="${bord.id === staat.bordId && staat.weergave !== 'team' ? 'actief' : ''}">
           <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <span>${esc(bord.naam)}</span>
@@ -304,9 +324,15 @@ function werkbalkBijwerken() {
   el('nieuwTaakKnop').hidden = isPersoonlijk();
   el('bordInstellingenKnop').hidden = isPersoonlijk() || !bord?.mag_beheren;
 
-  // Op je eigen bord staat overal jouw naam, dus dat filter heeft geen zin.
-  el('uitvoerendFilter').hidden = isPersoonlijk();
-  if (isPersoonlijk()) el('filterUitvoerend').value = '';
+  // Op je eigen bord en op je eigen lijst staat overal jouw naam, dus dat
+  // filter heeft daar geen zin.
+  const alleenIk = isPersoonlijk() || isMijnTakenlijst();
+  el('uitvoerendFilter').hidden = alleenIk;
+  if (alleenIk) el('filterUitvoerend').value = '';
+
+  // Eén regel uitleg boven je eigen lijst, zodat niemand hoeft te raden wie er
+  // meekijkt — en wat er gebeurt als je uit dienst gaat.
+  el('lijstUitleg').hidden = !isMijnTakenlijst();
 }
 
 async function herlaadTaken() {

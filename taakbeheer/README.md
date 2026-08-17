@@ -37,7 +37,8 @@ administratie — zie *Back-ups* verderop.
 | Rollen | *Beheerder* mag uitnodigen en accounts beheren, *lid* werkt gewoon mee. Je eigen rol kun je niet wijzigen — dat doet een collega-beheerder |
 | Wachtwoord kwijt | Een beheerder maakt een eenmalige herstellink, twee dagen geldig |
 | Mijn account | Klik linksonder op je naam om je eigen naam en wachtwoord te wijzigen |
-| Mijn taken | Je persoonlijke bord: alles wat aan jou is toegewezen, uit alle projecten, gegroepeerd per project en daarbinnen per status. Alleen jij ziet het |
+| Mijn taken | Overzicht: alles wat aan jou is toegewezen, uit alle projecten, gegroepeerd per project en daarbinnen per status |
+| Mijn takenlijst | Je eigen lijst, die je collega's en beheerders niet zien. Iedereen krijgt er automatisch een |
 | Projecten | Meerdere borden naast elkaar, bijvoorbeeld per project of per klant |
 | Wie ziet wat | Per project in te stellen: iedereen, of alleen gekozen mensen |
 | Tabelweergave | Zoals je prototype: opdracht, uitvoerend, status, deadline, omschrijving |
@@ -86,6 +87,33 @@ geldige keuze** en blijft bewust onopvallend grijs: anders zou elke taak een
 oordeel moeten krijgen dat niemand heeft gegeven. Status en prioriteit staan los
 van elkaar — een taak kan Done zijn en toch High hebben gehad.
 
+### Mijn takenlijst
+
+Iedereen heeft een eigen lijst voor werk dat niet op een projectbord thuishoort.
+Hij staat in de zijbalk onder *Mijn taken*, heet bij iedereen hetzelfde en wordt
+automatisch aangemaakt: bij nieuwe collega's zodra ze zich registreren.
+
+**Je collega's zien die lijst niet — beheerders ook niet.** Dat is de enige
+uitzondering op de regel hieronder dat een beheerder elk bord ziet. De regel
+bestaat om te voorkomen dat een bord onbereikbaar wordt; hier is het overnemen
+van de lijst bij uitdiensttreding het antwoord op datzelfde probleem.
+
+Wat dat wél en niet betekent:
+
+- **Verborgen, niet versleuteld.** Alles staat in één databasebestand op de
+  server. Wie bij de hosting kan, kan het lezen. Beloof je mensen dus niet meer
+  dan: je collega's zien dit niet.
+- **Werk blijft niet liggen.** Gaat iemand uit dienst, dan kan een beheerder de
+  lijst overnemen. Die wordt dan een gewoon afgeschermd bord met de naam
+  *Takenlijst van [naam]*, zodat duidelijk is van wie het was.
+- **Aan de lijst valt niets in te stellen.** Vaste naam, geen zichtbaarheid om
+  te kiezen, niet te verwijderen — ook niet door jezelf.
+- **Taken erop staan automatisch op jouw naam** en verschijnen daardoor ook in
+  het overzicht *Mijn taken*.
+- **Verhuizen mag één kant op.** Van je lijst naar een project wel; een
+  projecttaak naar je lijst niet. Anders kun je werk dat collega's zien voor
+  iedereen laten verdwijnen.
+
 ### Hoe borden en zichtbaarheid werken
 
 **Mijn taken** is geen echt bord: het is een overzicht dat wordt samengesteld uit
@@ -98,8 +126,9 @@ alleen bijwerken. Het bord van een ander is nergens op te vragen.
 Drie regels voorkomen dat een bord onbereikbaar wordt of dat iemand werk krijgt
 dat hij niet kan openen:
 
-1. **Beheerders zien elk bord.** Anders zou een bord verdwijnen zodra de laatste
-   deelnemer het bedrijf verlaat, en kan niemand dat meer rechtzetten.
+1. **Beheerders zien elk bord** — behalve een persoonlijke takenlijst, zie
+   hierboven. Anders zou een bord verdwijnen zodra de laatste deelnemer het
+   bedrijf verlaat, en kan niemand dat meer rechtzetten.
 2. **Wie een taak op een bord heeft, houdt toegang.** Bij het afschermen worden
    die mensen automatisch op de lijst gezet.
 3. **Je kunt alleen toewijzen aan wie het bord mag zien.** De keuzelijst toont de

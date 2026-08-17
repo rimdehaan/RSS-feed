@@ -6,7 +6,8 @@ import { randomBytes } from 'node:crypto';
 import { createWriteStream, createReadStream, unlinkSync, statSync, readFileSync } from 'node:fs';
 import { maakZip } from './zip.js';
 import { join } from 'node:path';
-import { db, BIJLAGEMAP, STATUSSEN, PRIORITEITEN, aantalGebruikers, logHistorie } from './db.js';
+import { db, BIJLAGEMAP, STATUSSEN, PRIORITEITEN, aantalGebruikers, logHistorie,
+         zorgVoorPriveLijst } from './db.js';
 import { splitsStappen, MAX_STAPPEN, MAX_STAP_TEKENS } from '../public/stappen.js';
 import {
   hashWachtwoord, wachtwoordKlopt, maakSessie, verwijderSessie,
@@ -40,6 +41,11 @@ function datumOfNull(waarde) {
 function zichtbaarBord(gebruiker, bordId) {
   const bord = db.prepare('SELECT * FROM borden WHERE id = ?').get(Number(bordId));
   if (!bord) return null;
+
+  // Let op de volgorde: deze regel moet vóór de beheerderscontrole staan.
+  // Een persoonlijke takenlijst is van één iemand, en van niemand anders.
+  if (bord.prive_van) return bord.prive_van === gebruiker.id ? bord : null;
+
   if (gebruiker.rol === 'beheerder' || bord.zichtbaar_voor_iedereen) return bord;
 
   const lid = db.prepare('SELECT 1 FROM bord_leden WHERE bord_id = ? AND gebruiker_id = ?')
@@ -49,6 +55,9 @@ function zichtbaarBord(gebruiker, bordId) {
 
 /** Instellingen wijzigen mag een beheerder, en wie het bord heeft aangemaakt. */
 function magBeheren(gebruiker, bord) {
+  // Aan een persoonlijke lijst valt niets in te stellen: hij heeft een vaste
+  // naam en er is maar één iemand die hem ziet.
+  if (bord.prive_van) return false;
   return gebruiker.rol === 'beheerder' || bord.aangemaakt_door === gebruiker.id;
 }
 
@@ -58,6 +67,11 @@ function magToegewezenWorden(bord, gebruikerId) {
 
   const gebruiker = db.prepare('SELECT rol FROM gebruikers WHERE id = ? AND actief = 1').get(gebruikerId);
   if (!gebruiker) return false;
+
+  // Ook hier vóór de beheerderscontrole: op een persoonlijke takenlijst is de
+  // eigenaar de enige die er iets op kan krijgen.
+  if (bord.prive_van) return bord.prive_van === gebruikerId;
+
   if (bord.zichtbaar_voor_iedereen || gebruiker.rol === 'beheerder') return true;
 
   return Boolean(db.prepare('SELECT 1 FROM bord_leden WHERE bord_id = ? AND gebruiker_id = ?')
@@ -98,8 +112,9 @@ api.post('/setup', (req, res) => {
     `INSERT INTO gebruikers (email, naam, wachtwoord_hash, rol) VALUES (?, ?, ?, 'beheerder')`
   ).run(email, naam, hashWachtwoord(wachtwoord));
 
-  // Een leeg bord om mee te beginnen.
+  // Een leeg bord om mee te beginnen, en je eigen takenlijst.
   db.prepare('INSERT INTO borden (naam) VALUES (?)').run('Takenbord');
+  zorgVoorPriveLijst(resultaat.lastInsertRowid);
 
   maakSessie(res, resultaat.lastInsertRowid);
   res.json({ ok: true });
@@ -174,6 +189,7 @@ api.post('/registreren', (req, res) => {
     ).run(uitnodiging.email, naam, hashWachtwoord(wachtwoord), uitnodiging.rol);
 
     db.prepare("UPDATE uitnodigingen SET gebruikt_op = datetime('now') WHERE token = ?").run(token);
+    zorgVoorPriveLijst(r.lastInsertRowid);   // iedereen begint met een eigen lijst
     return r.lastInsertRowid;
   });
 
@@ -368,14 +384,18 @@ api.post('/wachtwoord', vereistLogin, (req, res) => {
 
 api.get('/borden', vereistLogin, (req, res) => {
   const borden = db.prepare(
-    `SELECT b.id, b.naam, b.gearchiveerd, b.zichtbaar_voor_iedereen, b.aangemaakt_door,
+    `SELECT b.id, b.naam, b.gearchiveerd, b.zichtbaar_voor_iedereen, b.aangemaakt_door, b.prive_van,
             (SELECT COUNT(*) FROM taken t WHERE t.bord_id = b.id) AS aantal_taken
        FROM borden b
-      WHERE ? = 1
-         OR b.zichtbaar_voor_iedereen = 1
-         OR EXISTS (SELECT 1 FROM bord_leden bl WHERE bl.bord_id = b.id AND bl.gebruiker_id = ?)
+      WHERE CASE WHEN b.prive_van IS NOT NULL
+                 THEN b.prive_van = ?              -- alleen je eigen lijst
+                 ELSE ? = 1
+                      OR b.zichtbaar_voor_iedereen = 1
+                      OR EXISTS (SELECT 1 FROM bord_leden bl
+                                  WHERE bl.bord_id = b.id AND bl.gebruiker_id = ?)
+            END
       ORDER BY b.gearchiveerd, b.positie, b.id`
-  ).all(req.gebruiker.rol === 'beheerder' ? 1 : 0, req.gebruiker.id);
+  ).all(req.gebruiker.id, req.gebruiker.rol === 'beheerder' ? 1 : 0, req.gebruiker.id);
 
   res.json(borden.map((bord) => ({ ...bord, mag_beheren: magBeheren(req.gebruiker, bord) })));
 });
@@ -540,7 +560,11 @@ api.post('/borden/:id/taken', vereistLogin, (req, res) => {
 
   const status = STATUSSEN.includes(req.body.status) ? req.body.status : 'Not Started';
   const prioriteit = PRIORITEITEN.includes(req.body.prioriteit) ? req.body.prioriteit : null;
-  const uitvoerendId = req.body.uitvoerend_id ? Number(req.body.uitvoerend_id) : null;
+  // Op je eigen takenlijst ben jij per definitie de uitvoerder; zo komt de taak
+  // ook meteen in het overzicht Mijn taken te staan.
+  const uitvoerendId = req.body.uitvoerend_id
+    ? Number(req.body.uitvoerend_id)
+    : (bord.prive_van ? req.gebruiker.id : null);
 
   if (!magToegewezenWorden(bord, uitvoerendId)) {
     return res.status(400).json({ fout: 'Die persoon kan dit bord niet zien. Geef hem eerst toegang bij de bordinstellingen.' });
@@ -600,6 +624,11 @@ api.patch('/taken/:id', vereistLogin, (req, res) => {
     doelBord = zichtbaarBord(req.gebruiker, req.body.bord_id);
     if (!doelBord) {
       return res.status(400).json({ fout: 'Dat project bestaat niet, of je kunt het niet zien.' });
+    }
+    // Uit je eigen lijst naar een project mag; andersom niet. Anders kun je een
+    // taak die collega's zien voor iedereen laten verdwijnen.
+    if (doelBord.prive_van) {
+      return res.status(400).json({ fout: 'Een taak kan niet naar een persoonlijke takenlijst verhuizen.' });
     }
   }
 

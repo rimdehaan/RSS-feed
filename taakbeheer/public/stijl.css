@@ -645,3 +645,11 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
   .raster { grid-template-columns: 1fr; }
   .kop, .balk, .inhoud { padding-left: 14px; padding-right: 14px; }
 }
+
+/* Uitleg boven je eigen takenlijst: wie kijkt er mee, en wat gebeurt er als je
+   uit dienst gaat. Staat er altijd, want dat is de vraag die iedereen stelt. */
+.lijst-uitleg {
+  margin: 0; padding: 10px 28px; flex-shrink: 0;
+  background: #eef3f6; border-bottom: 1px solid var(--lijn);
+  font-size: 0.82rem; color: var(--donker);
+}

@@ -197,8 +197,11 @@ try {
   // ── Borden en taken ─────────────────────────────────────────────────────
   groep('Borden en taken');
   const borden = (await rim('/borden')).data;
-  check('standaardbord bestaat', borden.length === 1 && borden[0].naam === 'Takenbord');
-  const bordId = borden[0].id;
+  check('standaardbord bestaat', borden.some((b) => b.naam === 'Takenbord' && !b.prive_van));
+  check('en je eigen takenlijst ook',
+    borden.some((b) => b.naam === 'Mijn takenlijst' && b.prive_van), JSON.stringify(borden));
+  check('meer is er niet', borden.length === 2, JSON.stringify(borden.map((b) => b.naam)));
+  const bordId = borden.find((b) => b.naam === 'Takenbord').id;
 
   check('tweede bord aangemaakt', (await rim('/borden', { method: 'POST', body: { naam: 'Project Noord' } })).status === 200);
 
@@ -569,6 +572,62 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
   check('en staat als link in de historie',
     (await rim('/taken/' + metBijlage)).data.historie.some(h => h.veld === 'link verwijderd'));
   check('de bestanden zijn ongemoeid', bestandenInMap() === 3, String(bestandenInMap()));
+
+  // ── De persoonlijke takenlijst ──────────────────────────────────────────
+  // De enige plek waar de regel "een beheerder ziet elk bord" niet geldt.
+  groep('Mijn takenlijst');
+  const lijstVan = async (wie) =>
+    (await wie('/borden')).data.find((b) => b.prive_van);
+
+  const carlaLijst = await lijstVan(carla);
+  check('Carla kreeg er automatisch een bij het registreren', !!carlaLijst, JSON.stringify(carlaLijst));
+  check('met de vaste naam', carlaLijst.naam === 'Mijn takenlijst');
+  check('en hij is van haar', carlaLijst.prive_van === carlaId);
+  check('instellingen wijzigen kan niet, ook niet door haarzelf', carlaLijst.mag_beheren === false);
+
+  const rimLijst = await lijstVan(rim);
+  check('Rim heeft een eigen lijst', rimLijst.id !== carlaLijst.id);
+
+  check('een lid ziet de lijst van een ander niet',
+    (await carla('/borden')).data.every((b) => !b.prive_van || b.prive_van === carlaId));
+  check('en een BEHEERDER ook niet',
+    (await rim('/borden')).data.every((b) => !b.prive_van || b.prive_van === rimId),
+    JSON.stringify((await rim('/borden')).data.filter((b) => b.prive_van)));
+
+  const carlaTaak = (await carla(`/borden/${carlaLijst.id}/taken`,
+    { method: 'POST', body: { opdracht: 'Leverancier bellen' } })).data;
+  check('Carla maakt er een taak op aan', !!carlaTaak.id, JSON.stringify(carlaTaak));
+  check('die staat meteen op haar naam', carlaTaak.uitvoerend_id === carlaId);
+  check('en verschijnt in haar overzicht Mijn taken',
+    (await carla('/mijn-taken')).data.some((t) => t.id === carlaTaak.id));
+
+  check('een beheerder kan het bord niet opvragen',
+    (await rim('/borden/' + carlaLijst.id + '/taken')).status === 404);
+  check('en de instellingen ook niet',
+    (await rim('/borden/' + carlaLijst.id + '/instellingen')).status === 404);
+  check('en de taak erop niet',
+    (await rim('/taken/' + carlaTaak.id)).status === 404);
+  check('en er niets op aanmaken',
+    (await rim(`/borden/${carlaLijst.id}/taken`, { method: 'POST', body: { opdracht: 'Stiekem' } })).status === 404);
+  check('en het bord niet verwijderen',
+    (await rim('/borden/' + carlaLijst.id, { method: 'DELETE' })).status === 404);
+  check('en niet hernoemen',
+    (await rim('/borden/' + carlaLijst.id, { method: 'PATCH', body: { naam: 'Gekaapt' } })).status === 404);
+  check('de taak staat er nog', (await carla('/taken/' + carlaTaak.id)).status === 200);
+
+  check('zelf hernoemen kan ook niet',
+    (await carla('/borden/' + carlaLijst.id, { method: 'PATCH', body: { naam: 'Anders' } })).status === 403,
+    JSON.stringify((await carla('/borden/' + carlaLijst.id, { method: 'PATCH', body: { naam: 'Anders' } })).data));
+
+  check('uit je lijst naar een project mag',
+    (await carla('/taken/' + carlaTaak.id, { method: 'PATCH', body: { bord_id: projectA } })).status === 200);
+  check('en dan zien collega\'s hem wel', (await rim('/taken/' + carlaTaak.id)).status === 200);
+
+  r = await carla('/taken/' + carlaTaak.id, { method: 'PATCH', body: { bord_id: carlaLijst.id } });
+  check('maar terug naar je lijst niet', r.status === 400 && /persoonlijke takenlijst/.test(r.data.fout ?? ''),
+    JSON.stringify(r.data));
+  check('en de taak staat nog gewoon op het project',
+    (await rim('/taken/' + carlaTaak.id)).data.bord_id === projectA);
 
   groep('Bijlagen en afgeschermde borden');
   const geheimeTaak = (await rim(`/borden/${projectD}/taken`, { method: 'POST', body: { opdracht: 'Vertrouwelijk' } })).data.id;

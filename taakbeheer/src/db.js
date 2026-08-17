@@ -190,6 +190,31 @@ voegKolomToe('gebruikers', 'mag_werkprocessen', 'INTEGER NOT NULL DEFAULT 0');
 // er staat dan niets op schijf, dus opslagnaam is leeg en grootte 0.
 voegKolomToe('bijlagen', 'url', 'TEXT');
 
+/**
+ * De persoonlijke takenlijst. Is prive_van gevuld, dan is het bord van die ene
+ * persoon en ziet niemand anders het — ook een beheerder niet. Dat is de enige
+ * uitzondering op "een beheerder ziet elk bord"; die regel bestaat om te
+ * voorkomen dat een bord onbereikbaar wordt, en hier is het overnemen van de
+ * lijst bij uitdiensttreding het antwoord op datzelfde probleem.
+ */
+voegKolomToe('borden', 'prive_van', 'INTEGER REFERENCES gebruikers(id)');
+
+export const PRIVELIJST_NAAM = 'Mijn takenlijst';
+
+/** Maakt de persoonlijke lijst voor wie er nog geen heeft. */
+export function zorgVoorPriveLijst(gebruikerId) {
+  const bestaat = db.prepare('SELECT id FROM borden WHERE prive_van = ?').get(gebruikerId);
+  if (bestaat) return bestaat.id;
+
+  return db.prepare(
+    `INSERT INTO borden (naam, prive_van, zichtbaar_voor_iedereen, aangemaakt_door)
+     VALUES (?, ?, 0, ?)`
+  ).run(PRIVELIJST_NAAM, gebruikerId, gebruikerId).lastInsertRowid;
+}
+
+// Bestaande gebruikers krijgen er eenmalig ook een.
+for (const { id } of db.prepare('SELECT id FROM gebruikers').all()) zorgVoorPriveLijst(id);
+
 export const STATUSSEN = [
   'Not Started',
   'Working on it',
