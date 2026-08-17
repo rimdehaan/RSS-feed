@@ -128,7 +128,13 @@ body {
 }
 .zijbalk-kop button:hover { color: #fff; }
 
-.zijbalk nav { flex: 1; overflow-y: auto; padding-bottom: 12px; }
+/* Elk blok is precies zo hoog als zijn inhoud. Alleen de projectenlijst mag
+   krimpen en krijgt dan een schuifbalk — dat is het enige blok dat groeit.
+   Eerder had elk blok `flex: 1`, waardoor ze de hoogte in drieën deelden: een
+   gapend gat onder Mijn taken en de onderste projecten die wegvielen. */
+.zijbalk nav { flex-shrink: 0; padding-bottom: 12px; }
+#bordenLijst { flex-shrink: 1; min-height: 0; overflow-y: auto; }
+
 .zijbalk nav a {
   display: flex; align-items: center; gap: 10px; padding: 9px 20px;
   color: rgba(255,255,255,0.75); text-decoration: none; font-size: 0.88rem;
@@ -138,10 +144,21 @@ body {
 .zijbalk nav a:hover, .zijbalk nav a.actief {
   background: rgba(91,134,159,0.15); color: #fff; border-left-color: var(--blauw);
 }
-.zijbalk nav a .telling {
-  margin-left: auto; font-size: 0.72rem; color: rgba(255,255,255,0.4);
+/* Zonder dit knijpt flexbox de icoontjes plat zodra de naam meer ruimte vraagt
+   dan er is: vier vierkantjes worden dan vier smalle streepjes. */
+.zijbalk nav a > svg, .zijbalk nav a .telling { flex-shrink: 0; }
+/* Eén regel per project, met … als de naam niet past. `min-width: 0` is nodig,
+   anders weigert een flex-item smaller te worden dan zijn tekst en kapt hij
+   niet af maar loopt hij om. De volledige naam staat in de hover-tekst. */
+.zijbalk nav a .naam {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.zijbalk nav a .telling { font-size: 0.72rem; color: rgba(255,255,255,0.4); }
+.zijbalk nav a .slot { opacity: 0.5; }
+/* `margin-top: auto` duwt de voet naar de onderkant. Dat deden eerst de
+   nav-blokken met hun `flex: 1`; die vullen de ruimte niet meer op. */
 .zijbalk-voet {
+  margin-top: auto;
   padding: 14px 20px; font-size: 0.75rem; color: rgba(255,255,255,0.5);
   border-top: 1px solid rgba(255,255,255,0.1);
   display: flex; align-items: center; justify-content: space-between; gap: 8px;

@@ -44,6 +44,9 @@ const optieStijl = (achtergrond) => `background:${achtergrond};color:${LETTER_OP
 // Office-assistent, mét oogjes — en hij kleurt niet mee met de tekst.
 const PAPERCLIP = `<svg class="teken" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`;
 const SCHAKEL = `<svg class="teken" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`;
+// Om dezelfde reden getekend: het slotje in de zijbalk was een emoji en kwam er
+// als goudbruin hangslot uit tussen de witte letters.
+const SLOT = `<svg class="slot" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><title>Alleen zichtbaar voor gekozen mensen</title><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
 
 const el = (id) => document.getElementById(id);
 const statusKlasse = (status) => 's-' + status.toLowerCase().replace(/\s+/g, '-');
@@ -256,12 +259,12 @@ function tekenZijbalk() {
   el('persoonlijkLijst').innerHTML = `
     <a data-mijn class="${opMijnBord ? 'actief' : ''}">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      <span>Mijn taken</span>
+      <span class="naam">Mijn taken</span>
     </a>
     ${lijst ? `
-      <a data-bord="${lijst.id}" class="${lijst.id === staat.bordId && staat.weergave !== 'team' ? 'actief' : ''}">
+      <a data-bord="${lijst.id}" title="${esc(lijst.naam)}" class="${lijst.id === staat.bordId && staat.weergave !== 'team' ? 'actief' : ''}">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></svg>
-        <span>${esc(lijst.naam)}</span>
+        <span class="naam">${esc(lijst.naam)}</span>
         <span class="telling">${lijst.aantal_taken}</span>
       </a>` : ''}`;
 
@@ -276,10 +279,10 @@ function tekenZijbalk() {
   el('bordenLijst').innerHTML = projecten.length === 0
     ? '<p style="padding:6px 20px;font-size:.8rem;color:rgba(255,255,255,.35)">Nog geen projecten.</p>'
     : projecten.map(bord => `
-        <a data-bord="${bord.id}" class="${bord.id === staat.bordId && staat.weergave !== 'team' ? 'actief' : ''}">
+        <a data-bord="${bord.id}" title="${esc(bord.naam)}" class="${bord.id === staat.bordId && staat.weergave !== 'team' ? 'actief' : ''}">
           <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          <span>${esc(bord.naam)}</span>
-          ${bord.zichtbaar_voor_iedereen ? '' : '<span class="telling" title="Alleen zichtbaar voor gekozen mensen">🔒</span>'}
+          <span class="naam">${esc(bord.naam)}</span>
+          ${bord.zichtbaar_voor_iedereen ? '' : SLOT}
           <span class="telling">${bord.aantal_taken}</span>
         </a>`).join('');
 
