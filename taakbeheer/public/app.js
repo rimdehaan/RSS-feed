@@ -318,6 +318,13 @@ async function kiesBord(id) {
   teken();
 }
 
+const UITLEG = {
+  mijnTaken: 'Alles wat aan jou is toegewezen, uit alle projecten bij elkaar. '
+    + 'Nieuwe taken maak je aan op een project of op je eigen takenlijst.',
+  mijnTakenlijst: 'Alleen jij ziet deze lijst — je collega’s en beheerders niet. '
+    + 'Ga je uit dienst, dan kan een beheerder hem overnemen zodat lopend werk niet blijft liggen.',
+};
+
 /** Op het persoonlijke bord kun je geen taak aanmaken of instellingen wijzigen. */
 function werkbalkBijwerken() {
   const bord = staat.borden.find(b => b.id === staat.bordId);
@@ -330,9 +337,12 @@ function werkbalkBijwerken() {
   el('uitvoerendFilter').hidden = alleenIk;
   if (alleenIk) el('filterUitvoerend').value = '';
 
-  // Eén regel uitleg boven je eigen lijst, zodat niemand hoeft te raden wie er
-  // meekijkt — en wat er gebeurt als je uit dienst gaat.
-  el('lijstUitleg').hidden = !isMijnTakenlijst();
+  // Eén regel uitleg boven beide persoonlijke schermen, zodat niemand hoeft te
+  // raden wat het verschil is: het overzicht verzamelt, de lijst is van jou.
+  const uitleg = isPersoonlijk() ? UITLEG.mijnTaken
+    : isMijnTakenlijst() ? UITLEG.mijnTakenlijst : '';
+  el('lijstUitleg').textContent = uitleg;
+  el('lijstUitleg').hidden = !uitleg;
 }
 
 async function herlaadTaken() {
@@ -1266,6 +1276,7 @@ async function tekenWerkprocessen() {
   staat.weergave = 'werkprocessen';
   el('paginaTitel').textContent = 'Werkprocessen';
   el('werkbalk').hidden = true;
+  el('lijstUitleg').hidden = true;
   tekenZijbalk();
 
   const { mag_beheren, werkprocessen } = await api('/werkprocessen');
@@ -1651,6 +1662,7 @@ async function tekenTeam(bericht = null) {
   staat.weergave = 'team';
   el('paginaTitel').textContent = 'Team';
   el('werkbalk').hidden = true;
+  el('lijstUitleg').hidden = true;
   tekenZijbalk();
 
   staat.gebruikers = await api('/gebruikers');
