@@ -14,6 +14,7 @@ const staat = {
   bewerktId: null,
   detailId: null,
   deadlineFilter: null,  // null | 'te-laat' | 'komt-eraan'
+  sortering: null,       // null = eigen volgorde; anders { kolom, richting }
   toegestaneUitvoerders: null,   // null = iedereen mag; anders een Set met ids
 };
 
@@ -382,6 +383,54 @@ function gefilterdeTaken() {
   return basis;
 }
 
+// ── Sorteren ─────────────────────────────────────────────────────────────
+/**
+ * De vijf kolommen waarop je kunt sorteren, met per kolom de waarde waarop
+ * vergeleken wordt. Prioriteit en Status worden vergeleken op hun plek in de
+ * vaste lijst en niet alfabetisch — anders komt Low tussen High en Medium.
+ */
+const SORTEERBAAR = {
+  Opdracht:   (taak) => taak.opdracht,
+  Uitvoerend: (taak) => taak.uitvoerend_naam,
+  Prioriteit: (taak) => plek(staat.prioriteiten, taak.prioriteit),
+  Status:     (taak) => plek(staat.statussen, taak.status),
+  Deadline:   (taak) => taak.deadline,
+};
+
+/** Plek in de vaste lijst; onbekend of leeg telt als geen waarde. */
+function plek(lijst, waarde) {
+  const i = lijst.indexOf(waarde);
+  return i === -1 ? null : i;
+}
+
+/** Geen waarde ingevuld. Zulke rijen staan altijd onderaan, in beide richtingen. */
+const isLeeg = (waarde) => waarde === null || waarde === undefined || waarde === '';
+
+/**
+ * Sorteren verandert alleen wat je op je scherm ziet. De opgeslagen volgorde
+ * (`positie`, die je in Kanban versleept) blijft ongemoeid — vandaar een kopie
+ * van de lijst. Bij gelijke waarden blijft die eigen volgorde staan, want
+ * sorteren in JavaScript is stabiel.
+ */
+function gesorteerd(taken) {
+  if (!staat.sortering) return taken;
+
+  const waardeVan = SORTEERBAAR[staat.sortering.kolom];
+  const omgekeerd = staat.sortering.richting === 'af' ? -1 : 1;
+
+  return [...taken].sort((taakA, taakB) => {
+    const a = waardeVan(taakA);
+    const b = waardeVan(taakB);
+    if (isLeeg(a) && isLeeg(b)) return 0;
+    if (isLeeg(a)) return 1;
+    if (isLeeg(b)) return -1;
+    const uitkomst = typeof a === 'number'
+      ? a - b
+      : String(a).localeCompare(String(b), 'nl', { sensitivity: 'base' });
+    return uitkomst * omgekeerd;
+  });
+}
+
 /**
  * De twee tellers boven het overzicht. Ze tellen binnen de basis, dus zonder
  * hun eigen filter; anders zou het getal op nul springen zodra je erop klikt.
@@ -467,23 +516,65 @@ function tekenMijnTaken() {
   if (staat.weergave === 'kanban') koppelSlepen();
   koppelStatusKeuzes(el('inhoud'));
   koppelTaakKnoppen(el('inhoud'));
+  koppelSorteren(el('inhoud'));
 }
 
 // De breedtes zelf staan in stijl.css, zodat elke tabel ze deelt.
 const KOLOMMEN = ['Opdracht', 'Uitvoerend', 'Prioriteit', 'Status', 'Deadline',
                   'Bijlagen', 'Stappen', 'Details', 'Acties'];
 
+// Getekende pijltjes, zodat ze meekleuren met de witte letters in de kopbalk.
+const CHEVRON_OP = '<polyline points="6 15 12 9 18 15"/>';
+const CHEVRON_AF = '<polyline points="6 9 12 15 18 9"/>';
+const pijl = (vorm, klasse) => `<svg class="pijl ${klasse}" width="10" height="10" fill="none"
+  stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">${vorm}</svg>`;
+
+/**
+ * Een kolomkop. De vijf sorteerbare koppen krijgen een pijltje; bij de kolom
+ * waarop gesorteerd wordt staat het vast, bij de andere verschijnt het flauw
+ * zodra je eroverheen gaat. Het pijltje staat er altijd — anders verspringt de
+ * kop op het moment dat je hem aanwijst.
+ */
+function kopHtml(kolom) {
+  if (!SORTEERBAAR[kolom]) return `<th>${kolom}</th>`;
+
+  const actief = staat.sortering?.kolom === kolom;
+  const richting = actief ? staat.sortering.richting : null;
+  const titel = richting === 'af'
+    ? 'Klik om weer je eigen volgorde te tonen'
+    : `Sorteren op ${kolom.toLowerCase()}`;
+
+  return `<th class="sorteerbaar${actief ? ' sorteert' : ''}" data-sorteer="${kolom}" title="${titel}">
+    ${kolom}${actief ? pijl(richting === 'af' ? CHEVRON_AF : CHEVRON_OP, 'aan') : pijl(CHEVRON_OP, 'flauw')}
+  </th>`;
+}
+
 function tabelHtml(taken) {
+  const rijen = gesorteerd(taken);
   return `
     <div class="tabel-omhulsel">
       <table>
         <colgroup>${KOLOMMEN.map(k => `<col class="k-${k.toLowerCase()}">`).join('')}</colgroup>
-        <thead><tr>${KOLOMMEN.map(k => `<th>${k}</th>`).join('')}</tr></thead>
-        <tbody>${taken.length === 0
+        <thead><tr>${KOLOMMEN.map(kopHtml).join('')}</tr></thead>
+        <tbody>${rijen.length === 0
           ? `<tr class="leeg"><td colspan="${KOLOMMEN.length}">Geen taken gevonden.</td></tr>`
-          : taken.map(rijHtml).join('')}</tbody>
+          : rijen.map(rijHtml).join('')}</tbody>
       </table>
     </div>`;
+}
+
+/** Klikken op een kolomkop loopt rond: oplopend → aflopend → je eigen volgorde. */
+function koppelSorteren(wortel) {
+  wortel.querySelectorAll('th[data-sorteer]').forEach(kop => {
+    kop.addEventListener('click', () => {
+      const kolom = kop.dataset.sorteer;
+      const nu = staat.sortering;
+      staat.sortering = nu?.kolom !== kolom ? { kolom, richting: 'op' }
+        : nu.richting === 'op' ? { kolom, richting: 'af' }
+        : null;
+      teken();
+    });
+  });
 }
 
 function koppelStatusKeuzes(wortel) {
@@ -506,6 +597,7 @@ function tekenTabel() {
   el('inhoud').innerHTML = tabelHtml(gefilterdeTaken());
   koppelStatusKeuzes(el('inhoud'));
   koppelTaakKnoppen(el('inhoud'));
+  koppelSorteren(el('inhoud'));
 }
 
 function rijHtml(taak) {
@@ -1908,7 +2000,9 @@ el('exportKnop').addEventListener('click', () => {
 
   const veld = (waarde) => `"${String(waarde ?? '').replace(/"/g, '""')}"`;
 
-  const regels = gefilterdeTaken().map(t => {
+  // Wat je op je scherm ziet, staat ook zo in het bestand: zelfde filters,
+  // zelfde sortering.
+  const regels = gesorteerd(gefilterdeTaken()).map(t => {
     const waarden = [t.opdracht, t.uitvoerend_naam, t.prioriteit, t.status, t.deadline, t.omschrijving];
     return (isPersoonlijk() ? [t.bord_naam, ...waarden] : waarden).map(veld).join(',');
   });

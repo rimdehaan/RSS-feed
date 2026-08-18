@@ -242,6 +242,14 @@ thead th {
   padding: 12px 16px; text-align: left; font-size: 0.8rem; font-weight: 600;
   color: #fff; letter-spacing: 0.4px; white-space: nowrap;
 }
+/* Op vijf koppen kun je klikken om te sorteren: oplopend, aflopend, uit. Het
+   pijltje staat er altijd, ook onzichtbaar, zodat de kop niet verspringt zodra
+   je hem aanwijst. */
+thead th.sorteerbaar { cursor: pointer; user-select: none; }
+thead th.sorteerbaar:hover { background: rgba(255,255,255,0.13); }
+thead th .pijl { margin-left: 6px; vertical-align: -1px; }
+thead th .pijl.flauw { opacity: 0; }
+thead th.sorteerbaar:hover .pijl.flauw { opacity: 0.55; }
 tbody tr { border-bottom: 1px solid #f0f1f3; }
 tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: #f8f9fb; }
