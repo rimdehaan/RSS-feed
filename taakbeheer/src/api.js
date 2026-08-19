@@ -1339,8 +1339,9 @@ api.post('/briefjes', vereistLogin, (req, res) => {
   const titel = tekst(req.body.titel, 100);
   if (!titel) return res.status(400).json({ fout: 'Geef het briefje een titel.' });
 
-  const r = db.prepare('INSERT INTO briefjes (gebruiker_id, titel, tekst) VALUES (?, ?, ?)')
-    .run(req.gebruiker.id, titel, tekst(req.body.tekst, 5000));
+  const r = db.prepare(
+    'INSERT INTO briefjes (gebruiker_id, titel, tekst, vastgepind) VALUES (?, ?, ?, ?)'
+  ).run(req.gebruiker.id, titel, tekst(req.body.tekst, 5000), req.body.vastgepind ? 1 : 0);
 
   res.json(eigenBriefje(req.gebruiker, r.lastInsertRowid));
 });

@@ -434,15 +434,22 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
    als ze nodig hebben. `align-items: start` voorkomt dat een kort briefje
    wordt uitgerekt tot de hoogte van zijn buurman. */
 .muur {
-  display: grid; gap: 14px; align-items: start;
+  display: grid; gap: 14px;
   grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
 }
+/* Alle briefjes zijn even groot, wat er ook op staat. Past de tekst niet, dan
+   wordt hij afgeknipt met een vervaging; het hele briefje lees je door erop te
+   klikken. Ongelijke hoogtes maken de muur rommelig, en dat is precies wat
+   deze feature moest oplossen. */
 .briefje {
   background: var(--postit); border-radius: 3px; padding: 14px 16px 10px;
   box-shadow: 0 2px 6px rgba(0,41,68,0.14);
-  display: flex; flex-direction: column; cursor: pointer;
+  height: 208px; display: flex; flex-direction: column; cursor: pointer;
   transition: transform 0.12s, box-shadow 0.12s;
 }
+/* In de prullenbak staan de knoppen op hun eigen regel; daar is het kaartje
+   dus wat hoger. */
+.briefje.weggegooid { height: 252px; cursor: default; }
 .briefje:hover { transform: translateY(-2px); box-shadow: 0 5px 13px rgba(0,41,68,0.2); }
 /* Een vastgepind briefje krijgt een streep bovenaan, zodat je hem ook herkent
    als er straks meer kleuren bij komen. */
@@ -455,8 +462,10 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
 }
 /* De tekst wordt afgeknipt met een vervaging; het hele briefje lees je door
    erop te klikken. */
+/* `min-height: 0` is nodig, anders weigert dit vak kleiner te worden dan zijn
+   tekst en groeit het kaartje alsnog. */
 .briefje-tekst {
-  position: relative; margin-top: 8px; max-height: 112px; overflow: hidden;
+  position: relative; margin-top: 8px; flex: 1; min-height: 0; overflow: hidden;
   font-size: 0.82rem; line-height: 1.45; color: #4c4523;
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
@@ -472,6 +481,10 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
   padding-top: 8px; border-top: 1px solid rgba(0,41,68,0.09); font-size: 0.74rem;
 }
 .briefje-voet .zacht { margin-right: auto; color: rgba(0,41,68,0.45); }
+/* Terugzetten en Definitief weg staan naast elkaar op een eigen regel; naast
+   de datum erbij gepropt vielen ze van het kaartje af. */
+.briefje-knoppen { display: flex; gap: 8px; margin-top: 8px; }
+.briefje-knoppen .knop-link { flex: 1; text-align: center; padding: 6px 4px; }
 .briefje-knop {
   background: none; border: none; cursor: pointer; padding: 3px; line-height: 0;
   border-radius: 4px; color: rgba(0,41,68,0.4);

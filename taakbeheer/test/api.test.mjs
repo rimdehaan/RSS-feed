@@ -970,6 +970,13 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
     (await rim('/briefjes', { method: 'POST', body: { titel: '   ' } })).status === 400);
   check('hij hangt op de muur',
     (await rim('/briefjes')).data.briefjes.some((b) => b.id === briefje));
+  // Meteen weer weg, anders verdringt dit vastgepinde briefje de volgorde
+  // die we hieronder controleren.
+  const metVinkje = await rim('/briefjes', { method: 'POST', body: { titel: 'Meteen vast', vastgepind: true } });
+  check('meteen vastpinnen bij het aanmaken werkt ook', metVinkje.data.vastgepind === 1);
+  check('en zonder dat vinkje is hij niet vastgepind', nieuwBriefje.data.vastgepind === 0);
+  await rim(`/briefjes/${metVinkje.data.id}`, { method: 'DELETE' });
+  await rim(`/briefjes/${metVinkje.data.id}`, { method: 'DELETE' });
   check('en de prullenbak is leeg', (await rim('/briefjes')).data.prullenbak.length === 0);
 
   check('vastpinnen lukt',

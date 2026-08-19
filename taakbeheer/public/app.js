@@ -350,6 +350,8 @@ const UITLEG = {
     + 'Ga je uit dienst, dan kan een beheerder hem overnemen zodat lopend werk niet blijft liggen.',
   prikbord: 'Dingen die je moet onthouden maar niet hoeft te doen — instructies, afspraken, '
     + 'telefoonnummers. Alleen jij ziet ze. Zoeken doe je met het vak rechtsboven.',
+  prullenbak: 'Weggegooide briefjes blijven hier 30 dagen staan. Daarna ruimt de app ze op. '
+    + 'Zolang ze er staan kun je ze terugzetten.',
 };
 
 /** Op het persoonlijke bord kun je geen taak aanmaken of instellingen wijzigen. */
@@ -846,16 +848,23 @@ async function tekenPrikbord() {
 }
 
 function tekenMuur() {
-  el('lijstUitleg').textContent = UITLEG.prikbord;
+  const open = staat.prullenbakOpen;
+
+  // In de prullenbak hoort geen knop om een nieuw briefje te maken, en de weg
+  // terug moet een knop Terug zijn — niet nog een keer op Prullenbak klikken.
+  el('paginaTitel').textContent = open ? 'Prullenbak' : 'Mijn prikbord';
+  el('lijstUitleg').textContent = open ? UITLEG.prullenbak : UITLEG.prikbord;
   el('lijstUitleg').hidden = false;
+
+  el('nieuwBriefjeKnop').hidden = open;
+  el('terugNaarMuurKnop').hidden = !open;
 
   const aantal = staat.prullenbak.length;
   const knop = el('prullenbakKnop');
   knop.innerHTML = `${PRULLENBAK} Prullenbak${aantal ? ` (${aantal})` : ''}`;
-  knop.classList.toggle('actief', staat.prullenbakOpen);
-  knop.hidden = aantal === 0 && !staat.prullenbakOpen;
+  knop.hidden = open || aantal === 0;
 
-  const lijst = gevondenBriefjes(staat.prullenbakOpen ? staat.prullenbak : staat.briefjes);
+  const lijst = gevondenBriefjes(open ? staat.prullenbak : staat.briefjes);
   el('inhoud').innerHTML = lijst.length === 0
     ? `<div class="mijn-leeg">${leegTekst()}</div>`
     : `<div class="muur">${lijst.map(briefjeHtml).join('')}</div>`;
@@ -874,8 +883,10 @@ function briefjeHtml(briefje) {
   const inPrullenbak = Boolean(briefje.weggegooid_op);
   const dagen = inPrullenbak ? dagenTeGaan(briefje) : 0;
 
+  // Een leeg tekstvak blijft staan, zodat de voet op elk kaartje op dezelfde
+  // hoogte eindigt.
   return `
-    <article class="briefje${briefje.vastgepind && !inPrullenbak ? ' vastgepind' : ''}"
+    <article class="briefje${inPrullenbak ? ' weggegooid' : (briefje.vastgepind ? ' vastgepind' : '')}"
              data-briefje="${briefje.id}">
       <div class="briefje-kop">
         <h3>${esc(briefje.titel)}</h3>
@@ -883,15 +894,19 @@ function briefjeHtml(briefje) {
           <button class="briefje-knop${briefje.vastgepind ? ' aan' : ''}" data-pin="${briefje.id}"
                   title="${briefje.vastgepind ? 'Losmaken' : 'Bovenaan vastpinnen'}">${PUNAISE}</button>`}
       </div>
-      ${briefje.tekst ? `<div class="briefje-tekst">${esc(briefje.tekst)}</div>` : ''}
-      <div class="briefje-voet">
-        ${inPrullenbak
-          ? `<span class="zacht">nog ${dagen} ${dagen === 1 ? 'dag' : 'dagen'}</span>
+      <div class="briefje-tekst">${esc(briefje.tekst)}</div>
+      ${inPrullenbak
+        ? `<div class="briefje-voet">
+             <span class="zacht">Nog ${dagen} ${dagen === 1 ? 'dag' : 'dagen'}</span>
+           </div>
+           <div class="briefje-knoppen">
              <button class="knop-link" data-terug="${briefje.id}">Terugzetten</button>
-             <button class="knop-link weg" data-weg="${briefje.id}">Definitief weg</button>`
-          : `<span class="zacht">${datumNL(briefje.gewijzigd_op || briefje.aangemaakt_op)}</span>
-             <button class="briefje-knop" data-weg="${briefje.id}" title="Weggooien">${PRULLENBAK}</button>`}
-      </div>
+             <button class="knop-link weg" data-weg="${briefje.id}">Definitief weg</button>
+           </div>`
+        : `<div class="briefje-voet">
+             <span class="zacht">${datumNL(briefje.gewijzigd_op || briefje.aangemaakt_op)}</span>
+             <button class="briefje-knop" data-weg="${briefje.id}" title="Weggooien">${PRULLENBAK}</button>
+           </div>`}
     </article>`;
 }
 
@@ -904,8 +919,9 @@ function koppelMuur() {
     vak.classList.toggle('afgeknipt', vak.scrollHeight > vak.clientHeight + 1);
   });
 
-  // Op het kaartje klikken is lezen; de knoppen erin doen hun eigen ding.
-  inhoud.querySelectorAll('[data-briefje]').forEach(kaart => {
+  // Op het kaartje klikken is lezen; de knoppen erin doen hun eigen ding. In de
+  // prullenbak niet: daar kies je eerst terugzetten of definitief weg.
+  inhoud.querySelectorAll('.briefje:not(.weggegooid)').forEach(kaart => {
     kaart.addEventListener('click', (e) => {
       if (e.target.closest('button')) return;
       openBriefje(Number(kaart.dataset.briefje), 'lezen');
@@ -970,7 +986,12 @@ function openBriefje(id, stand) {
 el('nieuwBriefjeKnop').addEventListener('click', () => openBriefje(null, 'bewerken'));
 
 el('prullenbakKnop').addEventListener('click', () => {
-  staat.prullenbakOpen = !staat.prullenbakOpen;
+  staat.prullenbakOpen = true;
+  tekenMuur();
+});
+
+el('terugNaarMuurKnop').addEventListener('click', () => {
+  staat.prullenbakOpen = false;
   tekenMuur();
 });
 
