@@ -977,11 +977,36 @@ function openBriefje(id, stand) {
     el('brTitel').value = briefje?.titel ?? '';
     el('brTekst').value = briefje?.tekst ?? '';
     el('brVastgepind').checked = Boolean(briefje?.vastgepind);
+    telTitel();
+    telTekst();
   }
 
   el('briefjeVenster').classList.add('open');
   if (!lezen) el('brTitel').focus();
 }
+
+/**
+ * Laat naast het label zien hoeveel tekens er nog bij kunnen. De browser kapt
+ * bij `maxlength` zelf af, maar zonder teller merk je pas dat je aan de grens
+ * zit als er niets meer verschijnt — zeker bij plakken.
+ */
+function maakTekenteller(veldId, tellerId, max) {
+  const veld = el(veldId);
+  const teller = el(tellerId);
+
+  const bijwerken = () => {
+    const over = max - veld.value.length;
+    teller.textContent = over === 0 ? 'vol' : `nog ${over} ${over === 1 ? 'teken' : 'tekens'}`;
+    teller.classList.toggle('bijna-vol', over > 0 && over <= max / 10);
+    teller.classList.toggle('vol', over === 0);
+  };
+
+  veld.addEventListener('input', bijwerken);
+  return bijwerken;
+}
+
+const telTitel = maakTekenteller('brTitel', 'brTitelTeller', 100);
+const telTekst = maakTekenteller('brTekst', 'brTekstTeller', 5000);
 
 el('nieuwBriefjeKnop').addEventListener('click', () => openBriefje(null, 'bewerken'));
 

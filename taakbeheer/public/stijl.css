@@ -499,6 +499,15 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .briefje-lees a { color: #003d6b; }
+/* Hoeveel je nog kwijt kunt in het veld, rechts op de labelregel. Hij kleurt
+   mee: rustig grijs, oranje als het einde in zicht komt, rood als het vol is. */
+#brVorm .veld label {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+}
+.tekenteller { font-size: 0.72rem; font-weight: 400; color: var(--grijs); }
+.tekenteller.bijna-vol { color: #a15c00; }
+.tekenteller.vol { color: var(--rood); font-weight: 600; }
+
 .vastpin-keuze {
   display: flex; align-items: center; gap: 8px; margin-top: 16px;
   font-size: 0.85rem; color: var(--donker); cursor: pointer;

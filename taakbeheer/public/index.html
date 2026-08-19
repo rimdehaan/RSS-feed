@@ -120,12 +120,18 @@
 
       <div id="brVorm">
         <div class="veld">
-          <label for="brTitel">Titel</label>
+          <label for="brTitel">
+            <span>Titel</span>
+            <span class="tekenteller" id="brTitelTeller"></span>
+          </label>
           <input type="text" id="brTitel" maxlength="100" placeholder="Uren invullen" />
         </div>
 
         <div class="veld" style="margin-top:14px">
-          <label for="brTekst">Tekst <span class="zacht">(optioneel)</span></label>
+          <label for="brTekst">
+            <span>Tekst <span class="zacht">(optioneel)</span></span>
+            <span class="tekenteller" id="brTekstTeller"></span>
+          </label>
           <textarea id="brTekst" rows="10" maxlength="5000"
             placeholder="Uiterlijk vrijdag 16:00 in het urensysteem. Reisuren apart boeken op de projectcode."></textarea>
         </div>
