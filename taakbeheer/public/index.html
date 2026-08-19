@@ -86,10 +86,63 @@
       </div>
     </div>
 
+    <!-- Eigen balk voor het prikbord: daar horen de filters van taken niet. -->
+    <div class="balk" id="prikbordBalk" hidden>
+      <button class="btn btn-primary" id="nieuwBriefjeKnop">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nieuw briefje
+      </button>
+      <button class="btn btn-secondary" id="prullenbakKnop"></button>
+    </div>
+
     <!-- De tekst hangt af van het scherm en wordt gezet in app.js (UITLEG). -->
     <p class="lijst-uitleg" id="lijstUitleg" hidden></p>
 
     <div class="inhoud" id="inhoud"></div>
+  </div>
+</div>
+
+<!-- ── VENSTER: briefje van het prikbord ── -->
+<div class="overlay" id="briefjeVenster">
+  <div class="venster smal">
+    <div class="venster-kop">
+      <h2 id="briefjeVensterTitel">Nieuw briefje</h2>
+      <button class="venster-sluit" data-sluit>&times;</button>
+    </div>
+    <div class="venster-lijf">
+      <!-- Lezen. Je opent een briefje meestal om het te lézen, niet om het te
+           veranderen; daarom staat dit voorop en zit bewerken erachter. -->
+      <div id="brLezen" hidden>
+        <div class="briefje-lees" id="brLeesTekst"></div>
+        <p class="zacht" id="brLeesDatum" style="margin-top:16px;font-size:.76rem"></p>
+      </div>
+
+      <div id="brVorm">
+        <div class="veld">
+          <label for="brTitel">Titel</label>
+          <input type="text" id="brTitel" maxlength="100" placeholder="Uren invullen" />
+        </div>
+
+        <div class="veld" style="margin-top:14px">
+          <label for="brTekst">Tekst <span class="zacht">(optioneel)</span></label>
+          <textarea id="brTekst" rows="10" maxlength="5000"
+            placeholder="Uiterlijk vrijdag 16:00 in het urensysteem. Reisuren apart boeken op de projectcode."></textarea>
+        </div>
+
+        <label class="vastpin-keuze">
+          <input type="checkbox" id="brVastgepind" />
+          <span>Bovenaan vastpinnen</span>
+        </label>
+      </div>
+
+      <div class="melding" id="brMelding" style="margin-top:14px"></div>
+    </div>
+    <div class="venster-voet">
+      <button class="btn btn-danger links" id="brVerwijder" hidden>Weggooien</button>
+      <button class="btn btn-secondary" id="brBewerken" hidden>Bewerken</button>
+      <button class="btn btn-secondary" data-sluit id="brAnnuleer">Annuleren</button>
+      <button class="btn btn-primary" id="brOpslaan">Opslaan</button>
+    </div>
   </div>
 </div>
 

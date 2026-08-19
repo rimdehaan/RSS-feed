@@ -960,6 +960,77 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
   check('en hij is weg', (await rim('/werkprocessen')).data.werkprocessen.length === aantalVoor - 1);
   check('opvragen geeft niet gevonden', (await rim('/werkprocessen/' + keuring)).status === 404);
 
+  groep('Prikbord');
+  const nieuwBriefje = await rim('/briefjes', {
+    method: 'POST', body: { titel: 'Uren invullen', tekst: 'Uiterlijk vrijdag 16:00.' },
+  });
+  check('een briefje maken lukt', nieuwBriefje.status === 200);
+  const briefje = nieuwBriefje.data.id;
+  check('zonder titel lukt het niet',
+    (await rim('/briefjes', { method: 'POST', body: { titel: '   ' } })).status === 400);
+  check('hij hangt op de muur',
+    (await rim('/briefjes')).data.briefjes.some((b) => b.id === briefje));
+  check('en de prullenbak is leeg', (await rim('/briefjes')).data.prullenbak.length === 0);
+
+  check('vastpinnen lukt',
+    (await rim(`/briefjes/${briefje}`, { method: 'PATCH', body: { vastgepind: true } })).data.vastgepind === 1);
+  const jongerBriefje = (await rim('/briefjes', { method: 'POST', body: { titel: 'Sleutel kast' } })).data.id;
+  check('een vastgepind briefje staat boven een nieuwer briefje',
+    (await rim('/briefjes')).data.briefjes[0].id === briefje);
+  check('losmaken zet hem terug op datum',
+    (await rim(`/briefjes/${briefje}`, { method: 'PATCH', body: { vastgepind: false } })).status === 200
+    && (await rim('/briefjes')).data.briefjes[0].id === jongerBriefje);
+
+  check('bewerken lukt',
+    (await rim(`/briefjes/${briefje}`, { method: 'PATCH', body: { tekst: 'Nu op donderdag.' } }))
+      .data.tekst === 'Nu op donderdag.');
+  check('een lege titel wordt ook bij bewerken geweigerd',
+    (await rim(`/briefjes/${briefje}`, { method: 'PATCH', body: { titel: '' } })).status === 400);
+
+  groep('Prullenbak');
+  check('weggooien lukt',
+    (await rim(`/briefjes/${briefje}`, { method: 'DELETE' })).data.definitief === false);
+  let muur = (await rim('/briefjes')).data;
+  check('hij hangt niet meer op de muur', !muur.briefjes.some((b) => b.id === briefje));
+  check('maar ligt in de prullenbak', muur.prullenbak.some((b) => b.id === briefje));
+  check('met de bewaartermijn erbij', muur.prullenbak_dagen === 30);
+
+  check('terugzetten lukt', (await rim(`/briefjes/${briefje}/terug`, { method: 'POST' })).status === 200);
+  muur = (await rim('/briefjes')).data;
+  check('hij hangt weer op de muur', muur.briefjes.some((b) => b.id === briefje));
+  check('en de prullenbak is weer leeg', muur.prullenbak.length === 0);
+
+  await rim(`/briefjes/${briefje}`, { method: 'DELETE' });
+  check('nog een keer weggooien is definitief',
+    (await rim(`/briefjes/${briefje}`, { method: 'DELETE' })).data.definitief === true);
+  muur = (await rim('/briefjes')).data;
+  check('en dan is hij echt weg',
+    !muur.briefjes.concat(muur.prullenbak).some((b) => b.id === briefje));
+
+  // Een briefje dat 31 dagen geleden is weggegooid, hoort vanzelf te verdwijnen.
+  const oud = (await rim('/briefjes', { method: 'POST', body: { titel: 'Oude notitie' } })).data.id;
+  await rim(`/briefjes/${oud}`, { method: 'DELETE' });
+  execFileSync(process.execPath, ['-e', `
+    const Database = require('better-sqlite3');
+    const db = new Database(process.argv[1]);
+    db.prepare("UPDATE briefjes SET weggegooid_op = datetime('now', '-31 days') WHERE id = ?").run(${oud});
+  `, join(werkmap, 'test.db')], { cwd: hier + '/..' });
+  muur = (await rim('/briefjes')).data;
+  check('na 30 dagen ruimt de prullenbak zichzelf op',
+    !muur.prullenbak.some((b) => b.id === oud), JSON.stringify(muur.prullenbak));
+
+  groep('Briefjes van een ander');
+  const briefjeVanRim = (await rim('/briefjes', { method: 'POST', body: { titel: 'Alleen van Rim' } })).data.id;
+  check('Carla ziet haar eigen lege muur', (await carla('/briefjes')).data.briefjes.length === 0);
+  check('opvragen van dat van Rim bestaat niet voor haar',
+    (await carla(`/briefjes/${briefjeVanRim}`, { method: 'PATCH', body: { titel: 'Gekaapt' } })).status === 404);
+  check('weggooien evenmin',
+    (await carla(`/briefjes/${briefjeVanRim}`, { method: 'DELETE' })).status === 404);
+  check('en terugzetten ook niet',
+    (await carla(`/briefjes/${briefjeVanRim}/terug`, { method: 'POST' })).status === 404);
+  check('het briefje van Rim staat er nog ongewijzigd',
+    (await rim('/briefjes')).data.briefjes.find((b) => b.id === briefjeVanRim).titel === 'Alleen van Rim');
+
   groep('Uitloggen');
   await rim('/uitloggen', { method: 'POST' });
   check('na uitloggen geen toegang', (await rim('/borden')).status === 401);

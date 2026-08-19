@@ -10,12 +10,19 @@ const staat = {
   borden: [],
   bordId: null,        // null = het persoonlijke bord
   taken: [],
-  weergave: 'tabel',   // 'tabel' | 'kanban' | 'team' | 'werkprocessen'
+  weergave: 'tabel',   // 'tabel' | 'kanban' | 'team' | 'werkprocessen' | 'prikbord'
   bewerktId: null,
   detailId: null,
   deadlineFilter: null,  // null | 'te-laat' | 'komt-eraan'
   sortering: null,       // null = eigen volgorde; anders { kolom, richting }
   toegestaneUitvoerders: null,   // null = iedereen mag; anders een Set met ids
+
+  // Het prikbord: je eigen briefjes, en wat er in de prullenbak ligt.
+  briefjes: [],
+  prullenbak: [],
+  prullenbakOpen: false,
+  prullenbakDagen: 30,
+  briefjeId: null,
 };
 
 const KLEUREN = {
@@ -254,7 +261,10 @@ const mijnTakenlijst = () => staat.borden.find(b => b.prive_van) ?? null;
 const isMijnTakenlijst = () => staat.bordId !== null && staat.bordId === mijnTakenlijst()?.id;
 
 function tekenZijbalk() {
-  const opMijnBord = isPersoonlijk() && staat.weergave !== 'team';
+  // Team, Werkprocessen en het prikbord zijn eigen schermen; dan is er geen
+  // enkel bord actief, ook al staat er nog een bordId in de staat.
+  const opTaken = staat.weergave === 'tabel' || staat.weergave === 'kanban';
+  const opMijnBord = isPersoonlijk() && opTaken;
   const lijst = mijnTakenlijst();
 
   el('persoonlijkLijst').innerHTML = `
@@ -262,12 +272,22 @@ function tekenZijbalk() {
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       <span class="naam">Mijn taken</span>
     </a>
+    <a data-prikbord class="${staat.weergave === 'prikbord' ? 'actief' : ''}" title="Mijn prikbord">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="9" x2="20" y2="9"/></svg>
+      <span class="naam">Mijn prikbord</span>
+    </a>
     ${lijst ? `
-      <a data-bord="${lijst.id}" title="${esc(lijst.naam)}" class="${lijst.id === staat.bordId && staat.weergave !== 'team' ? 'actief' : ''}">
+      <a data-bord="${lijst.id}" title="${esc(lijst.naam)}" class="${lijst.id === staat.bordId && opTaken ? 'actief' : ''}">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></svg>
         <span class="naam">${esc(lijst.naam)}</span>
         <span class="telling">${lijst.aantal_taken}</span>
       </a>` : ''}`;
+
+  // Via de zijbalk kom je op de muur, niet in de prullenbak — ook niet als je
+  // die de vorige keer had openstaan. tekenPrikbord() zelf laat hem met rust,
+  // want dat is ook de herteken-functie na elke actie.
+  el('persoonlijkLijst').querySelector('[data-prikbord]')
+    .addEventListener('click', () => { staat.prullenbakOpen = false; tekenPrikbord(); });
 
   el('persoonlijkLijst').querySelector('[data-mijn]')
     .addEventListener('click', () => kiesBord(null));
@@ -280,7 +300,7 @@ function tekenZijbalk() {
   el('bordenLijst').innerHTML = projecten.length === 0
     ? '<p style="padding:6px 20px;font-size:.8rem;color:rgba(255,255,255,.35)">Nog geen projecten.</p>'
     : projecten.map(bord => `
-        <a data-bord="${bord.id}" title="${esc(bord.naam)}" class="${bord.id === staat.bordId && staat.weergave !== 'team' ? 'actief' : ''}">
+        <a data-bord="${bord.id}" title="${esc(bord.naam)}" class="${bord.id === staat.bordId && opTaken ? 'actief' : ''}">
           <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <span class="naam">${esc(bord.naam)}</span>
           ${bord.zichtbaar_voor_iedereen ? '' : SLOT}
@@ -297,7 +317,7 @@ function tekenZijbalk() {
 
 async function kiesBord(id) {
   staat.bordId = id;
-  if (staat.weergave === 'team' || staat.weergave === 'werkprocessen') staat.weergave = 'tabel';
+  if (staat.weergave !== 'kanban') staat.weergave = 'tabel';
 
   if (isPersoonlijk()) {
     staat.taken = await api('/mijn-taken');
@@ -317,6 +337,7 @@ async function kiesBord(id) {
   staat.deadlineFilter = null;
 
   el('werkbalk').hidden = false;
+  el('prikbordBalk').hidden = true;
   werkbalkBijwerken();
   tekenZijbalk();
   teken();
@@ -327,6 +348,8 @@ const UITLEG = {
     + 'Nieuwe taken maak je aan op een project of op je eigen takenlijst.',
   mijnTakenlijst: 'Alleen jij ziet deze lijst — je collega’s en beheerders niet. '
     + 'Ga je uit dienst, dan kan een beheerder hem overnemen zodat lopend werk niet blijft liggen.',
+  prikbord: 'Dingen die je moet onthouden maar niet hoeft te doen — instructies, afspraken, '
+    + 'telefoonnummers. Alleen jij ziet ze. Zoeken doe je met het vak rechtsboven.',
 };
 
 /** Op het persoonlijke bord kun je geen taak aanmaken of instellingen wijzigen. */
@@ -468,6 +491,7 @@ function tekenTeller(id, soort, gevonden, tekst, waarover) {
 
 // ── Tekenen ──────────────────────────────────────────────────────────────
 function teken() {
+  if (staat.weergave === 'prikbord') return tekenMuur();
   if (staat.weergave === 'werkprocessen') return tekenWerkprocessen();
   if (staat.weergave === 'team') return tekenTeam();
   tekenDeadlineKnoppen();
@@ -770,6 +794,217 @@ function koppelSlepen() {
     });
   });
 }
+
+// ── Prikbord ─────────────────────────────────────────────────────────────
+// Briefjes zijn naslag en geen werk: geen status, geen deadline, geen
+// uitvoerende. Ze zijn van jou alleen en staan daarom los van de borden.
+
+const PUNAISE = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="2" stroke-linecap="round"><path d="M12 17v5"/><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3z"/></svg>`;
+const PRULLENBAK = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="2" stroke-linecap="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>`;
+
+/**
+ * Zet webadressen in de tekst om in een link. Alleen http en https — dezelfde
+ * afspraak als bij bijlagen, zodat er geen `javascript:` doorheen glipt. Eerst
+ * alles onschadelijk maken met esc(), daarna pas de links erin.
+ */
+function metLinks(inhoud) {
+  return esc(inhoud)
+    .replace(/(https?:\/\/[^\s<]*[^\s<.,;:!?)])/g,
+      (adres) => `<a href="${adres}" target="_blank" rel="noopener noreferrer">${adres}</a>`)
+    .replace(/\n/g, '<br>');
+}
+
+/** Wat het zoekvak overlaat. Zoekt ook in de tekst die op het kaartje niet past. */
+function gevondenBriefjes(lijst) {
+  const zoek = el('zoek').value.trim().toLowerCase();
+  if (!zoek) return lijst;
+  return lijst.filter(b => (b.titel + ' ' + b.tekst).toLowerCase().includes(zoek));
+}
+
+/** Hoeveel dagen een weggegooid briefje nog in de prullenbak heeft. */
+function dagenTeGaan(briefje) {
+  const weg = new Date(briefje.weggegooid_op.replace(' ', 'T') + 'Z');
+  const over = staat.prullenbakDagen - Math.floor((Date.now() - weg) / 86400000);
+  return Math.max(0, over);
+}
+
+async function tekenPrikbord() {
+  staat.weergave = 'prikbord';
+  el('paginaTitel').textContent = 'Mijn prikbord';
+  el('werkbalk').hidden = true;
+  el('prikbordBalk').hidden = false;
+
+  const antwoord = await api('/briefjes');
+  staat.briefjes = antwoord.briefjes;
+  staat.prullenbak = antwoord.prullenbak;
+  staat.prullenbakDagen = antwoord.prullenbak_dagen;
+
+  tekenZijbalk();
+  tekenMuur();
+}
+
+function tekenMuur() {
+  el('lijstUitleg').textContent = UITLEG.prikbord;
+  el('lijstUitleg').hidden = false;
+
+  const aantal = staat.prullenbak.length;
+  const knop = el('prullenbakKnop');
+  knop.innerHTML = `${PRULLENBAK} Prullenbak${aantal ? ` (${aantal})` : ''}`;
+  knop.classList.toggle('actief', staat.prullenbakOpen);
+  knop.hidden = aantal === 0 && !staat.prullenbakOpen;
+
+  const lijst = gevondenBriefjes(staat.prullenbakOpen ? staat.prullenbak : staat.briefjes);
+  el('inhoud').innerHTML = lijst.length === 0
+    ? `<div class="mijn-leeg">${leegTekst()}</div>`
+    : `<div class="muur">${lijst.map(briefjeHtml).join('')}</div>`;
+
+  koppelMuur();
+}
+
+function leegTekst() {
+  if (el('zoek').value.trim()) return 'Geen briefjes gevonden.';
+  if (staat.prullenbakOpen) return 'De prullenbak is leeg.';
+  return 'Nog geen briefjes. Zet hier neer wat je niet mag vergeten: '
+       + 'instructies, afspraken met collega’s, telefoonnummers die je steeds weer opzoekt.';
+}
+
+function briefjeHtml(briefje) {
+  const inPrullenbak = Boolean(briefje.weggegooid_op);
+  const dagen = inPrullenbak ? dagenTeGaan(briefje) : 0;
+
+  return `
+    <article class="briefje${briefje.vastgepind && !inPrullenbak ? ' vastgepind' : ''}"
+             data-briefje="${briefje.id}">
+      <div class="briefje-kop">
+        <h3>${esc(briefje.titel)}</h3>
+        ${inPrullenbak ? '' : `
+          <button class="briefje-knop${briefje.vastgepind ? ' aan' : ''}" data-pin="${briefje.id}"
+                  title="${briefje.vastgepind ? 'Losmaken' : 'Bovenaan vastpinnen'}">${PUNAISE}</button>`}
+      </div>
+      ${briefje.tekst ? `<div class="briefje-tekst">${esc(briefje.tekst)}</div>` : ''}
+      <div class="briefje-voet">
+        ${inPrullenbak
+          ? `<span class="zacht">nog ${dagen} ${dagen === 1 ? 'dag' : 'dagen'}</span>
+             <button class="knop-link" data-terug="${briefje.id}">Terugzetten</button>
+             <button class="knop-link weg" data-weg="${briefje.id}">Definitief weg</button>`
+          : `<span class="zacht">${datumNL(briefje.gewijzigd_op || briefje.aangemaakt_op)}</span>
+             <button class="briefje-knop" data-weg="${briefje.id}" title="Weggooien">${PRULLENBAK}</button>`}
+      </div>
+    </article>`;
+}
+
+function koppelMuur() {
+  const inhoud = el('inhoud');
+
+  // Meten, niet gokken: een briefje krijgt de vervaging pas als zijn tekst
+  // langer is dan het kaartje hoog is.
+  inhoud.querySelectorAll('.briefje-tekst').forEach(vak => {
+    vak.classList.toggle('afgeknipt', vak.scrollHeight > vak.clientHeight + 1);
+  });
+
+  // Op het kaartje klikken is lezen; de knoppen erin doen hun eigen ding.
+  inhoud.querySelectorAll('[data-briefje]').forEach(kaart => {
+    kaart.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      openBriefje(Number(kaart.dataset.briefje), 'lezen');
+    });
+  });
+
+  inhoud.querySelectorAll('[data-pin]').forEach(knop => {
+    knop.addEventListener('click', async () => {
+      const briefje = staat.briefjes.find(b => b.id === Number(knop.dataset.pin));
+      await api(`/briefjes/${briefje.id}`, { method: 'PATCH', body: { vastgepind: !briefje.vastgepind } });
+      tekenPrikbord();
+    });
+  });
+
+  inhoud.querySelectorAll('[data-weg]').forEach(knop => {
+    knop.addEventListener('click', async () => {
+      await api(`/briefjes/${knop.dataset.weg}`, { method: 'DELETE' });
+      tekenPrikbord();
+    });
+  });
+
+  inhoud.querySelectorAll('[data-terug]').forEach(knop => {
+    knop.addEventListener('click', async () => {
+      await api(`/briefjes/${knop.dataset.terug}/terug`, { method: 'POST' });
+      tekenPrikbord();
+    });
+  });
+}
+
+/** `stand` is 'lezen' of 'bewerken'; een nieuw briefje begint bij bewerken. */
+function openBriefje(id, stand) {
+  const briefje = id === null ? null : staat.briefjes.find(b => b.id === id);
+  staat.briefjeId = id;
+  el('brMelding').textContent = '';
+
+  const lezen = stand === 'lezen' && briefje;
+  el('brLezen').hidden = !lezen;
+  el('brVorm').hidden = Boolean(lezen);
+  el('brBewerken').hidden = !lezen;
+  el('brOpslaan').hidden = Boolean(lezen);
+  el('brVerwijder').hidden = !briefje;
+  el('brAnnuleer').textContent = lezen ? 'Sluiten' : 'Annuleren';
+  el('briefjeVensterTitel').textContent = briefje ? briefje.titel : 'Nieuw briefje';
+
+  if (lezen) {
+    el('brLeesTekst').innerHTML = briefje.tekst
+      ? metLinks(briefje.tekst)
+      : '<span class="zacht">Dit briefje heeft alleen een titel.</span>';
+    el('brLeesDatum').textContent = briefje.gewijzigd_op
+      ? `Gewijzigd op ${datumNL(briefje.gewijzigd_op)}`
+      : `Gemaakt op ${datumNL(briefje.aangemaakt_op)}`;
+  } else {
+    el('brTitel').value = briefje?.titel ?? '';
+    el('brTekst').value = briefje?.tekst ?? '';
+    el('brVastgepind').checked = Boolean(briefje?.vastgepind);
+  }
+
+  el('briefjeVenster').classList.add('open');
+  if (!lezen) el('brTitel').focus();
+}
+
+el('nieuwBriefjeKnop').addEventListener('click', () => openBriefje(null, 'bewerken'));
+
+el('prullenbakKnop').addEventListener('click', () => {
+  staat.prullenbakOpen = !staat.prullenbakOpen;
+  tekenMuur();
+});
+
+el('brBewerken').addEventListener('click', () => openBriefje(staat.briefjeId, 'bewerken'));
+
+el('brOpslaan').addEventListener('click', async () => {
+  const body = {
+    titel: el('brTitel').value,
+    tekst: el('brTekst').value,
+    vastgepind: el('brVastgepind').checked,
+  };
+
+  if (!body.titel.trim()) {
+    el('brMelding').textContent = 'Geef het briefje een titel.';
+    return;
+  }
+
+  try {
+    if (staat.briefjeId === null) await api('/briefjes', { method: 'POST', body });
+    else await api(`/briefjes/${staat.briefjeId}`, { method: 'PATCH', body });
+  } catch (fout) {
+    el('brMelding').textContent = fout.message;
+    return;
+  }
+
+  el('briefjeVenster').classList.remove('open');
+  tekenPrikbord();
+});
+
+el('brVerwijder').addEventListener('click', async () => {
+  await api(`/briefjes/${staat.briefjeId}`, { method: 'DELETE' });
+  el('briefjeVenster').classList.remove('open');
+  tekenPrikbord();
+});
 
 // ── Knoppen in tabel en kanban ───────────────────────────────────────────
 function koppelTaakKnoppen(wortel) {
@@ -1371,6 +1606,7 @@ async function tekenWerkprocessen() {
   staat.weergave = 'werkprocessen';
   el('paginaTitel').textContent = 'Werkprocessen';
   el('werkbalk').hidden = true;
+  el('prikbordBalk').hidden = true;
   el('lijstUitleg').hidden = true;
   tekenZijbalk();
 
@@ -1757,6 +1993,7 @@ async function tekenTeam(bericht = null) {
   staat.weergave = 'team';
   el('paginaTitel').textContent = 'Team';
   el('werkbalk').hidden = true;
+  el('prikbordBalk').hidden = true;
   el('lijstUitleg').hidden = true;
   tekenZijbalk();
 

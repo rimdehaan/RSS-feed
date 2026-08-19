@@ -212,6 +212,45 @@ export function zorgVoorPriveLijst(gebruikerId) {
   ).run(PRIVELIJST_NAAM, gebruikerId, gebruikerId).lastInsertRowid;
 }
 
+/**
+ * Het prikbord. Briefjes zijn naslag en geen werk: geen status, geen deadline,
+ * geen uitvoerende. Ze zijn van één persoon en van niemand anders.
+ *
+ * `weggegooid_op` leeg betekent: hij hangt op de muur. Staat er een datum, dan
+ * zit hij in de prullenbak en verdwijnt hij na PRULLENBAK_DAGEN vanzelf.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS briefjes (
+    id            INTEGER PRIMARY KEY,
+    gebruiker_id  INTEGER NOT NULL REFERENCES gebruikers(id),
+    titel         TEXT NOT NULL,
+    tekst         TEXT NOT NULL DEFAULT '',
+    vastgepind    INTEGER NOT NULL DEFAULT 0,
+    aangemaakt_op TEXT NOT NULL DEFAULT (datetime('now')),
+    gewijzigd_op  TEXT,
+    weggegooid_op TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_briefjes_gebruiker ON briefjes(gebruiker_id);
+`);
+
+export const PRULLENBAK_DAGEN = 30;
+
+/**
+ * Ruimt op wat langer dan 30 dagen in de prullenbak ligt. Er draait geen klok
+ * in de app; dit loopt bij het opstarten en telkens als iemand zijn prikbord
+ * opent. Dat is genoeg: wat er te lang ligt, is weg zodra je gaat kijken.
+ */
+export function ruimPrullenbakOp() {
+  return db.prepare(
+    `DELETE FROM briefjes
+      WHERE weggegooid_op IS NOT NULL
+        AND weggegooid_op < datetime('now', '-${PRULLENBAK_DAGEN} days')`
+  ).run().changes;
+}
+
+ruimPrullenbakOp();
+
 // Bestaande gebruikers krijgen er eenmalig ook een.
 for (const { id } of db.prepare('SELECT id FROM gebruikers').all()) zorgVoorPriveLijst(id);
 

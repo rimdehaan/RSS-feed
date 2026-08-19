@@ -8,6 +8,9 @@
   --achtergrond: #f4f5f7;
   --lijn:    #e8eaed;
   --rood:    #EB5757;
+  /* Post-it-geel voor het prikbord. In stap 2 komt hier een kleur per
+     categorie bij; dit blijft de kleur voor briefjes zonder categorie. */
+  --postit:  #FDF3A7;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -426,6 +429,69 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
   z-index: 1000; align-items: center; justify-content: center; padding: 20px;
 }
 .overlay.open { display: flex; }
+/* ── Prikbord ── */
+/* Briefjes vloeien naast elkaar en zijn allemaal even breed; ze worden zo hoog
+   als ze nodig hebben. `align-items: start` voorkomt dat een kort briefje
+   wordt uitgerekt tot de hoogte van zijn buurman. */
+.muur {
+  display: grid; gap: 14px; align-items: start;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+}
+.briefje {
+  background: var(--postit); border-radius: 3px; padding: 14px 16px 10px;
+  box-shadow: 0 2px 6px rgba(0,41,68,0.14);
+  display: flex; flex-direction: column; cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.briefje:hover { transform: translateY(-2px); box-shadow: 0 5px 13px rgba(0,41,68,0.2); }
+/* Een vastgepind briefje krijgt een streep bovenaan, zodat je hem ook herkent
+   als er straks meer kleuren bij komen. */
+.briefje.vastgepind { box-shadow: 0 2px 6px rgba(0,41,68,0.14), inset 0 3px 0 #C4314B; }
+
+.briefje-kop { display: flex; align-items: flex-start; gap: 8px; }
+.briefje-kop h3 {
+  flex: 1; font-size: 0.9rem; font-weight: 700; line-height: 1.35;
+  color: var(--donker); overflow-wrap: anywhere;
+}
+/* De tekst wordt afgeknipt met een vervaging; het hele briefje lees je door
+   erop te klikken. */
+.briefje-tekst {
+  position: relative; margin-top: 8px; max-height: 112px; overflow: hidden;
+  font-size: 0.82rem; line-height: 1.45; color: #4c4523;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+/* Alleen vervagen als er ook werkelijk iets onder de rand valt; anders ligt de
+   vervaging over de laatste regel van een kort briefje. Welke dat zijn, meet
+   app.js na het tekenen. */
+.briefje-tekst.afgeknipt::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 26px;
+  background: linear-gradient(rgba(253,243,167,0), var(--postit));
+}
+.briefje-voet {
+  display: flex; align-items: center; gap: 10px; margin-top: 10px;
+  padding-top: 8px; border-top: 1px solid rgba(0,41,68,0.09); font-size: 0.74rem;
+}
+.briefje-voet .zacht { margin-right: auto; color: rgba(0,41,68,0.45); }
+.briefje-knop {
+  background: none; border: none; cursor: pointer; padding: 3px; line-height: 0;
+  border-radius: 4px; color: rgba(0,41,68,0.4);
+}
+.briefje-knop:hover { color: var(--donker); background: rgba(0,41,68,0.09); }
+.briefje-knop.aan { color: #C4314B; }
+.knop-link.weg { background: var(--rood); }
+.knop-link.weg:hover { background: #c94040; }
+
+.briefje-lees {
+  font-size: 0.9rem; line-height: 1.6; color: var(--donker);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.briefje-lees a { color: #003d6b; }
+.vastpin-keuze {
+  display: flex; align-items: center; gap: 8px; margin-top: 16px;
+  font-size: 0.85rem; color: var(--donker); cursor: pointer;
+}
+
+.venster.smal { width: 520px; }
 .venster {
   background: #fff; border-radius: 12px; width: 620px; max-width: 100%;
   max-height: 90vh; display: flex; flex-direction: column;

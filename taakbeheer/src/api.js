@@ -7,7 +7,7 @@ import { createWriteStream, createReadStream, unlinkSync, statSync, readFileSync
 import { maakZip } from './zip.js';
 import { join } from 'node:path';
 import { db, BIJLAGEMAP, STATUSSEN, PRIORITEITEN, aantalGebruikers, logHistorie,
-         zorgVoorPriveLijst } from './db.js';
+         zorgVoorPriveLijst, ruimPrullenbakOp, PRULLENBAK_DAGEN } from './db.js';
 import { splitsStappen, MAX_STAPPEN, MAX_STAP_TEKENS } from '../public/stappen.js';
 import {
   hashWachtwoord, wachtwoordKlopt, maakSessie, verwijderSessie,
@@ -1302,6 +1302,90 @@ api.delete('/opmerkingen/:id', vereistLogin, (req, res) => {
 
   db.prepare('DELETE FROM opmerkingen WHERE id = ?').run(opmerking.id);
   res.json({ ok: true });
+});
+
+// ── Prikbord ─────────────────────────────────────────────────────────────
+// Briefjes zijn van één persoon. Er is hier bewust géén uitzondering voor
+// beheerders: een beheerder die een bord niet ziet kan het overnemen, maar bij
+// naslag van een ander valt er niets over te nemen. Elke route zoekt daarom op
+// id én gebruiker_id tegelijk, zodat het briefje van een ander simpelweg niet
+// bestaat.
+const BRIEFJE_SELECT = `SELECT id, titel, tekst, vastgepind, aangemaakt_op, gewijzigd_op,
+                               weggegooid_op FROM briefjes`;
+
+function eigenBriefje(gebruiker, id) {
+  return db.prepare(`${BRIEFJE_SELECT} WHERE id = ? AND gebruiker_id = ?`)
+    .get(Number(id), gebruiker.id);
+}
+
+/** Vastgepind bovenaan, daarbinnen het nieuwste eerst. */
+const MUUR_VOLGORDE = 'ORDER BY vastgepind DESC, aangemaakt_op DESC, id DESC';
+
+api.get('/briefjes', vereistLogin, (req, res) => {
+  ruimPrullenbakOp();
+
+  const vanMij = (voorwaarde) => db.prepare(
+    `${BRIEFJE_SELECT} WHERE gebruiker_id = ? AND ${voorwaarde} ${MUUR_VOLGORDE}`
+  ).all(req.gebruiker.id);
+
+  res.json({
+    briefjes: vanMij('weggegooid_op IS NULL'),
+    prullenbak: vanMij('weggegooid_op IS NOT NULL'),
+    prullenbak_dagen: PRULLENBAK_DAGEN,
+  });
+});
+
+api.post('/briefjes', vereistLogin, (req, res) => {
+  const titel = tekst(req.body.titel, 100);
+  if (!titel) return res.status(400).json({ fout: 'Geef het briefje een titel.' });
+
+  const r = db.prepare('INSERT INTO briefjes (gebruiker_id, titel, tekst) VALUES (?, ?, ?)')
+    .run(req.gebruiker.id, titel, tekst(req.body.tekst, 5000));
+
+  res.json(eigenBriefje(req.gebruiker, r.lastInsertRowid));
+});
+
+api.patch('/briefjes/:id', vereistLogin, (req, res) => {
+  const briefje = eigenBriefje(req.gebruiker, req.params.id);
+  if (!briefje) return res.status(404).json({ fout: 'Briefje niet gevonden.' });
+
+  const titel = req.body.titel === undefined ? briefje.titel : tekst(req.body.titel, 100);
+  if (!titel) return res.status(400).json({ fout: 'Geef het briefje een titel.' });
+
+  const inhoud = req.body.tekst === undefined ? briefje.tekst : tekst(req.body.tekst, 5000);
+  const vastgepind = req.body.vastgepind === undefined
+    ? briefje.vastgepind
+    : (req.body.vastgepind ? 1 : 0);
+
+  db.prepare(
+    `UPDATE briefjes SET titel = ?, tekst = ?, vastgepind = ?, gewijzigd_op = datetime('now')
+      WHERE id = ?`
+  ).run(titel, inhoud, vastgepind, briefje.id);
+
+  res.json(eigenBriefje(req.gebruiker, briefje.id));
+});
+
+/** Weggooien is één klik zonder waarschuwing; hij belandt in de prullenbak. */
+api.delete('/briefjes/:id', vereistLogin, (req, res) => {
+  const briefje = eigenBriefje(req.gebruiker, req.params.id);
+  if (!briefje) return res.status(404).json({ fout: 'Briefje niet gevonden.' });
+
+  if (briefje.weggegooid_op) {
+    // Al in de prullenbak: dan is dit de tweede klik, en gaat hij er echt uit.
+    db.prepare('DELETE FROM briefjes WHERE id = ?').run(briefje.id);
+    return res.json({ ok: true, definitief: true });
+  }
+
+  db.prepare("UPDATE briefjes SET weggegooid_op = datetime('now') WHERE id = ?").run(briefje.id);
+  res.json({ ok: true, definitief: false });
+});
+
+api.post('/briefjes/:id/terug', vereistLogin, (req, res) => {
+  const briefje = eigenBriefje(req.gebruiker, req.params.id);
+  if (!briefje) return res.status(404).json({ fout: 'Briefje niet gevonden.' });
+
+  db.prepare('UPDATE briefjes SET weggegooid_op = NULL WHERE id = ?').run(briefje.id);
+  res.json(eigenBriefje(req.gebruiker, briefje.id));
 });
 
 export default api;
