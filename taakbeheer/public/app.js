@@ -249,10 +249,21 @@ function vulProjectKeuze(huidigBordId) {
     .join('');
 }
 
+/**
+ * Op je eigen takenlijst ben jij per definitie de uitvoerder, dus daar valt
+ * niets te kiezen. De server weigerde een collega al, maar dan krijg je pas ná
+ * het opslaan te horen dat het niet mocht — beter is de keuze niet aanbieden.
+ */
+function uitvoerendVeldBijwerken(bordId) {
+  el('vUitvoerendVeld').hidden = bordId !== null && bordId === mijnTakenlijst()?.id;
+}
+
 // Kies je een ander project, dan verandert ook wie de taak mag uitvoeren.
 el('vProject').addEventListener('change', async () => {
   try {
-    vulUitvoerendKeuze(await toegestaneVoorBord(Number(el('vProject').value)));
+    const bordId = Number(el('vProject').value);
+    uitvoerendVeldBijwerken(bordId);
+    vulUitvoerendKeuze(await toegestaneVoorBord(bordId));
   } catch (fout) {
     el('taakMelding').textContent = fout.message;
   }
@@ -1339,6 +1350,7 @@ async function openTaakVenster(id = null) {
   // naartoe te verplaatsen.
   el('vProjectVeld').hidden = !taak || staat.borden.length < 2;
   vulProjectKeuze(bordVanTaak);
+  uitvoerendVeldBijwerken(bordVanTaak);
   vulUitvoerendKeuze(taak && taak.bord_id !== staat.bordId
     ? await toegestaneVoorBord(bordVanTaak)
     : staat.toegestaneUitvoerders);
@@ -1360,7 +1372,8 @@ async function openTaakVenster(id = null) {
 el('taakOpslaan').addEventListener('click', async () => {
   const gegevens = {
     opdracht: el('vOpdracht').value.trim(),
-    uitvoerend_id: el('vUitvoerend').value || null,
+    // Op je eigen takenlijst staat het veld er niet; dan ben jij de uitvoerder.
+    uitvoerend_id: el('vUitvoerendVeld').hidden ? staat.ik.id : (el('vUitvoerend').value || null),
     status: el('vStatus').value,
     prioriteit: el('vPrioriteit').value || null,
     deadline: el('vDeadline').value || null,
