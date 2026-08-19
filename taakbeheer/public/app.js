@@ -23,6 +23,10 @@ const staat = {
   prullenbakOpen: false,
   prullenbakDagen: 30,
   briefjeId: null,
+  categorieen: [],
+  postitKleuren: [],
+  maxCategorieen: 6,
+  categorieFilter: null,   // null = alles; 'geen' = zonder categorie; anders een id
 };
 
 const KLEUREN = {
@@ -338,6 +342,7 @@ async function kiesBord(id) {
 
   el('werkbalk').hidden = false;
   el('prikbordBalk').hidden = true;
+  el('categorieBalk').hidden = true;
   werkbalkBijwerken();
   tekenZijbalk();
   teken();
@@ -818,11 +823,68 @@ function metLinks(inhoud) {
     .replace(/\n/g, '<br>');
 }
 
-/** Wat het zoekvak overlaat. Zoekt ook in de tekst die op het kaartje niet past. */
+const GEEL = '#FDF3A7';
+
+/** De kleur van een briefje: die van zijn categorie, of het standaardgeel. */
+function kleurVan(briefje) {
+  return staat.categorieen.find(c => c.id === briefje.categorie_id)?.kleur ?? GEEL;
+}
+
+/**
+ * De kleur als losse waarden, zodat de vervaging onderaan het kaartje dezelfde
+ * kleur kan gebruiken. `transparent` in een verloop geeft in sommige browsers
+ * een grijze waas; met dezelfde kleur op nul doorzichtigheid nooit.
+ */
+function kaartStijl(briefje) {
+  const kleur = kleurVan(briefje);
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(kleur.slice(i, i + 2), 16));
+  return `--kaart:${kleur};--kaart-nul:rgba(${r},${g},${b},0)`;
+}
+
+/** Wat het zoekvak en de categoriekeuze overlaten. */
 function gevondenBriefjes(lijst) {
   const zoek = el('zoek').value.trim().toLowerCase();
-  if (!zoek) return lijst;
-  return lijst.filter(b => (b.titel + ' ' + b.tekst).toLowerCase().includes(zoek));
+  const filter = staat.categorieFilter;
+
+  return lijst.filter(briefje => {
+    if (filter === 'geen' && briefje.categorie_id) return false;
+    if (filter !== null && filter !== 'geen' && briefje.categorie_id !== filter) return false;
+    if (!zoek) return true;
+    return (briefje.titel + ' ' + briefje.tekst).toLowerCase().includes(zoek);
+  });
+}
+
+/**
+ * De knoppenbalk om op categorie te filteren. Hij verschijnt pas als je
+ * categorieën hebt — anders staat er een balk met alleen "Alles" in.
+ */
+function tekenCategorieBalk() {
+  const balk = el('categorieBalk');
+  balk.hidden = staat.prullenbakOpen || staat.categorieen.length === 0;
+  if (balk.hidden) return;
+
+  const zonder = staat.briefjes.some(b => !b.categorie_id);
+  const knop = (waarde, naam, kleur, aantal) => `
+    <button class="cat-knop${staat.categorieFilter === waarde ? ' actief' : ''}"
+            data-filter="${waarde}" ${kleur ? `style="--kaart:${kleur}"` : ''}>
+      ${kleur ? '<span class="cat-stip"></span>' : ''}${esc(naam)}
+      <span class="cat-aantal">${aantal}</span>
+    </button>`;
+
+  balk.innerHTML =
+    knop('alles', 'Alles', null, staat.briefjes.length)
+    + staat.categorieen.map(c => knop(c.id, c.naam, c.kleur,
+        staat.briefjes.filter(b => b.categorie_id === c.id).length)).join('')
+    + (zonder ? knop('geen', 'Zonder categorie', GEEL,
+        staat.briefjes.filter(b => !b.categorie_id).length) : '');
+
+  balk.querySelectorAll('[data-filter]').forEach(k => {
+    k.addEventListener('click', () => {
+      const waarde = k.dataset.filter;
+      staat.categorieFilter = waarde === 'alles' ? null : (waarde === 'geen' ? 'geen' : Number(waarde));
+      tekenMuur();
+    });
+  });
 }
 
 /** Hoeveel dagen een weggegooid briefje nog in de prullenbak heeft. */
@@ -838,10 +900,19 @@ async function tekenPrikbord() {
   el('werkbalk').hidden = true;
   el('prikbordBalk').hidden = false;
 
-  const antwoord = await api('/briefjes');
+  const [antwoord, cat] = await Promise.all([api('/briefjes'), api('/briefje-categorieen')]);
   staat.briefjes = antwoord.briefjes;
   staat.prullenbak = antwoord.prullenbak;
   staat.prullenbakDagen = antwoord.prullenbak_dagen;
+  staat.categorieen = cat.categorieen;
+  staat.postitKleuren = cat.kleuren;
+  staat.maxCategorieen = cat.maximum;
+
+  // Stond je te filteren op een categorie die net is weggehaald? Dan alles weer.
+  if (typeof staat.categorieFilter === 'number'
+      && !staat.categorieen.some(c => c.id === staat.categorieFilter)) {
+    staat.categorieFilter = null;
+  }
 
   tekenZijbalk();
   tekenMuur();
@@ -863,6 +934,9 @@ function tekenMuur() {
   const knop = el('prullenbakKnop');
   knop.innerHTML = `${PRULLENBAK} Prullenbak${aantal ? ` (${aantal})` : ''}`;
   knop.hidden = open || aantal === 0;
+
+  el('categorieKnop').hidden = open;
+  tekenCategorieBalk();
 
   const lijst = gevondenBriefjes(open ? staat.prullenbak : staat.briefjes);
   el('inhoud').innerHTML = lijst.length === 0
@@ -887,7 +961,8 @@ function briefjeHtml(briefje) {
   // hoogte eindigt.
   return `
     <article class="briefje${inPrullenbak ? ' weggegooid' : (briefje.vastgepind ? ' vastgepind' : '')}"
-             data-briefje="${briefje.id}">
+             data-briefje="${briefje.id}" style="${kaartStijl(briefje)}"
+             ${inPrullenbak ? '' : 'draggable="true"'}>
       <div class="briefje-kop">
         <h3>${esc(briefje.titel)}</h3>
         ${inPrullenbak ? '' : `
@@ -949,7 +1024,84 @@ function koppelMuur() {
       tekenPrikbord();
     });
   });
+
+  koppelBriefjesSlepen();
 }
+
+/**
+ * Slepen om de volgorde te bepalen. De server rekent met de buren die je op je
+ * scherm ziet, dus het klopt ook als je op een categorie hebt gefilterd.
+ * Vastgepinde briefjes blijven bovenaan staan, wat je ook sleept.
+ */
+function koppelBriefjesSlepen() {
+  const muur = el('inhoud').querySelector('.muur');
+  if (!muur) return;
+  let gesleept = null;
+
+  muur.querySelectorAll('.briefje[draggable]').forEach(kaart => {
+    kaart.addEventListener('dragstart', (e) => {
+      gesleept = kaart;
+      kaart.classList.add('sleept');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', kaart.dataset.briefje);
+    });
+    kaart.addEventListener('dragend', () => {
+      kaart.classList.remove('sleept');
+      gesleept = null;
+    });
+  });
+
+  muur.addEventListener('dragover', (e) => {
+    if (!gesleept) return;
+    e.preventDefault();
+
+    // De muur is een raster, dus links-rechts telt net zo goed als boven-onder.
+    const anderen = [...muur.querySelectorAll('.briefje:not(.sleept)')];
+    const hierna = anderen.find(kaart => {
+      const vak = kaart.getBoundingClientRect();
+      return e.clientY < vak.bottom
+        && (e.clientY < vak.top || e.clientX < vak.left + vak.width / 2);
+    });
+    muur.insertBefore(gesleept, hierna ?? null);
+  });
+
+  muur.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    const kaart = gesleept;
+    if (!kaart) return;
+
+    await api(`/briefjes/${kaart.dataset.briefje}/verplaats`, {
+      method: 'POST',
+      body: {
+        vorige_id: kaart.previousElementSibling?.dataset.briefje ?? null,
+        volgende_id: kaart.nextElementSibling?.dataset.briefje ?? null,
+      },
+    });
+    tekenPrikbord();
+  });
+}
+
+const kleurVanId = (id) => staat.categorieen.find(c => c.id === id)?.kleur ?? GEEL;
+
+// Post-it-kleuren zijn allemaal licht, dus daar horen donkere letters bij —
+// niet de witte van optieStijl(), die is voor de volle status- en prioriteitskleuren.
+const postitStijl = (kleur) => `background:${kleur};color:#002944`;
+
+/** De keuzelijst in het briefjesvenster, met elke categorie in zijn eigen kleur. */
+function vulCategorieKeuze(gekozen) {
+  el('brCategorie').innerHTML =
+    `<option value="" style="${postitStijl(GEEL)}">Geen categorie</option>`
+    + staat.categorieen.map(c =>
+        `<option value="${c.id}" ${c.id === gekozen ? 'selected' : ''}
+                 style="${postitStijl(c.kleur)}">${esc(c.naam)}</option>`).join('');
+
+  el('brCategorie').value = gekozen ?? '';
+  el('brCategorie').style.background = kleurVanId(gekozen);
+}
+
+el('brCategorie').addEventListener('change', () => {
+  el('brCategorie').style.background = kleurVanId(Number(el('brCategorie').value) || null);
+});
 
 /** `stand` is 'lezen' of 'bewerken'; een nieuw briefje begint bij bewerken. */
 function openBriefje(id, stand) {
@@ -977,6 +1129,7 @@ function openBriefje(id, stand) {
     el('brTitel').value = briefje?.titel ?? '';
     el('brTekst').value = briefje?.tekst ?? '';
     el('brVastgepind').checked = Boolean(briefje?.vastgepind);
+    vulCategorieKeuze(briefje?.categorie_id ?? null);
     telTitel();
     telTekst();
   }
@@ -1008,6 +1161,98 @@ function maakTekenteller(veldId, tellerId, max) {
 const telTitel = maakTekenteller('brTitel', 'brTitelTeller', 100);
 const telTekst = maakTekenteller('brTekst', 'brTekstTeller', 5000);
 
+// ── Categorieën beheren ──────────────────────────────────────────────────
+// Naam en kleur worden meteen bewaard zodra je ze wijzigt; er is geen aparte
+// opslaanknop, want dan zou je die per regel moeten hebben.
+
+function tekenCategorieVenster() {
+  el('catMelding').textContent = '';
+  el('catNieuw').hidden = staat.categorieen.length >= staat.maxCategorieen;
+
+  el('catLijst').innerHTML = staat.categorieen.length === 0
+    ? '<p class="zacht" style="font-size:.85rem;margin-bottom:12px">Nog geen categorieën.</p>'
+    : staat.categorieen.map(c => `
+        <div class="cat-regel" data-cat="${c.id}">
+          <input type="text" class="cat-naam" value="${esc(c.naam)}" maxlength="40" />
+          <div class="cat-kleuren">
+            ${staat.postitKleuren.map(k => `
+              <button type="button" class="cat-kleur${k.kleur === c.kleur ? ' gekozen' : ''}"
+                      data-kleur="${k.kleur}" title="${esc(k.naam)}"
+                      style="background:${k.kleur}"></button>`).join('')}
+          </div>
+          <button class="knop-link weg" data-catweg="${c.id}">Weghalen</button>
+        </div>`).join('');
+
+  el('catLijst').querySelectorAll('.cat-regel').forEach(regel => {
+    const id = Number(regel.dataset.cat);
+
+    regel.querySelector('.cat-naam').addEventListener('change', async (e) => {
+      await bewaarCategorie(id, { naam: e.target.value });
+    });
+
+    regel.querySelectorAll('[data-kleur]').forEach(knop => {
+      knop.addEventListener('click', () => bewaarCategorie(id, { kleur: knop.dataset.kleur }));
+    });
+  });
+
+  el('catLijst').querySelectorAll('[data-catweg]').forEach(knop => {
+    knop.addEventListener('click', async () => {
+      const categorie = staat.categorieen.find(c => c.id === Number(knop.dataset.catweg));
+      const aantal = staat.briefjes.filter(b => b.categorie_id === categorie.id).length;
+
+      if (aantal > 0 && !confirm(
+        `"${categorie.naam}" weghalen? De ${aantal} ${aantal === 1 ? 'briefje' : 'briefjes'} `
+        + 'erin blijven staan en worden weer geel.')) return;
+
+      await api(`/briefje-categorieen/${categorie.id}`, { method: 'DELETE' });
+      await ververColorenEnTekenen();
+    });
+  });
+}
+
+async function bewaarCategorie(id, wijziging) {
+  try {
+    await api(`/briefje-categorieen/${id}`, { method: 'PATCH', body: wijziging });
+  } catch (fout) {
+    el('catMelding').textContent = fout.message;
+    return;
+  }
+  await ververColorenEnTekenen();
+}
+
+/** Categorieën opnieuw ophalen, en zowel het venster als de muur bijwerken. */
+async function ververColorenEnTekenen() {
+  await tekenPrikbord();
+  tekenCategorieVenster();
+}
+
+el('categorieKnop').addEventListener('click', () => {
+  tekenCategorieVenster();
+  el('categorieVenster').classList.add('open');
+});
+
+el('catToevoegen').addEventListener('click', async () => {
+  const naam = el('catNaam').value.trim();
+  if (!naam) {
+    el('catMelding').textContent = 'Geef de categorie een naam.';
+    return;
+  }
+
+  try {
+    await api('/briefje-categorieen', { method: 'POST', body: { naam } });
+  } catch (fout) {
+    el('catMelding').textContent = fout.message;
+    return;
+  }
+
+  el('catNaam').value = '';
+  await ververColorenEnTekenen();
+});
+
+el('catNaam').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') el('catToevoegen').click();
+});
+
 el('nieuwBriefjeKnop').addEventListener('click', () => openBriefje(null, 'bewerken'));
 
 el('prullenbakKnop').addEventListener('click', () => {
@@ -1027,6 +1272,7 @@ el('brOpslaan').addEventListener('click', async () => {
     titel: el('brTitel').value,
     tekst: el('brTekst').value,
     vastgepind: el('brVastgepind').checked,
+    categorie_id: Number(el('brCategorie').value) || null,
   };
 
   if (!body.titel.trim()) {
@@ -1653,6 +1899,7 @@ async function tekenWerkprocessen() {
   el('paginaTitel').textContent = 'Werkprocessen';
   el('werkbalk').hidden = true;
   el('prikbordBalk').hidden = true;
+  el('categorieBalk').hidden = true;
   el('lijstUitleg').hidden = true;
   tekenZijbalk();
 
@@ -2040,6 +2287,7 @@ async function tekenTeam(bericht = null) {
   el('paginaTitel').textContent = 'Team';
   el('werkbalk').hidden = true;
   el('prikbordBalk').hidden = true;
+  el('categorieBalk').hidden = true;
   el('lijstUitleg').hidden = true;
   tekenZijbalk();
 

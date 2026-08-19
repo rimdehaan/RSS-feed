@@ -8,8 +8,8 @@
   --achtergrond: #f4f5f7;
   --lijn:    #e8eaed;
   --rood:    #EB5757;
-  /* Post-it-geel voor het prikbord. In stap 2 komt hier een kleur per
-     categorie bij; dit blijft de kleur voor briefjes zonder categorie. */
+  /* Post-it-geel: de kleur van een briefje zonder categorie. De kleuren van de
+     categorieën zelf staan in src/db.js, want de server bewaakt ze. */
   --postit:  #FDF3A7;
 }
 
@@ -441,8 +441,53 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
    wordt hij afgeknipt met een vervaging; het hele briefje lees je door erop te
    klikken. Ongelijke hoogtes maken de muur rommelig, en dat is precies wat
    deze feature moest oplossen. */
+/* Filteren op categorie. Elke knop draagt zijn eigen kleur als stip mee. */
+.categorie-balk {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding: 10px 28px; background: #fff; border-bottom: 1px solid var(--lijn); flex-shrink: 0;
+}
+.cat-knop {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  background: #fff; border: 1px solid var(--lijn); border-radius: 20px;
+  padding: 5px 12px; font-size: 0.79rem; font-family: inherit; color: var(--donker);
+}
+.cat-knop:hover { border-color: var(--blauw); }
+.cat-knop.actief { background: var(--donker); color: #fff; border-color: var(--donker); }
+.cat-stip {
+  width: 11px; height: 11px; border-radius: 50%; background: var(--kaart);
+  border: 1px solid rgba(0,41,68,0.2); flex-shrink: 0;
+}
+.cat-aantal { font-size: 0.72rem; opacity: 0.55; }
+
+/* Categorieën beheren. Naam en kleur worden bewaard zodra je ze wijzigt. */
+.cat-regel {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid var(--lijn);
+}
+.cat-regel .cat-naam {
+  flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--grijs);
+  border-radius: 6px; font-size: 0.85rem; font-family: inherit; color: var(--donker);
+  background: #f8f9fb; outline: none;
+}
+.cat-regel .cat-naam:focus { border-color: var(--blauw); }
+.cat-kleuren { display: flex; gap: 4px; flex-shrink: 0; }
+.cat-kleur {
+  width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(0,41,68,0.15);
+}
+.cat-kleur.gekozen { border-color: var(--donker); }
+.cat-nieuw { display: flex; gap: 8px; margin-top: 14px; }
+.cat-nieuw input {
+  flex: 1; padding: 8px 12px; border: 1px solid var(--grijs); border-radius: 6px;
+  font-size: 0.85rem; font-family: inherit; color: var(--donker); background: #f8f9fb; outline: none;
+}
+.categorie-keuze {
+  padding: 8px 12px; border: 1px solid var(--grijs); border-radius: 6px;
+  font-size: 0.87rem; font-family: inherit; color: var(--donker); outline: none;
+}
+
 .briefje {
-  background: var(--postit); border-radius: 3px; padding: 14px 16px 10px;
+  background: var(--kaart, var(--postit)); border-radius: 3px; padding: 14px 16px 10px;
   box-shadow: 0 2px 6px rgba(0,41,68,0.14);
   height: 208px; display: flex; flex-direction: column; cursor: pointer;
   transition: transform 0.12s, box-shadow 0.12s;
@@ -450,6 +495,7 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
 /* In de prullenbak staan de knoppen op hun eigen regel; daar is het kaartje
    dus wat hoger. */
 .briefje.weggegooid { height: 252px; cursor: default; }
+.briefje.sleept { opacity: 0.4; }
 .briefje:hover { transform: translateY(-2px); box-shadow: 0 5px 13px rgba(0,41,68,0.2); }
 /* Een vastgepind briefje krijgt een streep bovenaan, zodat je hem ook herkent
    als er straks meer kleuren bij komen. */
@@ -466,7 +512,7 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
    tekst en groeit het kaartje alsnog. */
 .briefje-tekst {
   position: relative; margin-top: 8px; flex: 1; min-height: 0; overflow: hidden;
-  font-size: 0.82rem; line-height: 1.45; color: #4c4523;
+  font-size: 0.82rem; line-height: 1.45; color: rgba(0,41,68,0.78);
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
 /* Alleen vervagen als er ook werkelijk iets onder de rand valt; anders ligt de
@@ -474,7 +520,7 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
    app.js na het tekenen. */
 .briefje-tekst.afgeknipt::after {
   content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 26px;
-  background: linear-gradient(rgba(253,243,167,0), var(--postit));
+  background: linear-gradient(var(--kaart-nul, rgba(253,243,167,0)), var(--kaart, var(--postit)));
 }
 .briefje-voet {
   display: flex; align-items: center; gap: 10px; margin-top: 10px;

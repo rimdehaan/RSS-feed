@@ -1026,6 +1026,80 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
   check('na 30 dagen ruimt de prullenbak zichzelf op',
     !muur.prullenbak.some((b) => b.id === oud), JSON.stringify(muur.prullenbak));
 
+  groep('Categorieën');
+  const beginstand = await rim('/briefje-categorieen');
+  check('je begint zonder categorieën', beginstand.data.categorieen.length === 0);
+  check('er zijn vijf kleuren voor categorieën', beginstand.data.kleuren.length === 5
+    && beginstand.data.maximum === 5, JSON.stringify(beginstand.data.kleuren));
+  check('en geel zit er niet bij — die is voor briefjes zonder categorie',
+    !beginstand.data.kleuren.some((k) => k.kleur.toUpperCase() === '#FDF3A7'),
+    JSON.stringify(beginstand.data.kleuren));
+
+  const uren = (await rim('/briefje-categorieen', { method: 'POST', body: { naam: 'Uren' } })).data;
+  const apparatuur = (await rim('/briefje-categorieen', { method: 'POST', body: { naam: 'Apparatuur' } })).data;
+  check('een categorie maken lukt', uren.naam === 'Uren' && Boolean(uren.kleur));
+  check('zonder naam lukt het niet',
+    (await rim('/briefje-categorieen', { method: 'POST', body: { naam: ' ' } })).status === 400);
+  check('twee categorieën krijgen niet dezelfde kleur', uren.kleur !== apparatuur.kleur,
+    `${uren.kleur} en ${apparatuur.kleur}`);
+
+  // Volmaken: er zijn er nu 2, dus nog 3 erbij en dan zit het vol.
+  for (const naam of ['Contacten', 'Codes', 'Afspraken']) {
+    await rim('/briefje-categorieen', { method: 'POST', body: { naam } });
+  }
+  const alle = (await rim('/briefje-categorieen')).data.categorieen;
+  check('vijf categorieën passen', alle.length === 5);
+  check('en ze hebben alle vijf een andere kleur',
+    new Set(alle.map((c) => c.kleur)).size === 5, JSON.stringify(alle));
+  check('geen enkele is geel', !alle.some((c) => c.kleur.toUpperCase() === '#FDF3A7'),
+    JSON.stringify(alle));
+  const zesde = await rim('/briefje-categorieen', { method: 'POST', body: { naam: 'Te veel' } });
+  check('een zesde niet', zesde.status === 400);
+  check('met uitleg waarom', /geel/.test(zesde.data.fout), zesde.data.fout);
+
+  check('hernoemen lukt',
+    (await rim(`/briefje-categorieen/${apparatuur.id}`, { method: 'PATCH', body: { naam: 'Machines' } }))
+      .data.naam === 'Machines');
+  check('van kleur wisselen ook',
+    (await rim(`/briefje-categorieen/${apparatuur.id}`, { method: 'PATCH', body: { kleur: '#DBC9EC' } }))
+      .data.kleur === '#DBC9EC');
+  check('een kleur die niet bestaat wordt genegeerd',
+    (await rim(`/briefje-categorieen/${apparatuur.id}`, { method: 'PATCH', body: { kleur: '#123456' } }))
+      .data.kleur === '#DBC9EC');
+
+  groep('Briefjes in een categorie');
+  const inCat = (await rim('/briefjes', { method: 'POST', body: { titel: 'Urenbriefje', categorie_id: uren.id } })).data;
+  check('een briefje in een categorie zetten lukt', inCat.categorie_id === uren.id);
+  check('eruit halen ook',
+    (await rim(`/briefjes/${inCat.id}`, { method: 'PATCH', body: { categorie_id: null } })).data.categorie_id === null);
+  check('en er weer in',
+    (await rim(`/briefjes/${inCat.id}`, { method: 'PATCH', body: { categorie_id: uren.id } })).data.categorie_id === uren.id);
+
+  groep('Eigen volgorde');
+  const eersteMuur = (await rim('/briefjes')).data.briefjes;
+  check('een nieuw briefje staat bovenaan', eersteMuur[0].id === inCat.id,
+    JSON.stringify(eersteMuur.map((b) => b.titel)));
+
+  // Het bovenste briefje onder het tweede schuiven.
+  await rim(`/briefjes/${eersteMuur[0].id}/verplaats`, {
+    method: 'POST',
+    body: { vorige_id: eersteMuur[1].id, volgende_id: eersteMuur[2]?.id ?? null },
+  });
+  const naSlepen = (await rim('/briefjes')).data.briefjes;
+  check('slepen zet hem op de tweede plek', naSlepen[1].id === eersteMuur[0].id,
+    JSON.stringify(naSlepen.map((b) => b.titel)));
+  check('en de posities blijven hele getallen',
+    naSlepen.every((b, i) => b.positie === i + 1 || b.vastgepind),
+    JSON.stringify(naSlepen.map((b) => [b.titel, b.positie])));
+
+  groep('Categorie weghalen');
+  const voorHet = (await rim('/briefjes')).data.briefjes.length;
+  check('weghalen lukt', (await rim(`/briefje-categorieen/${uren.id}`, { method: 'DELETE' })).status === 200);
+  const naHet = (await rim('/briefjes')).data.briefjes;
+  check('de briefjes blijven staan', naHet.length === voorHet);
+  check('maar hebben geen categorie meer',
+    naHet.find((b) => b.id === inCat.id).categorie_id === null);
+
   groep('Briefjes van een ander');
   const briefjeVanRim = (await rim('/briefjes', { method: 'POST', body: { titel: 'Alleen van Rim' } })).data.id;
   check('Carla ziet haar eigen lege muur', (await carla('/briefjes')).data.briefjes.length === 0);
@@ -1037,6 +1111,21 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
     (await carla(`/briefjes/${briefjeVanRim}/terug`, { method: 'POST' })).status === 404);
   check('het briefje van Rim staat er nog ongewijzigd',
     (await rim('/briefjes')).data.briefjes.find((b) => b.id === briefjeVanRim).titel === 'Alleen van Rim');
+
+  check('Carla ziet de categorieën van Rim niet',
+    (await carla('/briefje-categorieen')).data.categorieen.length === 0);
+  check('en kan ze niet hernoemen',
+    (await carla(`/briefje-categorieen/${apparatuur.id}`, { method: 'PATCH', body: { naam: 'Gekaapt' } })).status === 404);
+  check('en niet weghalen',
+    (await carla(`/briefje-categorieen/${apparatuur.id}`, { method: 'DELETE' })).status === 404);
+
+  // Een briefje in de categorie van een ander zetten mag niet lukken; dat zou
+  // de kleur van die ander op jouw muur zetten.
+  const stiekem = await carla('/briefjes', { method: 'POST', body: { titel: 'Stiekem', categorie_id: apparatuur.id } });
+  check('en een briefje in andermans categorie zetten evenmin', stiekem.data.categorie_id === null,
+    JSON.stringify(stiekem.data));
+  check('het slepen van andermans briefje lukt ook niet',
+    (await carla(`/briefjes/${briefjeVanRim}/verplaats`, { method: 'POST', body: {} })).status === 404);
 
   groep('Uitloggen');
   await rim('/uitloggen', { method: 'POST' });

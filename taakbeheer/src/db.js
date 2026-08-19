@@ -170,9 +170,11 @@ db.exec(`
 // Nieuwe kolommen moeten er dus apart bij, anders werkt een nieuwe versie wel
 // op een lege database maar niet op die van de server.
 
+/** Geeft true terug als de kolom er nu pas bij komt — handig om eenmalig te vullen. */
 function voegKolomToe(tabel, kolom, definitie) {
   const bestaat = db.prepare(`PRAGMA table_info(${tabel})`).all().some((k) => k.name === kolom);
   if (!bestaat) db.exec(`ALTER TABLE ${tabel} ADD COLUMN ${kolom} ${definitie}`);
+  return !bestaat;
 }
 
 // Bestaande borden blijven zichtbaar voor iedereen — dat was immers hoe ze werkten.
@@ -233,6 +235,55 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_briefjes_gebruiker ON briefjes(gebruiker_id);
 `);
+
+/**
+ * Categorieën van het prikbord. Van één persoon, net als de briefjes zelf.
+ * Elke categorie heeft één kleur uit de vaste post-it-lijst; zo betekent een
+ * kleur altijd hetzelfde en wordt de muur geen kerstboom.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS briefje_categorieen (
+    id           INTEGER PRIMARY KEY,
+    gebruiker_id INTEGER NOT NULL REFERENCES gebruikers(id),
+    naam         TEXT NOT NULL,
+    kleur        TEXT NOT NULL,
+    positie      INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_categorieen_gebruiker ON briefje_categorieen(gebruiker_id);
+`);
+
+// Leeg = geen categorie; zo'n briefje blijft gewoon geel. Een categorie
+// verwijderen laat de briefjes staan, die vallen dan terug op geel.
+voegKolomToe('briefjes', 'categorie_id',
+  'INTEGER REFERENCES briefje_categorieen(id) ON DELETE SET NULL');
+
+// Je eigen volgorde, die je met slepen bepaalt. Lager staat hoger op de muur.
+if (voegKolomToe('briefjes', 'positie', 'INTEGER NOT NULL DEFAULT 0')) {
+  // Bestaande briefjes krijgen eenmalig de volgorde die ze op het scherm al
+  // hadden: het nieuwste bovenaan.
+  const opVolgorde = db.prepare('SELECT id FROM briefjes ORDER BY aangemaakt_op DESC, id DESC').all();
+  const zet = db.prepare('UPDATE briefjes SET positie = ? WHERE id = ?');
+  opVolgorde.forEach((briefje, i) => zet.run(i + 1, briefje.id));
+}
+
+/**
+ * Geel is gereserveerd voor een briefje zónder categorie. Zou een categorie
+ * ook geel mogen zijn, dan zijn die twee op de muur niet uit elkaar te houden
+ * — en dan betekent een kleur niets meer. Er blijven dus vijf kleuren voor
+ * categorieën over, en daarmee vijf categorieën.
+ */
+export const GEEN_CATEGORIE_KLEUR = '#FDF3A7';
+
+export const POSTIT_KLEUREN = [
+  { naam: 'Roze',   kleur: '#FBC6D4' },
+  { naam: 'Oranje', kleur: '#FCD9A8' },
+  { naam: 'Groen',  kleur: '#C9E7BE' },
+  { naam: 'Blauw',  kleur: '#BFDCF2' },
+  { naam: 'Paars',  kleur: '#DBC9EC' },
+];
+
+export const MAX_CATEGORIEEN = POSTIT_KLEUREN.length;
 
 export const PRULLENBAK_DAGEN = 30;
 

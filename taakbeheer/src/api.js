@@ -7,7 +7,8 @@ import { createWriteStream, createReadStream, unlinkSync, statSync, readFileSync
 import { maakZip } from './zip.js';
 import { join } from 'node:path';
 import { db, BIJLAGEMAP, STATUSSEN, PRIORITEITEN, aantalGebruikers, logHistorie,
-         zorgVoorPriveLijst, ruimPrullenbakOp, PRULLENBAK_DAGEN } from './db.js';
+         zorgVoorPriveLijst, ruimPrullenbakOp, PRULLENBAK_DAGEN,
+         POSTIT_KLEUREN, MAX_CATEGORIEEN } from './db.js';
 import { splitsStappen, MAX_STAPPEN, MAX_STAP_TEKENS } from '../public/stappen.js';
 import {
   hashWachtwoord, wachtwoordKlopt, maakSessie, verwijderSessie,
@@ -1310,16 +1311,102 @@ api.delete('/opmerkingen/:id', vereistLogin, (req, res) => {
 // naslag van een ander valt er niets over te nemen. Elke route zoekt daarom op
 // id én gebruiker_id tegelijk, zodat het briefje van een ander simpelweg niet
 // bestaat.
-const BRIEFJE_SELECT = `SELECT id, titel, tekst, vastgepind, aangemaakt_op, gewijzigd_op,
-                               weggegooid_op FROM briefjes`;
+const BRIEFJE_SELECT = `SELECT id, titel, tekst, vastgepind, categorie_id, positie,
+                               aangemaakt_op, gewijzigd_op, weggegooid_op FROM briefjes`;
 
 function eigenBriefje(gebruiker, id) {
   return db.prepare(`${BRIEFJE_SELECT} WHERE id = ? AND gebruiker_id = ?`)
     .get(Number(id), gebruiker.id);
 }
 
-/** Vastgepind bovenaan, daarbinnen het nieuwste eerst. */
-const MUUR_VOLGORDE = 'ORDER BY vastgepind DESC, aangemaakt_op DESC, id DESC';
+/**
+ * Vastgepind bovenaan, daarbinnen je eigen volgorde. Een nieuw briefje krijgt
+ * de laagste positie en komt dus bovenaan te staan.
+ */
+const MUUR_VOLGORDE = 'ORDER BY vastgepind DESC, positie, id DESC';
+
+/** Bestaat deze categorie, en is hij van jou? */
+function eigenCategorie(gebruiker, id) {
+  return db.prepare('SELECT * FROM briefje_categorieen WHERE id = ? AND gebruiker_id = ?')
+    .get(Number(id), gebruiker.id);
+}
+
+/**
+ * Leest een categorie uit het verzoek. Geeft `undefined` als het veld er niet
+ * in zat (dan blijft de huidige staan), `null` voor geen categorie, en anders
+ * het nummer. Een categorie van iemand anders telt als geen categorie.
+ */
+function leesCategorie(gebruiker, waarde) {
+  if (waarde === undefined) return undefined;
+  if (!waarde) return null;
+  return eigenCategorie(gebruiker, waarde) ? Number(waarde) : null;
+}
+
+api.get('/briefje-categorieen', vereistLogin, (req, res) => {
+  res.json({
+    categorieen: db.prepare(
+      'SELECT id, naam, kleur FROM briefje_categorieen WHERE gebruiker_id = ? ORDER BY positie, id'
+    ).all(req.gebruiker.id),
+    kleuren: POSTIT_KLEUREN,
+    maximum: MAX_CATEGORIEEN,
+  });
+});
+
+api.post('/briefje-categorieen', vereistLogin, (req, res) => {
+  const naam = tekst(req.body.naam, 40);
+  if (!naam) return res.status(400).json({ fout: 'Geef de categorie een naam.' });
+
+  const aantal = db.prepare('SELECT COUNT(*) AS n FROM briefje_categorieen WHERE gebruiker_id = ?')
+    .get(req.gebruiker.id).n;
+  if (aantal >= MAX_CATEGORIEEN) {
+    return res.status(400).json({
+      fout: `Meer dan ${MAX_CATEGORIEEN} categorieën kan niet: geel is voor briefjes zonder `
+          + `categorie, dus er blijven ${MAX_CATEGORIEEN} post-it-kleuren over.`,
+    });
+  }
+
+  // Standaard de eerste kleur die nog vrij is, zodat twee categorieën nooit
+  // per ongeluk dezelfde kleur krijgen.
+  const bezet = db.prepare('SELECT kleur FROM briefje_categorieen WHERE gebruiker_id = ?')
+    .all(req.gebruiker.id).map((c) => c.kleur);
+  const gevraagd = POSTIT_KLEUREN.some((k) => k.kleur === req.body.kleur) ? req.body.kleur : null;
+  const kleur = gevraagd ?? POSTIT_KLEUREN.find((k) => !bezet.includes(k.kleur))?.kleur
+             ?? POSTIT_KLEUREN[0].kleur;
+
+  const r = db.prepare(
+    'INSERT INTO briefje_categorieen (gebruiker_id, naam, kleur, positie) VALUES (?, ?, ?, ?)'
+  ).run(req.gebruiker.id, naam, kleur, aantal + 1);
+
+  res.json(db.prepare('SELECT id, naam, kleur FROM briefje_categorieen WHERE id = ?').get(r.lastInsertRowid));
+});
+
+api.patch('/briefje-categorieen/:id', vereistLogin, (req, res) => {
+  const categorie = eigenCategorie(req.gebruiker, req.params.id);
+  if (!categorie) return res.status(404).json({ fout: 'Categorie niet gevonden.' });
+
+  const naam = req.body.naam === undefined ? categorie.naam : tekst(req.body.naam, 40);
+  if (!naam) return res.status(400).json({ fout: 'Geef de categorie een naam.' });
+
+  const kleur = POSTIT_KLEUREN.some((k) => k.kleur === req.body.kleur) ? req.body.kleur : categorie.kleur;
+
+  db.prepare('UPDATE briefje_categorieen SET naam = ?, kleur = ? WHERE id = ?')
+    .run(naam, kleur, categorie.id);
+
+  res.json(db.prepare('SELECT id, naam, kleur FROM briefje_categorieen WHERE id = ?').get(categorie.id));
+});
+
+/** Verwijderen laat de briefjes staan; die vallen terug op geen categorie. */
+api.delete('/briefje-categorieen/:id', vereistLogin, (req, res) => {
+  const categorie = eigenCategorie(req.gebruiker, req.params.id);
+  if (!categorie) return res.status(404).json({ fout: 'Categorie niet gevonden.' });
+
+  db.transaction(() => {
+    db.prepare('UPDATE briefjes SET categorie_id = NULL WHERE categorie_id = ?').run(categorie.id);
+    db.prepare('DELETE FROM briefje_categorieen WHERE id = ?').run(categorie.id);
+  })();
+
+  res.json({ ok: true });
+});
 
 api.get('/briefjes', vereistLogin, (req, res) => {
   ruimPrullenbakOp();
@@ -1339,9 +1426,16 @@ api.post('/briefjes', vereistLogin, (req, res) => {
   const titel = tekst(req.body.titel, 100);
   if (!titel) return res.status(400).json({ fout: 'Geef het briefje een titel.' });
 
+  // Bovenaan, want dat is waar je een nieuw briefje verwacht.
+  const bovenaan = db.prepare(
+    'SELECT COALESCE(MIN(positie), 1) - 1 AS p FROM briefjes WHERE gebruiker_id = ?'
+  ).get(req.gebruiker.id).p;
+
   const r = db.prepare(
-    'INSERT INTO briefjes (gebruiker_id, titel, tekst, vastgepind) VALUES (?, ?, ?, ?)'
-  ).run(req.gebruiker.id, titel, tekst(req.body.tekst, 5000), req.body.vastgepind ? 1 : 0);
+    `INSERT INTO briefjes (gebruiker_id, titel, tekst, vastgepind, categorie_id, positie)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(req.gebruiker.id, titel, tekst(req.body.tekst, 5000), req.body.vastgepind ? 1 : 0,
+        leesCategorie(req.gebruiker, req.body.categorie_id) ?? null, bovenaan);
 
   res.json(eigenBriefje(req.gebruiker, r.lastInsertRowid));
 });
@@ -1358,10 +1452,14 @@ api.patch('/briefjes/:id', vereistLogin, (req, res) => {
     ? briefje.vastgepind
     : (req.body.vastgepind ? 1 : 0);
 
+  const gelezen = leesCategorie(req.gebruiker, req.body.categorie_id);
+  const categorie = gelezen === undefined ? briefje.categorie_id : gelezen;
+
   db.prepare(
-    `UPDATE briefjes SET titel = ?, tekst = ?, vastgepind = ?, gewijzigd_op = datetime('now')
+    `UPDATE briefjes SET titel = ?, tekst = ?, vastgepind = ?, categorie_id = ?,
+            gewijzigd_op = datetime('now')
       WHERE id = ?`
-  ).run(titel, inhoud, vastgepind, briefje.id);
+  ).run(titel, inhoud, vastgepind, categorie, briefje.id);
 
   res.json(eigenBriefje(req.gebruiker, briefje.id));
 });
@@ -1379,6 +1477,44 @@ api.delete('/briefjes/:id', vereistLogin, (req, res) => {
 
   db.prepare("UPDATE briefjes SET weggegooid_op = datetime('now') WHERE id = ?").run(briefje.id);
   res.json({ ok: true, definitief: false });
+});
+
+/**
+ * Slepen. Werkt met de buren uit het scherm, zodat het ook klopt als je op een
+ * categorie hebt gefilterd en je dus niet alle briefjes ziet. Dezelfde aanpak
+ * als bij het slepen van kaarten in Kanban.
+ */
+api.post('/briefjes/:id/verplaats', vereistLogin, (req, res) => {
+  const briefje = eigenBriefje(req.gebruiker, req.params.id);
+  if (!briefje) return res.status(404).json({ fout: 'Briefje niet gevonden.' });
+
+  const positieVan = (id) => id
+    ? db.prepare('SELECT positie FROM briefjes WHERE id = ? AND gebruiker_id = ?')
+        .get(Number(id), req.gebruiker.id)?.positie
+    : undefined;
+
+  const boven = positieVan(req.body.vorige_id);
+  const onder = positieVan(req.body.volgende_id);
+
+  let positie;
+  if (boven !== undefined && onder !== undefined) positie = (boven + onder) / 2;
+  else if (boven !== undefined) positie = boven + 0.5;
+  else if (onder !== undefined) positie = onder - 0.5;
+  else positie = briefje.positie;
+
+  db.transaction(() => {
+    db.prepare('UPDATE briefjes SET positie = ? WHERE id = ?').run(positie, briefje.id);
+
+    // Weer op hele getallen zetten; anders worden de tussenruimtes na veel
+    // slepen zo klein dat twee briefjes gelijk komen te staan.
+    const opVolgorde = db.prepare(
+      'SELECT id FROM briefjes WHERE gebruiker_id = ? ORDER BY positie, id'
+    ).all(req.gebruiker.id);
+    const zet = db.prepare('UPDATE briefjes SET positie = ? WHERE id = ?');
+    opVolgorde.forEach((rij, index) => zet.run(index + 1, rij.id));
+  })();
+
+  res.json(eigenBriefje(req.gebruiker, briefje.id));
 });
 
 api.post('/briefjes/:id/terug', vereistLogin, (req, res) => {

@@ -92,14 +92,47 @@
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Nieuw briefje
       </button>
+      <button class="btn btn-secondary" id="categorieKnop">Categorieën</button>
       <button class="btn btn-secondary" id="prullenbakKnop"></button>
       <button class="btn btn-secondary" id="terugKnop" hidden>← Terug naar Mijn prikbord</button>
     </div>
+
+    <!-- Filteren op categorie. Verschijnt pas als je categorieën hebt. -->
+    <div class="categorie-balk" id="categorieBalk" hidden></div>
 
     <!-- De tekst hangt af van het scherm en wordt gezet in app.js (UITLEG). -->
     <p class="lijst-uitleg" id="lijstUitleg" hidden></p>
 
     <div class="inhoud" id="inhoud"></div>
+  </div>
+</div>
+
+<!-- ── VENSTER: categorieën van het prikbord ── -->
+<div class="overlay" id="categorieVenster">
+  <div class="venster smal">
+    <div class="venster-kop">
+      <h2>Categorieën</h2>
+      <button class="venster-sluit" data-sluit>&times;</button>
+    </div>
+    <div class="venster-lijf">
+      <p class="zacht" style="font-size:.82rem;margin-bottom:14px">
+        Elke categorie krijgt een eigen post-it-kleur, en geel blijft voor briefjes zonder
+        categorie. Er passen er dus vijf — zo blijft een kleur betekenen wat hij betekent.
+        Een categorie weghalen laat je briefjes staan; die worden dan weer geel.
+      </p>
+
+      <div id="catLijst"></div>
+
+      <div class="cat-nieuw" id="catNieuw">
+        <input type="text" id="catNaam" maxlength="40" placeholder="Naam van de categorie" />
+        <button class="btn btn-secondary btn-sm" id="catToevoegen">Toevoegen</button>
+      </div>
+
+      <div class="melding" id="catMelding" style="margin-top:14px"></div>
+    </div>
+    <div class="venster-voet">
+      <button class="btn btn-primary" data-sluit>Klaar</button>
+    </div>
   </div>
 </div>
 
@@ -134,6 +167,11 @@
           </label>
           <textarea id="brTekst" rows="10" maxlength="5000"
             placeholder="Uiterlijk vrijdag 16:00 in het urensysteem. Reisuren apart boeken op de projectcode."></textarea>
+        </div>
+
+        <div class="veld" style="margin-top:14px">
+          <label for="brCategorie"><span>Categorie</span></label>
+          <select id="brCategorie" class="categorie-keuze"></select>
         </div>
 
         <label class="vastpin-keuze">
