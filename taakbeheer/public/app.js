@@ -283,9 +283,9 @@ function tekenZijbalk() {
         <span class="telling">${lijst.aantal_taken}</span>
       </a>` : ''}`;
 
-  // Via de zijbalk kom je op de muur, niet in de prullenbak — ook niet als je
-  // die de vorige keer had openstaan. tekenPrikbord() zelf laat hem met rust,
-  // want dat is ook de herteken-functie na elke actie.
+  // Via de zijbalk kom je op het prikbord zelf, niet in de prullenbak — ook
+  // niet als je die de vorige keer had openstaan. tekenPrikbord() laat hem met
+  // rust, want dat is ook de herteken-functie na elke actie.
   el('persoonlijkLijst').querySelector('[data-prikbord]')
     .addEventListener('click', () => { staat.prullenbakOpen = false; tekenPrikbord(); });
 
@@ -851,13 +851,13 @@ function tekenMuur() {
   const open = staat.prullenbakOpen;
 
   // In de prullenbak hoort geen knop om een nieuw briefje te maken, en de weg
-  // terug moet een knop Terug zijn — niet nog een keer op Prullenbak klikken.
+  // terug moet een eigen knop zijn — niet nog een keer op Prullenbak klikken.
   el('paginaTitel').textContent = open ? 'Prullenbak' : 'Mijn prikbord';
   el('lijstUitleg').textContent = open ? UITLEG.prullenbak : UITLEG.prikbord;
   el('lijstUitleg').hidden = false;
 
   el('nieuwBriefjeKnop').hidden = open;
-  el('terugNaarMuurKnop').hidden = !open;
+  el('terugKnop').hidden = !open;
 
   const aantal = staat.prullenbak.length;
   const knop = el('prullenbakKnop');
@@ -1015,7 +1015,7 @@ el('prullenbakKnop').addEventListener('click', () => {
   tekenMuur();
 });
 
-el('terugNaarMuurKnop').addEventListener('click', () => {
+el('terugKnop').addEventListener('click', () => {
   staat.prullenbakOpen = false;
   tekenMuur();
 });
