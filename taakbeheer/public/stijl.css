@@ -282,6 +282,11 @@ tbody tr.komt-eraan td { color: #7a4a06; }
 .datum-te-laat { color: #C4314B; font-weight: 700; }
 .datum-eraan   { color: #a15c00; font-weight: 700; }
 .acties { display: flex; gap: 6px; align-items: center; }
+/* In het teamoverzicht staan per regel vijf knoppen. Zonder deze regels knijpt
+   de tabel de naamkolom zo smal dat "Rim de Haan" over drie regels valt; nu
+   wijken de knoppen uit naar een tweede regel. */
+.team-tabel td:first-child, .team-tabel td:nth-child(2) { white-space: nowrap; }
+.team-tabel .acties { flex-wrap: wrap; justify-content: flex-end; }
 .zacht { color: var(--grijs); }
 
 .knop-link {

@@ -303,7 +303,11 @@ export function ruimPrullenbakOp() {
 ruimPrullenbakOp();
 
 // Bestaande gebruikers krijgen er eenmalig ook een.
-for (const { id } of db.prepare('SELECT id FROM gebruikers').all()) zorgVoorPriveLijst(id);
+// Alleen voor wie nog werkt. Is iemand uit dienst en heeft een beheerder zijn
+// lijst overgenomen, dan hoort er geen lege nieuwe voor in de plaats te komen.
+for (const { id } of db.prepare('SELECT id FROM gebruikers WHERE actief = 1').all()) {
+  zorgVoorPriveLijst(id);
+}
 
 export const STATUSSEN = [
   'Not Started',

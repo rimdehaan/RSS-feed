@@ -250,8 +250,9 @@ api.delete('/uitnodigingen/:token', vereistBeheerder, (req, res) => {
 
 api.get('/gebruikers', vereistLogin, (req, res) => {
   res.json(db.prepare(
-    `SELECT id, naam, email, rol, actief, mag_werkprocessen
-       FROM gebruikers ORDER BY actief DESC, naam COLLATE NOCASE`
+    `SELECT g.id, g.naam, g.email, g.rol, g.actief, g.mag_werkprocessen,
+            EXISTS(SELECT 1 FROM borden b WHERE b.prive_van = g.id) AS heeft_takenlijst
+       FROM gebruikers g ORDER BY g.actief DESC, g.naam COLLATE NOCASE`
   ).all());
 });
 
@@ -297,6 +298,12 @@ api.patch('/gebruikers/:id', vereistBeheerder, (req, res) => {
     .run(naam, rol, actief, magWerkprocessen, id);
 
   if (!actief) db.prepare('DELETE FROM sessies WHERE gebruiker_id = ?').run(id);
+
+  // Komt iemand terug in dienst en is zijn takenlijst intussen overgenomen,
+  // dan krijgt hij hier een nieuwe. Bij het opstarten gebeurt dat alleen voor
+  // wie actief is, dus zonder dit zou hij tot de eerstvolgende herstart zonder
+  // takenlijst zitten.
+  if (actief && !gebruiker.actief) zorgVoorPriveLijst(id);
 
   res.json({ ok: true });
 });
@@ -1303,6 +1310,55 @@ api.delete('/opmerkingen/:id', vereistLogin, (req, res) => {
 
   db.prepare('DELETE FROM opmerkingen WHERE id = ?').run(opmerking.id);
   res.json({ ok: true });
+});
+
+/**
+ * De takenlijst van een vertrokken collega overnemen. Dit is de belofte die op
+ * dat scherm staat: alleen jij ziet je lijst, maar als je uit dienst gaat kan
+ * een beheerder hem overnemen zodat lopend werk niet blijft liggen.
+ *
+ * Alleen bij een uitgeschakelde collega. Dat is wat "uit dienst" hier betekent,
+ * en het is de enige reden waarom die belofte geen achterdeur is: zolang iemand
+ * gewoon werkt, komt er niemand bij zijn lijst.
+ */
+api.post('/gebruikers/:id/takenlijst-overnemen', vereistBeheerder, (req, res) => {
+  const id = Number(req.params.id);
+  const collega = db.prepare('SELECT * FROM gebruikers WHERE id = ?').get(id);
+  if (!collega) return res.status(404).json({ fout: 'Gebruiker niet gevonden.' });
+
+  if (collega.actief) {
+    return res.status(400).json({
+      fout: 'Je kunt de takenlijst pas overnemen als deze collega is uitgeschakeld.',
+    });
+  }
+
+  const lijst = db.prepare('SELECT * FROM borden WHERE prive_van = ?').get(id);
+  if (!lijst) return res.status(404).json({ fout: 'Deze collega heeft geen eigen takenlijst (meer).' });
+
+  const naam = `Takenlijst van ${collega.naam}`.slice(0, 80);
+
+  db.transaction(() => {
+    // Geen privélijst meer, maar een gewoon afgeschermd project van de
+    // beheerder die hem overneemt.
+    db.prepare(
+      `UPDATE borden SET prive_van = NULL, naam = ?, zichtbaar_voor_iedereen = 0,
+              aangemaakt_door = ? WHERE id = ?`
+    ).run(naam, req.gebruiker.id, lijst.id);
+
+    db.prepare('DELETE FROM bord_leden WHERE bord_id = ?').run(lijst.id);
+    db.prepare('INSERT OR IGNORE INTO bord_leden (bord_id, gebruiker_id) VALUES (?, ?)')
+      .run(lijst.id, req.gebruiker.id);
+
+    // De taken stonden op naam van iemand die niet meer werkt. Die naam laten
+    // staan zou de lijst laten lijken alsof er nog iemand mee bezig is; boven-
+    // dien weigert de app een uitgeschakelde collega als uitvoerder, waardoor
+    // je de taken daarna niet meer zou kunnen bewerken. Wie het was staat in
+    // de naam van het project.
+    db.prepare('UPDATE taken SET uitvoerend_id = NULL WHERE bord_id = ?').run(lijst.id);
+  })();
+
+  const aantal = db.prepare('SELECT COUNT(*) AS n FROM taken WHERE bord_id = ?').get(lijst.id).n;
+  res.json({ id: lijst.id, naam, aantal_taken: aantal });
 });
 
 // ── Prikbord ─────────────────────────────────────────────────────────────

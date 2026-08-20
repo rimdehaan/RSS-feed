@@ -98,6 +98,14 @@ uitzondering op de regel hieronder dat een beheerder elk bord ziet. De regel
 bestaat om te voorkomen dat een bord onbereikbaar wordt; hier is het overnemen
 van de lijst bij uitdiensttreding het antwoord op datzelfde probleem.
 
+**Overnemen als iemand uit dienst gaat.** Schakel de collega uit in *Team*; pas
+dan verschijnt bij hem de knop **Takenlijst overnemen**. Zijn lijst wordt een
+gewoon project met de naam *Takenlijst van [naam]*, alleen zichtbaar voor de
+beheerder die hem overneemt. De taken blijven staan maar komen op niemands naam,
+zodat je ze kunt verdelen. Dit kan niet worden teruggedraaid, en zolang iemand
+gewoon werkt kan niemand erbij — dat is wat de belofte op dat scherm waard maakt.
+Zijn prikbord blijft privé: dat is naslag, geen lopend werk.
+
 Wat dat wél en niet betekent:
 
 - **Verborgen, niet versleuteld.** Alles staat in één databasebestand op de

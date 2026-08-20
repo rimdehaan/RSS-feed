@@ -960,6 +960,56 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
   check('en hij is weg', (await rim('/werkprocessen')).data.werkprocessen.length === aantalVoor - 1);
   check('opvragen geeft niet gevonden', (await rim('/werkprocessen/' + keuring)).status === 404);
 
+  groep('Takenlijst van een vertrokken collega overnemen');
+  const lijstVanCarla = (await carla('/borden')).data.find((b) => b.prive_van);
+  check('Carla heeft een eigen takenlijst', Boolean(lijstVanCarla));
+  await carla(`/borden/${lijstVanCarla.id}/taken`, { method: 'POST', body: { opdracht: 'Half afgemaakte klus' } });
+  check('met een taak erop', (await carla(`/borden/${lijstVanCarla.id}/taken`)).data.length === 1);
+
+  check('zolang Carla werkt, kan Rim hem niet overnemen',
+    (await rim(`/gebruikers/${carlaId}/takenlijst-overnemen`, { method: 'POST' })).status === 400);
+  check('en ziet hij hem ook niet',
+    !(await rim('/borden')).data.some((b) => b.id === lijstVanCarla.id));
+
+  await rim(`/gebruikers/${carlaId}`, { method: 'PATCH', body: { actief: false } });
+  const overgenomen = await rim(`/gebruikers/${carlaId}/takenlijst-overnemen`, { method: 'POST' });
+  check('is ze uit dienst, dan lukt overnemen wel', overgenomen.status === 200, JSON.stringify(overgenomen.data));
+  check('met de naam van de collega erin',
+    overgenomen.data.naam === 'Takenlijst van Carla Smit', overgenomen.data.naam);
+  check('en de taak is meegekomen', overgenomen.data.aantal_taken === 1);
+
+  const nuVanRim = (await rim('/borden')).data.find((b) => b.id === lijstVanCarla.id);
+  check('hij staat nu bij de projecten van Rim', Boolean(nuVanRim));
+  check('en is geen privélijst meer', !nuVanRim.prive_van, JSON.stringify(nuVanRim));
+  // /borden geeft deze vlag als 0 of 1 terug, niet als true/false.
+  check('niet zichtbaar voor iedereen', nuVanRim.zichtbaar_voor_iedereen === 0,
+    JSON.stringify(nuVanRim));
+  check('Rim mag hem beheren', nuVanRim.mag_beheren === true);
+
+  const takenErop = (await rim(`/borden/${lijstVanCarla.id}/taken`)).data;
+  check('de taak staat er nog', takenErop.length === 1 && takenErop[0].opdracht === 'Half afgemaakte klus');
+  check('maar op niemands naam, klaar om te verdelen', takenErop[0].uitvoerend_id === null,
+    JSON.stringify(takenErop[0]));
+  check('en is gewoon te bewerken',
+    (await rim(`/taken/${takenErop[0].id}`, { method: 'PATCH', body: { status: 'Working on it' } })).status === 200);
+
+  check('een tweede keer overnemen kan niet',
+    (await rim(`/gebruikers/${carlaId}/takenlijst-overnemen`, { method: 'POST' })).status === 404);
+  check('Carla staat in het teamoverzicht zonder takenlijst',
+    (await rim('/gebruikers')).data.find((g) => g.id === carlaId).heeft_takenlijst === 0);
+
+  // Terugzetten: Carla mag weer aan het werk voor de rest van de test. Bij het
+  // uitschakelen is haar sessie gewist, dus ze moet opnieuw inloggen.
+  await rim(`/gebruikers/${carlaId}`, { method: 'PATCH', body: { actief: true } });
+  await carla('/inloggen', { method: 'POST', body: { email: 'carla@transafe.nl', wachtwoord: 'CarlaHaarWachtwoord' } });
+  check('inschakelen geeft haar een nieuwe, lege takenlijst',
+    (await rim('/gebruikers')).data.find((g) => g.id === carlaId).heeft_takenlijst === 1);
+  const nieuweLijst = (await carla('/borden')).data.find((b) => b.prive_van);
+  check('die niet dezelfde is als de overgenomen lijst', nieuweLijst.id !== lijstVanCarla.id);
+  check('en die leeg is', (await carla(`/borden/${nieuweLijst.id}/taken`)).data.length === 0);
+  check('de overgenomen lijst ziet ze niet meer',
+    !(await carla('/borden')).data.some((b) => b.id === lijstVanCarla.id));
+
   groep('Prikbord');
   const nieuwBriefje = await rim('/briefjes', {
     method: 'POST', body: { titel: 'Uren invullen', tekst: 'Uiterlijk vrijdag 16:00.' },

@@ -2343,7 +2343,7 @@ async function tekenTeam(bericht = null) {
     <div class="kaartje">
       <h3>Teamleden</h3>
       <div class="melding" id="herstelMelding" style="margin-bottom:12px"></div>
-      <table>
+      <table class="team-tabel">
         <thead><tr><th>Naam</th><th>E-mail</th><th>Rol</th><th>Werkprocessen</th><th>Status</th>${beheerder ? '<th></th>' : ''}</tr></thead>
         <tbody>${staat.gebruikers.map(g => `
           <tr>
@@ -2368,6 +2368,10 @@ async function tekenTeam(bericht = null) {
                 <button class="btn ${g.actief ? 'btn-danger' : 'btn-secondary'} btn-sm" data-actief="${g.id}" data-waarde="${g.actief ? 0 : 1}">
                   ${g.actief ? 'Uitschakelen' : 'Inschakelen'}
                 </button>`}
+              ${!g.actief && g.heeft_takenlijst ? `
+                <button class="btn btn-secondary btn-sm" data-overnemen="${g.id}" data-wie="${esc(g.naam)}">
+                  Takenlijst overnemen
+                </button>` : ''}
             </div></td>` : ''}
           </tr>`).join('')}</tbody>
       </table>
@@ -2471,6 +2475,33 @@ function koppelTeamKnoppen() {
       try {
         await api('/gebruikers/' + knop.dataset.actief, { method: 'PATCH', body: { actief: Number(knop.dataset.waarde) === 1 } });
         tekenTeam();
+      } catch (fout) { alert(fout.message); }
+    });
+  });
+
+  // De takenlijst van een vertrokken collega overnemen. Alleen bij iemand die
+  // is uitgeschakeld; zolang iemand werkt, blijft zijn lijst van hem alleen.
+  el('inhoud').querySelectorAll('[data-overnemen]').forEach(knop => {
+    knop.addEventListener('click', async () => {
+      const wie = knop.dataset.wie;
+      if (!confirm(
+        `De takenlijst van ${wie} overnemen?\n\n`
+        + 'Hij wordt een gewoon project dat alleen jij ziet, met de naam '
+        + `"Takenlijst van ${wie}". De taken die erop staan komen op niemands naam, `
+        + 'zodat je ze kunt verdelen. Dit kun je niet terugdraaien.')) return;
+
+      try {
+        const bord = await api(`/gebruikers/${knop.dataset.overnemen}/takenlijst-overnemen`,
+          { method: 'POST' });
+        staat.borden = await api('/borden');
+
+        // Eerst opnieuw tekenen (de knop hoort weg te zijn), dan pas de melding
+        // zetten — anders wist het opnieuw tekenen hem meteen weer.
+        await tekenTeam();
+        const melding = el('herstelMelding');
+        melding.textContent = `"${bord.naam}" staat nu bij je projecten, met `
+          + `${bord.aantal_taken} ${bord.aantal_taken === 1 ? 'taak' : 'taken'} zonder uitvoerder.`;
+        melding.classList.add('goed');
       } catch (fout) { alert(fout.message); }
     });
   });
