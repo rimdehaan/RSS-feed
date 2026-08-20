@@ -64,8 +64,8 @@ Er zijn twee losse signalen. Een taak krijgt er hoogstens één.
 
 | | Wanneer | Hoe het eruitziet |
 |---|---|---|
-| **Te laat** | De deadline is gisteren of eerder, en de taak is niet *Done* of *Cancelled* | Rode regel of kaart met ⚠, en eronder "N dagen te laat" |
-| **Komt eraan** | De deadline is vandaag of morgen, en er wordt nog niet aan gewerkt | Oranje regel of kaart met ⏱ |
+| **Te laat** | De deadline is gisteren of eerder, en de taak is niet *Done* of *Cancelled* | Rode regel met ⚠, en eronder "N dagen te laat" |
+| **Komt eraan** | De deadline is vandaag of morgen, en er wordt nog niet aan gewerkt | Oranje regel met ⏱ |
 
 Het verschil dat het meeste uitmaakt: **te laat blijft te laat, ook als iemand er
 al aan werkt.** Zet je een te late taak op *Working on it*, dan blijft hij rood.
@@ -228,7 +228,7 @@ Verder:
 - **De taakstatus verandert niet vanzelf** als alles is afgevinkt. Klaar met het
   werk is niet hetzelfde als *Done*; daar zit vaak nog controle of facturatie
   tussen. Je ziet alleen `12 van 12 ✓`.
-- **Op de kaart en in de tabel** staat de totale voortgang als `☑ 7/12`.
+- **In de tabel** staat de totale voortgang als `☑ 7/12`.
 - **Ontkoppelen wist de voortgang** van dat blok, met een waarschuwing vooraf.
 
 Stappen zijn op de taak niet te wijzigen. Zou dat wel kunnen, dan is de kopie
