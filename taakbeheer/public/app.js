@@ -10,11 +10,14 @@ const staat = {
   borden: [],
   bordId: null,        // null = het persoonlijke bord
   taken: [],
-  weergave: 'tabel',   // 'tabel' | 'kanban' | 'team' | 'werkprocessen' | 'prikbord'
+  weergave: 'tabel',   // 'tabel' | 'team' | 'werkprocessen' | 'prikbord'
   bewerktId: null,
   detailId: null,
   deadlineFilter: null,  // null | 'te-laat' | 'komt-eraan'
   sortering: null,       // null = eigen volgorde; anders { kolom, richting }
+  // Statussen waarvan het blok dicht staat. Afgerond werk begint dicht: dat
+  // groeit eindeloos en is zelden waar je naar zoekt.
+  dichtgeklapt: new Set(['Done', 'Cancelled']),
   toegestaneUitvoerders: null,   // null = iedereen mag; anders een Set met ids
 
   // Het prikbord: je eigen briefjes, en wat er in de prullenbak ligt.
@@ -278,7 +281,7 @@ const isMijnTakenlijst = () => staat.bordId !== null && staat.bordId === mijnTak
 function tekenZijbalk() {
   // Team, Werkprocessen en het prikbord zijn eigen schermen; dan is er geen
   // enkel bord actief, ook al staat er nog een bordId in de staat.
-  const opTaken = staat.weergave === 'tabel' || staat.weergave === 'kanban';
+  const opTaken = staat.weergave === 'tabel';
   const opMijnBord = isPersoonlijk() && opTaken;
   const lijst = mijnTakenlijst();
 
@@ -332,7 +335,7 @@ function tekenZijbalk() {
 
 async function kiesBord(id) {
   staat.bordId = id;
-  if (staat.weergave !== 'kanban') staat.weergave = 'tabel';
+  staat.weergave = 'tabel';
 
   if (isPersoonlijk()) {
     staat.taken = await api('/mijn-taken');
@@ -426,15 +429,17 @@ function gefilterdeTaken() {
 
 // ── Sorteren ─────────────────────────────────────────────────────────────
 /**
- * De vijf kolommen waarop je kunt sorteren, met per kolom de waarde waarop
- * vergeleken wordt. Prioriteit en Status worden vergeleken op hun plek in de
- * vaste lijst en niet alfabetisch — anders komt Low tussen High en Medium.
+ * De kolommen waarop je kunt sorteren, met per kolom de waarde waarop
+ * vergeleken wordt. Prioriteit wordt vergeleken op zijn plek in de vaste lijst
+ * en niet alfabetisch — anders komt Low tussen High en Medium.
+ *
+ * Status staat er bewust niet bij: de tabel is al op status gegroepeerd, dus
+ * daarop sorteren zou niets doen.
  */
 const SORTEERBAAR = {
   Opdracht:   (taak) => taak.opdracht,
   Uitvoerend: (taak) => taak.uitvoerend_naam,
   Prioriteit: (taak) => plek(staat.prioriteiten, taak.prioriteit),
-  Status:     (taak) => plek(staat.statussen, taak.status),
   Deadline:   (taak) => taak.deadline,
 };
 
@@ -448,10 +453,10 @@ function plek(lijst, waarde) {
 const isLeeg = (waarde) => waarde === null || waarde === undefined || waarde === '';
 
 /**
- * Sorteren verandert alleen wat je op je scherm ziet. De opgeslagen volgorde
- * (`positie`, die je in Kanban versleept) blijft ongemoeid — vandaar een kopie
- * van de lijst. Bij gelijke waarden blijft die eigen volgorde staan, want
- * sorteren in JavaScript is stabiel.
+ * Sorteren verandert alleen wat je op je scherm ziet; de opgeslagen volgorde
+ * (`positie`) blijft ongemoeid — vandaar een kopie van de lijst. Bij gelijke
+ * waarden blijft die eigen volgorde staan, want sorteren in JavaScript is
+ * stabiel.
  */
 function gesorteerd(taken) {
   if (!staat.sortering) return taken;
@@ -514,7 +519,6 @@ function teken() {
   if (staat.weergave === 'team') return tekenTeam();
   tekenDeadlineKnoppen();
   if (isPersoonlijk()) return tekenMijnTaken();
-  if (staat.weergave === 'kanban') return tekenKanban();
   tekenTabel();
 }
 
@@ -548,17 +552,17 @@ function tekenMijnTaken() {
         <span class="telling">${project.taken.length} ${project.taken.length === 1 ? 'taak' : 'taken'}</span>
         <a data-open-bord="${bordId}">Open project →</a>
       </div>
-      ${staat.weergave === 'kanban' ? kolommenHtml(project.taken) : tabelHtml(project.taken)}
+      ${statusBlokkenHtml(project.taken)}
     </div>`).join('');
 
   el('inhoud').querySelectorAll('[data-open-bord]').forEach(link => {
     link.addEventListener('click', () => kiesBord(Number(link.dataset.openBord)));
   });
 
-  if (staat.weergave === 'kanban') koppelSlepen();
   koppelStatusKeuzes(el('inhoud'));
   koppelTaakKnoppen(el('inhoud'));
   koppelSorteren(el('inhoud'));
+  koppelStatusBlokken(el('inhoud'));
 }
 
 // De breedtes zelf staan in stijl.css, zodat elke tabel ze deelt.
@@ -635,11 +639,58 @@ function koppelStatusKeuzes(wortel) {
   });
 }
 
+// ── Blokken per status ───────────────────────────────────────────────────
+// De tabel valt uiteen in een blok per status, in de vaste statusvolgorde.
+// Verander je de status van een taak, dan tekent de app het scherm opnieuw en
+// springt de rij vanzelf naar het juiste blok.
+
+const KLAP_DICHT = `<polyline points="9 18 15 12 9 6"/>`;
+const KLAP_OPEN  = `<polyline points="6 9 12 15 18 9"/>`;
+
+/** Statussen die je hebt dichtgeklapt. Done en Cancelled beginnen dicht. */
+function statusBlokkenHtml(taken) {
+  // Helemaal niets? Dan één lege tabel met de melding, niet zes keer.
+  if (taken.length === 0) return tabelHtml([]);
+
+  return staat.statussen.map(status => {
+    const erin = taken.filter(t => t.status === status);
+    if (erin.length === 0) return '';   // lege statussen laten we weg
+
+    const dicht = staat.dichtgeklapt.has(status);
+    return `
+      <section class="status-blok${dicht ? ' dicht' : ''}" data-blok="${esc(status)}"
+               style="--status:${KLEUREN[status]}">
+        <button type="button" class="status-kop" data-klap="${esc(status)}"
+                title="${dicht ? 'Openklappen' : 'Dichtklappen'}">
+          <svg class="klap-pijl" width="13" height="13" fill="none" stroke="currentColor"
+               stroke-width="2.5" viewBox="0 0 24 24">${dicht ? KLAP_DICHT : KLAP_OPEN}</svg>
+          <span class="status-stip"></span>
+          <span class="status-naam">${esc(status)}</span>
+          <span class="telling">${erin.length} ${erin.length === 1 ? 'taak' : 'taken'}</span>
+        </button>
+        ${dicht ? '' : tabelHtml(erin)}
+      </section>`;
+  }).join('');
+}
+
+function koppelStatusBlokken(wortel) {
+  wortel.querySelectorAll('[data-klap]').forEach(knop => {
+    knop.addEventListener('click', () => {
+      const status = knop.dataset.klap;
+      // Per status, niet per project: klap je Done dicht, dan overal.
+      if (staat.dichtgeklapt.has(status)) staat.dichtgeklapt.delete(status);
+      else staat.dichtgeklapt.add(status);
+      teken();
+    });
+  });
+}
+
 function tekenTabel() {
-  el('inhoud').innerHTML = tabelHtml(gefilterdeTaken());
+  el('inhoud').innerHTML = statusBlokkenHtml(gefilterdeTaken());
   koppelStatusKeuzes(el('inhoud'));
   koppelTaakKnoppen(el('inhoud'));
   koppelSorteren(el('inhoud'));
+  koppelStatusBlokken(el('inhoud'));
 }
 
 function rijHtml(taak) {
@@ -694,123 +745,6 @@ function rijHtml(taak) {
         <button class="btn btn-danger btn-sm" data-verwijder="${taak.id}">Verwijder</button>
       </div></td>
     </tr>`;
-}
-
-function kolommenHtml(taken) {
-  return `<div class="kanban">${staat.statussen.map(status => {
-    const inKolom = taken.filter(t => t.status === status);
-    return `
-      <div class="kolom" data-status="${esc(status)}" data-bord="${taken[0]?.bord_id ?? staat.bordId}">
-        <div class="kolom-kop">
-          <span class="kolom-stip" style="background:${KLEUREN[status]}"></span>
-          ${esc(status)}
-          <span class="telling">${inKolom.length}</span>
-        </div>
-        <div class="kolom-lijst" data-lijst="${esc(status)}">
-          ${inKolom.map(kaartHtml).join('')}
-        </div>
-      </div>`;
-  }).join('')}</div>`;
-}
-
-function tekenKanban() {
-  el('inhoud').innerHTML = kolommenHtml(gefilterdeTaken());
-  koppelSlepen();
-  koppelTaakKnoppen(el('inhoud'));
-}
-
-function kaartHtml(taak) {
-  const teLaat = isTeLaat(taak);
-  const eraan = komtEraan(taak);
-  return `
-    <div class="kaart ${teLaat ? 'te-laat' : (eraan ? 'komt-eraan' : '')}" draggable="true" data-taak="${taak.id}"
-         data-detail="${taak.id}" data-bord="${taak.bord_id}"
-         ${teLaat || eraan ? `title="${esc(waaromAandacht(taak))}"` : ''}>
-      ${taak.prioriteit
-        ? `<span class="prio-vlag ${prioKlasse(taak.prioriteit)}">${esc(prioTekst(taak.prioriteit))}</span>`
-        : ''}
-      <div class="kaart-titel">${
-        teLaat ? '<span class="teken-te-laat" aria-hidden="true">⚠</span> '
-               : (eraan ? '<span class="teken-eraan" aria-hidden="true">⏱</span> ' : '')}${esc(taak.opdracht)}</div>
-      ${teLaat ? `<div class="te-laat-tekst">${esc(teLaatTekst(taak))}</div>` : ''}
-      <div class="kaart-voet">
-        ${taak.uitvoerend_naam && !isPersoonlijk()
-          ? `<span class="bolletje" title="${esc(taak.uitvoerend_naam)}">${esc(initialen(taak.uitvoerend_naam))}</span>`
-          : ''}
-        ${taak.deadline
-          ? `<span class="${teLaat ? 'datum-te-laat' : (eraan ? 'datum-eraan' : '')}">${datumNL(taak.deadline)}</span>`
-          : ''}
-        ${taak.aantal_opmerkingen ? `<span title="opmerkingen">💬 ${taak.aantal_opmerkingen}</span>` : ''}
-        ${taak.aantal_bijlagen ? `<span title="bijlagen">${PAPERCLIP} ${taak.aantal_bijlagen}</span>` : ''}
-        ${taak.aantal_stappen ? `<span title="stappen uit werkprocessen" class="${taak.aantal_afgevinkt === taak.aantal_stappen ? 'klaar' : ''}">☑ ${taak.aantal_afgevinkt}/${taak.aantal_stappen}</span>` : ''}
-      </div>
-    </div>`;
-}
-
-// ── Slepen op het kanbanbord ─────────────────────────────────────────────
-function koppelSlepen() {
-  let gesleept = null;
-
-  el('inhoud').querySelectorAll('.kaart').forEach(kaart => {
-    kaart.addEventListener('dragstart', (e) => {
-      gesleept = kaart;
-      kaart.classList.add('sleept');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', kaart.dataset.taak);
-    });
-    kaart.addEventListener('dragend', () => {
-      kaart.classList.remove('sleept');
-      gesleept = null;
-    });
-  });
-
-  el('inhoud').querySelectorAll('.kolom').forEach(kolom => {
-    const lijst = kolom.querySelector('.kolom-lijst');
-
-    kolom.addEventListener('dragover', (e) => {
-      if (!gesleept) return;
-      // Op het persoonlijke bord staan meerdere projecten onder elkaar. Een taak
-      // naar een ander project slepen zou hem verhuizen, en dat is niet wat een
-      // statuskolom hoort te doen.
-      if (gesleept.dataset.bord !== kolom.dataset.bord) return;
-
-      e.preventDefault();
-      kolom.classList.add('sleep-over');
-
-      // Zoek de kaart waar de muis boven zit en zet de gesleepte kaart ervoor.
-      const anderen = [...lijst.querySelectorAll('.kaart:not(.sleept)')];
-      const hierna = anderen.find(kaart => {
-        const vak = kaart.getBoundingClientRect();
-        return e.clientY < vak.top + vak.height / 2;
-      });
-      lijst.insertBefore(gesleept, hierna ?? null);
-    });
-
-    kolom.addEventListener('dragleave', (e) => {
-      if (!kolom.contains(e.relatedTarget)) kolom.classList.remove('sleep-over');
-    });
-
-    kolom.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      kolom.classList.remove('sleep-over');
-      const kaart = gesleept;
-      if (!kaart || kaart.dataset.bord !== kolom.dataset.bord) return;
-
-      try {
-        await api(`/taken/${kaart.dataset.taak}/verplaats`, {
-          method: 'POST',
-          body: {
-            status: kolom.dataset.status,
-            vorige_id: kaart.previousElementSibling?.dataset.taak ?? null,
-            volgende_id: kaart.nextElementSibling?.dataset.taak ?? null,
-          },
-        });
-      } catch (fout) {
-        alert(fout.message);
-      }
-      herlaadTaken();
-    });
-  });
 }
 
 // ── Prikbord ─────────────────────────────────────────────────────────────
@@ -1309,7 +1243,7 @@ el('brVerwijder').addEventListener('click', async () => {
   tekenPrikbord();
 });
 
-// ── Knoppen in tabel en kanban ───────────────────────────────────────────
+// ── Knoppen in de tabel ──────────────────────────────────────────────────
 function koppelTaakKnoppen(wortel) {
   wortel.querySelectorAll('[data-bewerk]').forEach(knop => {
     knop.addEventListener('click', (e) => { e.stopPropagation(); openTaakVenster(Number(knop.dataset.bewerk)); });
@@ -2555,14 +2489,6 @@ el('filterStatus').addEventListener('change', teken);
 el('filterPrioriteit').addEventListener('change', teken);
 el('filterUitvoerend').addEventListener('change', teken);
 el('teamKnop').addEventListener('click', tekenTeam);
-
-document.querySelectorAll('[data-weergave]').forEach(knop => {
-  knop.addEventListener('click', () => {
-    document.querySelectorAll('[data-weergave]').forEach(k => k.classList.toggle('actief', k === knop));
-    staat.weergave = knop.dataset.weergave;
-    teken();
-  });
-});
 
 el('nieuwBordKnop').addEventListener('click', async () => {
   const naam = prompt('Naam van het nieuwe bord:');

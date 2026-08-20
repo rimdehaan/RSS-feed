@@ -1,8 +1,9 @@
 # Transafe Taakbeheer
 
 Takenbeheer voor een klein team, in de geest van monday.com. Meerdere mensen met
-een eigen account werken samen aan dezelfde borden: tabelweergave, kanban met
-slepen, opmerkingen per taak en een historie die bijhoudt wie wat wanneer wijzigde.
+een eigen account werken samen aan dezelfde borden: een tabel die per status
+groepeert, opmerkingen per taak en een historie die bijhoudt wie wat wanneer
+wijzigde.
 
 Dit is de servervariant van je oorspronkelijke `Taakbeheer.html`. De opmaak en de
 statussen zijn hetzelfde gebleven; wat veranderde is dat de gegevens niet meer in
@@ -42,9 +43,9 @@ administratie — zie *Back-ups* verderop.
 | Projecten | Meerdere borden naast elkaar, bijvoorbeeld per project of per klant |
 | Wie ziet wat | Per project in te stellen: iedereen, of alleen gekozen mensen |
 | Tabelweergave | Zoals je prototype: opdracht, uitvoerend, status, deadline, omschrijving |
+| Blokken per status | De tabel valt uiteen in een blok per status, elk met zijn eigen kleur. Verander je de status, dan springt de rij naar het juiste blok. Elk blok kun je dichtklappen; Done en Cancelled beginnen dicht |
 | Prioriteit | Critical, High, Medium of Low — of geen. Klik en kies, net als bij status. Ook te filteren |
 | Deadline-alarm | Rood als de deadline voorbij is, oranje als hij eraan komt. Met tellers bovenaan om erop te filteren |
-| Kanban | De zes statussen als kolommen, kaarten ertussen slepen |
 | Werkprocessen | Bibliotheek met vaste werkwijzen. Je maakt er een door een procedure te plakken; de app knipt hem in stappen |
 | Werkproces op een taak | Eén of meer werkprocessen aan een taak hangen, met afvinkbare stappen en voortgang per proces |
 | Overdragen | Een taak naar een ander project verplaatsen via **Bewerken → Project**. Opmerkingen, historie en bijlagen gaan mee |

@@ -201,13 +201,6 @@ body {
   background: #fff; border-bottom: 1px solid var(--lijn); flex-shrink: 0;
   flex-wrap: wrap;   /* op een smal scherm liever een regel erbij dan knoppen die afbreken */
 }
-.weergave-knoppen { display: flex; background: var(--achtergrond); border-radius: 6px; padding: 3px; gap: 2px; }
-.weergave-knoppen button {
-  border: none; background: none; padding: 5px 14px; border-radius: 4px;
-  font-size: 0.82rem; font-weight: 600; color: var(--blauw);
-  cursor: pointer; font-family: inherit;
-}
-.weergave-knoppen button.actief { background: #fff; color: var(--donker); box-shadow: 0 1px 3px rgba(0,41,68,0.1); }
 
 /* Tellers met filter. Ze verschijnen alleen als er iets te tellen valt, en
    dragen dezelfde kleuren als de regels waar ze naar verwijzen. */
@@ -300,10 +293,13 @@ tbody tr.komt-eraan td { color: #7a4a06; }
    tabel; zonder vaste maten kiest elke tabel zijn eigen breedtes en staan de
    projecten niet meer onder elkaar uitgelijnd. Opdracht krijgt wat overblijft,
    want dat is de belangrijkste kolom. */
-.tabel-omhulsel { overflow-x: auto; }
 /* De ondergrens houdt Opdracht breder dan elke andere kolom; is er minder
-   ruimte, dan schuift de tabel zijwaarts in plaats van hem plat te drukken. */
-.tabel-omhulsel table { table-layout: fixed; min-width: 1325px; }
+   ruimte, dan schuift het hele scherm zijwaarts in plaats van de tabel plat te
+   drukken. Bewust het hele scherm en niet elke tabel apart: er staan nu meerdere
+   tabellen onder elkaar, en die moeten samen opschuiven — anders lopen de
+   kolommen uit de pas zodra je naar rechts schuift. */
+.tabel-omhulsel { min-width: 1325px; }
+.tabel-omhulsel table { table-layout: fixed; min-width: 100%; }
 
 col.k-opdracht   { width: auto; }
 col.k-uitvoerend { width: 150px; }
@@ -334,48 +330,28 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
 /* De gekleurde rondjes vullen hun kolom in plaats van hem op te rekken. */
 .tabel-omhulsel .status-select { width: 100%; min-width: 0; }
 
-/* ── Kanban ── */
-.kanban { display: flex; gap: 14px; align-items: flex-start; min-height: 100%; }
-.kolom {
-  background: #eef0f3; border-radius: 10px; width: 280px; flex-shrink: 0;
-  display: flex; flex-direction: column; max-height: 100%;
-}
-.kolom-kop {
-  padding: 12px 14px 10px; display: flex; align-items: center; gap: 8px;
-  font-size: 0.82rem; font-weight: 700; color: var(--donker);
-}
-.kolom-stip { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.kolom-kop .telling { margin-left: auto; color: var(--grijs); font-weight: 600; }
-.kolom-lijst { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 60px; }
-.kolom.sleep-over { outline: 2px dashed var(--blauw); outline-offset: -3px; }
+/* ── Blokken per status ── */
+/* De tabel valt uiteen in een blok per status. De kleur komt via --status uit
+   app.js, zodat kleur en status niet op twee plekken worden vastgelegd. */
+.status-blok { border-left: 4px solid var(--status); padding-left: 14px; margin-bottom: 20px; }
+.status-blok:last-child { margin-bottom: 0; }
 
-.kaart {
-  background: #fff; border-radius: 8px; padding: 11px 13px;
-  border: 1px solid var(--lijn); box-shadow: 0 1px 3px rgba(0,41,68,0.07);
-  cursor: grab; font-size: 0.85rem;
+.status-kop {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  background: none; border: none; padding: 0 0 9px; cursor: pointer;
+  font-family: inherit; font-size: 0.86rem; font-weight: 700; color: var(--donker);
+  text-align: left;
 }
-.kaart:active { cursor: grabbing; }
-.kaart.sleept { opacity: 0.4; }
-.kaart.te-laat {
-  background: #fbe0e4; border-color: #eda9b3;
-  box-shadow: 0 1px 3px rgba(196,49,75,0.18), inset 4px 0 0 #C4314B;
+.status-kop:hover .status-naam { text-decoration: underline; }
+/* De statuskleuren zijn vol; als tekstkleur op wit is met name het geel van
+   "Working on it" slecht leesbaar. Vandaar een gekleurd bolletje en een balk,
+   met de titel gewoon in het donkerblauw. */
+.status-stip {
+  width: 11px; height: 11px; border-radius: 50%; background: var(--status); flex-shrink: 0;
 }
-.kaart.te-laat .kaart-titel { color: #7d2431; }
+.status-kop .klap-pijl { color: var(--blauw); flex-shrink: 0; }
+.status-kop .telling { font-weight: 500; font-size: 0.78rem; color: var(--grijs); }
 
-.kaart.komt-eraan {
-  background: #fff7e6; border-color: #f2d09a;
-  box-shadow: 0 1px 3px rgba(242,153,74,0.18), inset 4px 0 0 #F2994A;
-}
-.kaart.komt-eraan .kaart-titel { color: #7a4a06; }
-.kaart-titel { font-weight: 600; color: var(--donker); margin-bottom: 7px; line-height: 1.35; }
-.prio-vlag {
-  display: inline-block; margin-bottom: 6px; padding: 2px 9px; border-radius: 12px;
-  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.2px;
-}
-.kaart-voet { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--blauw); flex-wrap: wrap; }
-.kaart-voet .datum-te-laat { color: #C4314B; font-weight: 700; }
-.kaart-voet .datum-eraan   { color: #a15c00; font-weight: 700; }
-.kaart .te-laat-tekst { margin: -3px 0 7px; }
 
 .bolletje {
   width: 22px; height: 22px; border-radius: 50%; background: var(--blauw);
