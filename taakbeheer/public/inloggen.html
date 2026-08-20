@@ -26,6 +26,12 @@
           <label for="wachtwoord">Wachtwoord</label>
           <input type="password" id="wachtwoord" autocomplete="current-password" required />
         </div>
+        <!-- Alleen als je een nieuw wachtwoord kiest. Bewust geen `required`:
+             een verborgen verplicht veld blokkeert het versturen. -->
+        <div class="veld" id="herhaalVeld" hidden>
+          <label for="herhaal">Wachtwoord nogmaals</label>
+          <input type="password" id="herhaal" autocomplete="new-password" />
+        </div>
         <div class="melding" id="melding"></div>
         <button type="submit" class="btn btn-primary" id="verstuur">Inloggen</button>
       </form>
@@ -44,6 +50,12 @@
     const el = (id) => document.getElementById(id);
     const melding = el('melding');
     let modus = 'inloggen';   // 'inloggen' | 'setup' | 'registreren'
+
+    /** Kies je een nieuw wachtwoord, dan moet je het twee keer typen. */
+    function vraagOmHerhaling() {
+      el('wachtwoord').autocomplete = 'new-password';
+      el('herhaalVeld').hidden = false;
+    }
 
     function toon(tekst, goed = false) {
       melding.textContent = tekst;
@@ -72,7 +84,7 @@
           el('titel').textContent = 'Nieuw wachtwoord kiezen';
           el('email').value = data.email;
           el('email').readOnly = true;
-          el('wachtwoord').autocomplete = 'new-password';
+          vraagOmHerhaling();
           el('verstuur').textContent = 'Wachtwoord instellen';
           el('uitleg').textContent =
             'Kies een nieuw wachtwoord van minstens 10 tekens. Je wordt daarna meteen ingelogd.';
@@ -94,7 +106,7 @@
           el('naamVeld').hidden = false;
           el('email').value = data.email;
           el('email').readOnly = true;
-          el('wachtwoord').autocomplete = 'new-password';
+          vraagOmHerhaling();
           el('verstuur').textContent = 'Account aanmaken';
           el('uitleg').textContent = 'Kies een wachtwoord van minstens 10 tekens.';
         } catch (fout) {
@@ -109,7 +121,7 @@
         modus = 'setup';
         el('titel').textContent = 'Eerste beheerder aanmaken';
         el('naamVeld').hidden = false;
-        el('wachtwoord').autocomplete = 'new-password';
+        vraagOmHerhaling();
         el('verstuur').textContent = 'Aanmaken en starten';
         el('uitleg').textContent =
           'Dit scherm verschijnt alleen zolang er nog geen enkel account bestaat. ' +
@@ -126,6 +138,15 @@
         const naam = el('naam').value.trim();
         const email = el('email').value.trim();
         const wachtwoord = el('wachtwoord').value;
+
+        // Je ziet niet wat je typt; twee keer hetzelfde intypen is de enige
+        // manier om zeker te weten dat er geen typefout in zit.
+        if (!el('herhaalVeld').hidden && wachtwoord !== el('herhaal').value) {
+          toon('De twee wachtwoorden zijn niet gelijk. Typ ze allebei opnieuw.');
+          el('herhaal').value = '';
+          el('verstuur').disabled = false;
+          return;
+        }
 
         if (modus === 'setup') {
           await verstuurNaar('/api/setup', { naam, email, wachtwoord });

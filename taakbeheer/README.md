@@ -32,7 +32,7 @@ administratie — zie *Back-ups* verderop.
 
 | Onderdeel | Wat het doet |
 |---|---|
-| Accounts | Inloggen met e-mail en wachtwoord. Wachtwoorden worden versleuteld opgeslagen (scrypt), nooit leesbaar |
+| Accounts | Inloggen met e-mail en wachtwoord. Wachtwoorden worden versleuteld opgeslagen (scrypt), nooit leesbaar. Kies je een nieuw wachtwoord, dan typ je het twee keer |
 | Uitnodigen | Alleen een beheerder voegt mensen toe. Je krijgt een link die je zelf doorstuurt |
 | Rollen | *Beheerder* mag uitnodigen en accounts beheren, *lid* werkt gewoon mee. Je eigen rol kun je niet wijzigen — dat doet een collega-beheerder |
 | Wachtwoord kwijt | Een beheerder maakt een eenmalige herstellink, twee dagen geldig |

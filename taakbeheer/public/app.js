@@ -2238,6 +2238,7 @@ el('wieBenIk').addEventListener('click', () => {
   el('aEmail').value = staat.ik.email;
   el('aHuidig').value = '';
   el('aNieuw').value = '';
+  el('aHerhaal').value = '';
   for (const id of ['aNaamMelding', 'aWachtwoordMelding']) {
     el(id).textContent = '';
     el(id).classList.remove('goed');
@@ -2269,6 +2270,15 @@ el('aNaamKnop').addEventListener('click', async () => {
 el('aWachtwoordKnop').addEventListener('click', async () => {
   const melding = el('aWachtwoordMelding');
   melding.classList.remove('goed');
+
+  // Je ziet niet wat je typt; twee keer hetzelfde is de enige manier om zeker
+  // te weten dat er geen typefout in zit.
+  if (el('aNieuw').value !== el('aHerhaal').value) {
+    melding.textContent = 'De twee nieuwe wachtwoorden zijn niet gelijk. Typ ze allebei opnieuw.';
+    el('aHerhaal').value = '';
+    return;
+  }
+
   try {
     await api('/wachtwoord', {
       method: 'POST',
@@ -2276,6 +2286,7 @@ el('aWachtwoordKnop').addEventListener('click', async () => {
     });
     el('aHuidig').value = '';
     el('aNieuw').value = '';
+    el('aHerhaal').value = '';
     melding.textContent = 'Je wachtwoord is gewijzigd. Je blijft gewoon ingelogd.';
     melding.classList.add('goed');
   } catch (fout) {
