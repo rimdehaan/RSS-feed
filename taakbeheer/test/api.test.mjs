@@ -1177,6 +1177,81 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
   check('het slepen van andermans briefje lukt ook niet',
     (await carla(`/briefjes/${briefjeVanRim}/verplaats`, { method: 'POST', body: {} })).status === 404);
 
+  groep('Rem op het raden van wachtwoorden');
+  // Een eigen account, zodat de tellers van de andere tests niet in de weg zitten.
+  const remToken = (await rim('/uitnodigingen', { method: 'POST', body: { email: 'remmer@transafe.nl' } })).data.token;
+  const remmer = client();
+  await remmer('/registreren', { method: 'POST', body: { token: remToken, naam: 'Rem Mertens', wachtwoord: 'RemZijnWachtwoord' } });
+
+  const remProbeer = (wachtwoord) => remmer('/inloggen', {
+    method: 'POST', body: { email: 'remmer@transafe.nl', wachtwoord },
+  });
+
+  const vijfPogingen = [];
+  for (let i = 0; i < 5; i++) vijfPogingen.push((await remProbeer('helemaalFout')).status);
+  check('de eerste vijf pogingen worden gewoon geweigerd',
+    vijfPogingen.every((s) => s === 401), JSON.stringify(vijfPogingen));
+
+  const remZesde = await remProbeer('helemaalFout');
+  check('de zesde wordt geblokkeerd', remZesde.status === 429, JSON.stringify(remZesde.data));
+  check('met een melding die de wachttijd noemt',
+    /Te veel mislukte pogingen.*minuten opnieuw/.test(remZesde.data.fout), remZesde.data.fout);
+
+  const remMetJuiste = await remProbeer('RemZijnWachtwoord');
+  check('ook het juiste wachtwoord komt er dan niet doorheen', remMetJuiste.status === 429,
+    JSON.stringify(remMetJuiste.data));
+
+  check('een ander account kan gewoon inloggen',
+    (await client()('/inloggen', { method: 'POST', body: { email: 'carla@transafe.nl', wachtwoord: 'CarlaHaarWachtwoord' } })).status === 200);
+
+  groep('Een geslaagde inlog wist de teller');
+  const tweedeToken = (await rim('/uitnodigingen', { method: 'POST', body: { email: 'remTelClient@transafe.nl' } })).data.token;
+  const remTelClient = client();
+  await remTelClient('/registreren', { method: 'POST', body: { token: tweedeToken, naam: 'Tel Jansen', wachtwoord: 'TelZijnWachtwoord' } });
+  const remTelProbeer = (w) => remTelClient('/inloggen', { method: 'POST', body: { email: 'remTelClient@transafe.nl', wachtwoord: w } });
+
+  for (let i = 0; i < 4; i++) await remTelProbeer('fout');
+  check('na vier fouten lukt het juiste wachtwoord nog', (await remTelProbeer('TelZijnWachtwoord')).status === 200);
+  // Zou de remTelClient niet gewist zijn, dan blokkeert de tweede poging hieronder al.
+  const remNaReset = [];
+  for (let i = 0; i < 5; i++) remNaReset.push((await remTelProbeer('fout')).status);
+  check('en daarna heb je weer vijf pogingen',
+    remNaReset.every((s) => s === 401), JSON.stringify(remNaReset));
+
+  groep('Tokens raden gaat ook niet onbeperkt');
+  const remRader = client();
+  const remGokPogingen = [];
+  for (let i = 0; i < 22; i++) {
+    remGokPogingen.push((await remRader(`/herstel/gegokt${i}`)).status);
+  }
+  // Waar de grens precies valt hangt af van wat eerdere tests al aan mislukte
+  // tokenpogingen hebben opgeleverd; het gaat erom dát er geblokkeerd wordt.
+  const eersteBlok = remGokPogingen.indexOf(429);
+  check('raden geeft eerst gewoon "niet geldig"',
+    eersteBlok > 0 && remGokPogingen.slice(0, eersteBlok).every((s) => s === 404),
+    JSON.stringify(remGokPogingen));
+  check('en wordt daarna geblokkeerd',
+    eersteBlok !== -1 && remGokPogingen.slice(eersteBlok).every((s) => s === 429),
+    JSON.stringify(remGokPogingen));
+  check('binnen de afgesproken grens van twintig', eersteBlok <= 20, String(eersteBlok));
+
+  groep('Wachtwoord wijzigen gooit andere sessies eruit');
+  const remTabEen = client();
+  const remTabTwee = client();
+  const remInlogAls = (c, w) => c('/inloggen', { method: 'POST', body: { email: 'carla@transafe.nl', wachtwoord: w } });
+  await remInlogAls(remTabEen, 'CarlaHaarWachtwoord');
+  await remInlogAls(remTabTwee, 'CarlaHaarWachtwoord');
+  check('beide browsers zijn ingelogd',
+    (await remTabEen('/borden')).status === 200 && (await remTabTwee('/borden')).status === 200);
+
+  check('wachtwoord wijzigen lukt', (await remTabEen('/wachtwoord', {
+    method: 'POST', body: { huidig: 'CarlaHaarWachtwoord', nieuw: 'CarlaHaarNieuwere' },
+  })).status === 200);
+  check('de andere browser is eruit gegooid', (await remTabTwee('/borden')).status === 401);
+  check('maar in je eigen scherm blijf je ingelogd', (await remTabEen('/borden')).status === 200);
+  check('en het oude wachtwoord werkt niet meer',
+    (await client()('/inloggen', { method: 'POST', body: { email: 'carla@transafe.nl', wachtwoord: 'CarlaHaarWachtwoord' } })).status === 401);
+
   groep('Uitloggen');
   await rim('/uitloggen', { method: 'POST' });
   check('na uitloggen geen toegang', (await rim('/borden')).status === 401);

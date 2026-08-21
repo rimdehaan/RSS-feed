@@ -14,6 +14,7 @@ import {
   hashWachtwoord, wachtwoordKlopt, maakSessie, verwijderSessie,
   vereistLogin, vereistBeheerder,
 } from './auth.js';
+import { GRENZEN, wachtNog, telFout, vergeet, teVeelMelding } from './rem.js';
 
 const api = Router();
 
@@ -25,6 +26,15 @@ function tekst(waarde, max = 500) {
 
 function geldigEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+/**
+ * Rem op het raden van uitnodigings- en herstellinks. Geeft het antwoord terug
+ * als je geblokkeerd bent, anders null.
+ */
+function tokenRem(req, res) {
+  const wacht = wachtNog(`token:${req.ip}`, GRENZEN.tokenPerIp);
+  return wacht === null ? null : res.status(429).json({ fout: teVeelMelding(wacht) });
 }
 
 /** Datum als jjjj-mm-dd, of null. */
@@ -127,14 +137,30 @@ api.post('/inloggen', (req, res) => {
   const email = tekst(req.body.email, 160).toLowerCase();
   const wachtwoord = String(req.body.wachtwoord ?? '');
 
+  // Twee sleutels: streng per adres, ruim per IP. Het juiste wachtwoord komt er
+  // bewust ook niet doorheen zolang je geblokkeerd bent — anders heeft de rem
+  // geen zin, want dat is precies wat een aanvaller aan het zoeken is.
+  const perAdres = `inloggen:adres:${email}`;
+  const perIp = `inloggen:ip:${req.ip}`;
+
+  const wacht = wachtNog(perAdres, GRENZEN.inloggenPerAdres)
+             ?? wachtNog(perIp, GRENZEN.inloggenPerIp);
+  if (wacht !== null) {
+    return res.status(429).json({ fout: teVeelMelding(wacht) });
+  }
+
   const gebruiker = db.prepare('SELECT * FROM gebruikers WHERE email = ?').get(email);
 
   // Bewust dezelfde melding voor "onbekend adres" en "verkeerd wachtwoord":
-  // anders kan iemand uitvissen welke adressen bestaan.
+  // anders kan iemand uitvissen welke adressen bestaan. Om diezelfde reden telt
+  // een onbekend adres gewoon mee in de teller.
   if (!gebruiker || !gebruiker.actief || !wachtwoordKlopt(wachtwoord, gebruiker.wachtwoord_hash)) {
+    telFout(perAdres);
+    telFout(perIp);
     return res.status(401).json({ fout: 'E-mailadres of wachtwoord klopt niet.' });
   }
 
+  vergeet(perAdres);
   maakSessie(res, gebruiker.id);
   res.json({ ok: true });
 });
@@ -157,11 +183,15 @@ api.get('/ik', (req, res) => {
 // ── Uitnodigingen ────────────────────────────────────────────────────────
 
 api.get('/uitnodiging/:token', (req, res) => {
+  const geblokkeerd = tokenRem(req, res);
+  if (geblokkeerd) return geblokkeerd;
+
   const uitnodiging = db.prepare(
     'SELECT email, verloopt_op, gebruikt_op FROM uitnodigingen WHERE token = ?'
   ).get(req.params.token);
 
   if (!uitnodiging || uitnodiging.gebruikt_op || new Date(uitnodiging.verloopt_op) < new Date()) {
+    telFout(`token:${req.ip}`);
     return res.status(404).json({ fout: 'Deze uitnodiging is niet meer geldig.' });
   }
   res.json({ email: uitnodiging.email });
@@ -325,6 +355,9 @@ api.post('/gebruikers/:id/herstel', vereistBeheerder, (req, res) => {
 });
 
 api.get('/herstel/:token', (req, res) => {
+  const geblokkeerd = tokenRem(req, res);
+  if (geblokkeerd) return geblokkeerd;
+
   const rij = db.prepare(
     `SELECT h.gebruikt_op, h.verloopt_op, g.naam, g.email
        FROM herstel h JOIN gebruikers g ON g.id = h.gebruiker_id
@@ -332,6 +365,7 @@ api.get('/herstel/:token', (req, res) => {
   ).get(req.params.token);
 
   if (!rij || rij.gebruikt_op || new Date(rij.verloopt_op) < new Date()) {
+    telFout(`token:${req.ip}`);
     return res.status(404).json({ fout: 'Deze herstellink is niet meer geldig.' });
   }
   res.json({ naam: rij.naam, email: rij.email });
@@ -375,16 +409,33 @@ api.post('/wachtwoord', vereistLogin, (req, res) => {
   const huidig = String(req.body.huidig ?? '');
   const nieuw = String(req.body.nieuw ?? '');
 
+  // Ook hier een rem: dit is de tweede plek waar je een wachtwoord kunt raden.
+  const sleutel = `wachtwoord:${req.gebruiker.id}`;
+  const wacht = wachtNog(sleutel, GRENZEN.inloggenPerAdres);
+  if (wacht !== null) return res.status(429).json({ fout: teVeelMelding(wacht) });
+
   const gebruiker = db.prepare('SELECT * FROM gebruikers WHERE id = ?').get(req.gebruiker.id);
   if (!wachtwoordKlopt(huidig, gebruiker.wachtwoord_hash)) {
+    telFout(sleutel);
     return res.status(403).json({ fout: 'Je huidige wachtwoord klopt niet.' });
   }
   if (nieuw.length < 10) {
     return res.status(400).json({ fout: 'Kies een wachtwoord van minstens 10 tekens.' });
   }
 
-  db.prepare('UPDATE gebruikers SET wachtwoord_hash = ? WHERE id = ?')
-    .run(hashWachtwoord(nieuw), gebruiker.id);
+  db.transaction(() => {
+    db.prepare('UPDATE gebruikers SET wachtwoord_hash = ? WHERE id = ?')
+      .run(hashWachtwoord(nieuw), gebruiker.id);
+
+    // Alle sessies eruit, ook die van jezelf: verander je je wachtwoord omdat je
+    // vermoedt dat iemand meekijkt, dan moet die meekijker er meteen uit en niet
+    // pas over dertig dagen. Hieronder krijg je zelf meteen een nieuwe, dus in je
+    // eigen scherm merk je er niets van. Zo doet de herstellink het ook.
+    db.prepare('DELETE FROM sessies WHERE gebruiker_id = ?').run(gebruiker.id);
+  })();
+
+  vergeet(sleutel);
+  maakSessie(res, gebruiker.id);
   res.json({ ok: true });
 });
 

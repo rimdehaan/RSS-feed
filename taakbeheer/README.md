@@ -353,6 +353,57 @@ volume maken. Een back-up die je nooit hebt teruggezet is geen back-up: probeer
 
 ---
 
+## Beveiliging
+
+Wat de app zelf doet:
+
+- **Wachtwoorden** gaan door scrypt met een eigen salt per wachtwoord en worden
+  vergeleken op een manier die uit de reactietijd niets verraadt. Nergens
+  leesbaar opgeslagen.
+- **Databasevragen** lopen allemaal via voorbereide zoekopdrachten. Er wordt
+  nooit invoer in de tekst van een zoekopdracht geplakt.
+- **Sessies** zijn een willekeurige code van 32 bytes, bewaard op de server. De
+  cookie is `httpOnly`, `sameSite=lax` en `secure` zodra je live staat.
+- **Uploads** krijgen een willekeurige naam op schijf en worden altijd als
+  bijlage teruggegeven, nooit als pagina. Een geüpload html- of svg-bestand kan
+  dus niet als onderdeel van deze site draaien.
+- **Inloggen verraadt niet** of een e-mailadres bestaat.
+
+### Rem op het raden
+
+Vijf mislukte inlogpogingen op hetzelfde e-mailadres binnen een kwartier, en het
+adres gaat op slot tot dat kwartier om is — **ook met het juiste wachtwoord**.
+Anders zou de rem niets voorstellen, want dat juiste wachtwoord is precies wat
+een aanvaller zoekt. Een geslaagde inlog wist de teller.
+
+Per IP-adres ligt de grens veel hoger (vijftig), zodat een kantoor met één
+internetverbinding zichzelf niet buitensluit. Het opvragen van een uitnodigings-
+of herstellink is beperkt tot twintig mislukte pogingen per IP.
+
+De keerzijde: iemand kan een collega een kwartier buitensluiten door expres fout
+te gokken. Dat is de prijs voor een rem die werkt.
+
+De tellers staan in het geheugen van de server. Bij een herstart zijn ze leeg;
+dat is geen opening, want een aanvaller kan geen herstart afdwingen.
+
+### Wachtwoord wijzigen logt overal uit
+
+Verander je je wachtwoord, dan worden alle sessies van dat account verwijderd en
+krijgt alleen je huidige scherm meteen een nieuwe. Iedereen die nog op een ander
+apparaat ingelogd stond, moet opnieuw inloggen. Verander je je wachtwoord omdat
+je vermoedt dat iemand meekijkt, dan is die meekijker er dus meteen uit.
+
+### Wat de app níet oplost
+
+- **De database is niet versleuteld.** Alles staat in één bestand bij de
+  hosting. Wie daarbij kan, leest alles. Zet tweestapsverificatie op je
+  hostingaccount en houd bij wie er toegang heeft.
+- **Geen tweestapsverificatie voor gebruikers.** Zit er niet in.
+- **DDoS houd je niet tegen in code.** Dat is werk voor de laag ervóór, zoals
+  Cloudflare. De rem hierboven dekt alleen de dure verzoeken.
+
+---
+
 ## Wat er (nog) niet in zit
 
 Bewust weggelaten, zodat het overzichtelijk blijft:
