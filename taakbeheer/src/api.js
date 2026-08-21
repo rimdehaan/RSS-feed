@@ -12,9 +12,10 @@ import { db, BIJLAGEMAP, STATUSSEN, PRIORITEITEN, aantalGebruikers, logHistorie,
 import { splitsStappen, MAX_STAPPEN, MAX_STAP_TEKENS } from '../public/stappen.js';
 import {
   hashWachtwoord, wachtwoordKlopt, maakSessie, verwijderSessie,
-  vereistLogin, vereistBeheerder,
+  vereistLogin, vereistBeheerder, moetZwaarder, verzwaar,
 } from './auth.js';
 import { GRENZEN, wachtNog, telFout, vergeet, teVeelMelding } from './rem.js';
+import { noteer, laatsteRegels, LOG_DAGEN } from './logboek.js';
 
 const api = Router();
 
@@ -127,6 +128,11 @@ api.post('/setup', (req, res) => {
   db.prepare('INSERT INTO borden (naam) VALUES (?)').run('Takenbord');
   zorgVoorPriveLijst(resultaat.lastInsertRowid);
 
+  noteer({
+    soort: 'installatie', gelukt: true, email,
+    gebruikerId: resultaat.lastInsertRowid, ip: req.ip,
+  });
+
   maakSessie(res, resultaat.lastInsertRowid);
   res.json({ ok: true });
 });
@@ -146,6 +152,7 @@ api.post('/inloggen', (req, res) => {
   const wacht = wachtNog(perAdres, GRENZEN.inloggenPerAdres)
              ?? wachtNog(perIp, GRENZEN.inloggenPerIp);
   if (wacht !== null) {
+    noteer({ soort: 'geblokkeerd', email, ip: req.ip });
     return res.status(429).json({ fout: teVeelMelding(wacht) });
   }
 
@@ -157,10 +164,18 @@ api.post('/inloggen', (req, res) => {
   if (!gebruiker || !gebruiker.actief || !wachtwoordKlopt(wachtwoord, gebruiker.wachtwoord_hash)) {
     telFout(perAdres);
     telFout(perIp);
+    noteer({ soort: 'inloggen', email, gebruikerId: gebruiker?.id, ip: req.ip });
     return res.status(401).json({ fout: 'E-mailadres of wachtwoord klopt niet.' });
   }
 
   vergeet(perAdres);
+  noteer({ soort: 'inloggen', gelukt: true, email, gebruikerId: gebruiker.id, ip: req.ip });
+
+  // Is dit wachtwoord nog met de oude, lichtere instelling opgeslagen? Dan nu
+  // opnieuw wegschrijven: dit is het enige moment waarop we het wachtwoord in
+  // handen hebben. Zo groeit iedereen vanzelf mee zonder iets te merken.
+  if (moetZwaarder(gebruiker.wachtwoord_hash)) verzwaar(gebruiker.id, wachtwoord);
+
   maakSessie(res, gebruiker.id);
   res.json({ ok: true });
 });
@@ -224,7 +239,13 @@ api.post('/registreren', (req, res) => {
     return r.lastInsertRowid;
   });
 
-  maakSessie(res, maakAan());
+  const nieuweId = maakAan();
+  noteer({
+    soort: 'registreren', gelukt: true,
+    email: uitnodiging.email, gebruikerId: nieuweId, ip: req.ip,
+  });
+
+  maakSessie(res, nieuweId);
   res.json({ ok: true });
 });
 
@@ -391,6 +412,14 @@ api.post('/herstel', (req, res) => {
     db.prepare('DELETE FROM sessies WHERE gebruiker_id = ?').run(rij.gebruiker_id);
   })();
 
+  // Met een herstellink neemt iemand een bestaand account over. Juist dat wil je
+  // later kunnen terugzien.
+  const wie = db.prepare('SELECT email FROM gebruikers WHERE id = ?').get(rij.gebruiker_id);
+  noteer({
+    soort: 'herstel', gelukt: true,
+    email: wie?.email, gebruikerId: rij.gebruiker_id, ip: req.ip,
+  });
+
   maakSessie(res, rij.gebruiker_id);
   res.json({ ok: true });
 });
@@ -412,11 +441,15 @@ api.post('/wachtwoord', vereistLogin, (req, res) => {
   // Ook hier een rem: dit is de tweede plek waar je een wachtwoord kunt raden.
   const sleutel = `wachtwoord:${req.gebruiker.id}`;
   const wacht = wachtNog(sleutel, GRENZEN.inloggenPerAdres);
-  if (wacht !== null) return res.status(429).json({ fout: teVeelMelding(wacht) });
+  if (wacht !== null) {
+    noteer({ soort: 'geblokkeerd', email: req.gebruiker.email, gebruikerId: req.gebruiker.id, ip: req.ip });
+    return res.status(429).json({ fout: teVeelMelding(wacht) });
+  }
 
   const gebruiker = db.prepare('SELECT * FROM gebruikers WHERE id = ?').get(req.gebruiker.id);
   if (!wachtwoordKlopt(huidig, gebruiker.wachtwoord_hash)) {
     telFout(sleutel);
+    noteer({ soort: 'wachtwoord', email: gebruiker.email, gebruikerId: gebruiker.id, ip: req.ip });
     return res.status(403).json({ fout: 'Je huidige wachtwoord klopt niet.' });
   }
   if (nieuw.length < 10) {
@@ -435,8 +468,17 @@ api.post('/wachtwoord', vereistLogin, (req, res) => {
   })();
 
   vergeet(sleutel);
+  noteer({ soort: 'wachtwoord', gelukt: true, email: gebruiker.email, gebruikerId: gebruiker.id, ip: req.ip });
   maakSessie(res, gebruiker.id);
   res.json({ ok: true });
+});
+
+/**
+ * Het inlogboek. Alleen voor beheerders: er staan e-mailadressen en IP-adressen
+ * in, en dat hoort niet iedereen te zien.
+ */
+api.get('/inlogboek', vereistBeheerder, (req, res) => {
+  res.json({ regels: laatsteRegels(req.query.aantal ?? 100), bewaartermijn_dagen: LOG_DAGEN });
 });
 
 // ── Borden ───────────────────────────────────────────────────────────────

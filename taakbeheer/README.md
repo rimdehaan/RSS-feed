@@ -368,6 +368,50 @@ Wat de app zelf doet:
   bijlage teruggegeven, nooit als pagina. Een geüpload html- of svg-bestand kan
   dus niet als onderdeel van deze site draaien.
 - **Inloggen verraadt niet** of een e-mailadres bestaat.
+- **De browser krijgt strenge instructies mee** over wat er op de pagina mag —
+  zie "Wat de browser wel en niet mag" hieronder.
+
+### Hoe zwaar wachtwoorden versleuteld worden
+
+Scrypt is expres langzaam. Hoe zwaarder de instelling, hoe langer het duurt om
+één wachtwoord te controleren — en hoe onbetaalbaarder het wordt om er miljoenen
+te raden. De prijs betaal jij ook: één keer per inlog, ongeveer een halve
+seconde. Dat merk je niet, een aanvaller wel.
+
+De instelling staat op `N = 65536`. Een zwaardere stand (131072) vraagt 128 MB
+werkgeheugen per inlogpoging; dat past niet comfortabel in een kleine
+hostingcontainer, dus daar houden we het bij.
+
+In de opgeslagen waarde staat vóóraan met welke instelling hij is gemaakt:
+`scrypt$65536$8$1$…`. Daardoor kan die instelling later omhoog zonder dat er
+iets breekt. Wachtwoorden uit de oude tijd (vóór deze verandering) werken gewoon,
+en worden bij je eerstvolgende inlog stilletjes opnieuw en zwaarder weggeschreven
+— dat is het enige moment waarop de app je wachtwoord in handen heeft. Je merkt
+er niets van.
+
+Wil je later hoger: zet `SCRYPT_N` op de hostingomgeving op een macht van twee.
+
+### Wat de browser wel en niet mag
+
+De server stuurt bij elk antwoord een **Content-Security-Policy** mee. Dat is een
+lijstje regels voor de browser: waar scripts, stijlen en afbeeldingen vandaan
+mogen komen. Mocht er ooit tóch ergens vreemde code de pagina op glippen, dan
+weigert de browser die uit te voeren. Een tweede slot op de deur.
+
+- Scripts mogen alleen uit een eigen bestand van deze site komen. Daarom staat
+  het script van het inlogscherm nu in `public/inloggen.js` en niet meer tussen
+  de HTML. **Zet er dus nooit een `<script>`-blok in een pagina** — dat doet het
+  niet meer.
+- Stijl mag wél rechtstreeks op een element staan. De app zet kleuren zo neer
+  (statuskleuren, post-itkleuren) en een stijl kan geen code uitvoeren.
+- De site mag niet in een lijstje op een andere website getoond worden
+  (`frame-ancestors 'none'`), wat klikkaperij uitsluit.
+
+Daarnaast gaat er mee: `X-Content-Type-Options`, `Referrer-Policy`,
+`X-Frame-Options`, en **HSTS** zodra je via https binnenkomt — dan onthoudt de
+browser een jaar lang dat deze site alleen via https bereikbaar is. Bewust
+zonder `includeSubDomains`: die regel zou ook gelden voor elke andere naam onder
+`transafe.info`, en daar gaat deze app niet over.
 
 ### Rem op het raden
 
@@ -392,6 +436,28 @@ Verander je je wachtwoord, dan worden alle sessies van dat account verwijderd en
 krijgt alleen je huidige scherm meteen een nieuwe. Iedereen die nog op een ander
 apparaat ingelogd stond, moet opnieuw inloggen. Verander je je wachtwoord omdat
 je vermoedt dat iemand meekijkt, dan is die meekijker er dus meteen uit.
+
+### Het inlogboek
+
+Onder **Team** staat voor beheerders een knop *Inlogboek tonen*. Daarin staat wie
+er wanneer is ingelogd, wie het probeerde en niet lukte, wie er door de rem is
+tegengehouden, en wanneer er een wachtwoord is gewijzigd of een herstellink is
+gebruikt. Bij elke regel staat het IP-adres waar het vandaan kwam.
+
+Waarom dit erin zit: zonder zo'n boek merk je een inbraakpoging pas als het al te
+laat is. Zie je een reeks mislukte pogingen op één adres, dan is dat een reden om
+dat wachtwoord te laten wijzigen. Zie je een geslaagde inlog op een tijdstip dat
+niet klopt, dan weet je genoeg.
+
+Twee dingen om te weten:
+
+- **Er staan persoonsgegevens in** — e-mailadressen en IP-adressen. Daarom zien
+  alleen beheerders het, en verdwijnt elke regel na **90 dagen** vanzelf. Dat
+  opruimen gebeurt bij het opstarten van de server. Voor het ISO-dossier is dit
+  precies het soort maatregel dat je wilt kunnen laten zien; noem het daar wel
+  bij naam, met die bewaartermijn erbij.
+- **Wachtwoorden staan er niet in**, ook niet de fout ingetypte. Alleen dát het
+  misging.
 
 ### Wat de app níet oplost
 
@@ -450,9 +516,12 @@ taakbeheer/
 ├── src/
 │   ├── db.js            de database en alle tabellen
 │   ├── auth.js          wachtwoorden versleutelen, sessies bijhouden
+│   ├── rem.js           de rem op het raden van wachtwoorden
+│   ├── logboek.js       het inlogboek: wie kwam er binnen, wie niet
 │   └── api.js           alle adressen waar de browser mee praat
 └── public/
     ├── inloggen.html    inloggen, registreren, wachtwoord herstellen
+    ├── inloggen.js      het script daarbij (apart bestand vanwege de CSP)
     ├── index.html       de app zelf
     ├── app.js           alles wat er in de browser gebeurt
     └── stijl.css        de opmaak
@@ -471,6 +540,7 @@ Twee pakketten van buiten, verder niets:
 | `DATABASE_PAD` | Waar het databasebestand staat | `./data/taakbeheer.db` |
 | `NODE_ENV` | Zet op `production` zodra je live staat | leeg |
 | `MAX_BIJLAGE_MB` | Grootste bestand dat je mag uploaden | `10` |
+| `SCRYPT_N` | Hoe zwaar wachtwoorden versleuteld worden (macht van twee) | `65536` |
 | `HERSTEL_BEHEERDER` | Noodluik: e-mailadres dat bij het opstarten beheerder wordt | leeg |
 
 ---

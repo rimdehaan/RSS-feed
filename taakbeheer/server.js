@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import api from './src/api.js';
 import { metGebruiker, ruimOp } from './src/auth.js';
 import { db, aantalGebruikers } from './src/db.js';
+import { ruimLogboekOp } from './src/logboek.js';
 
 const hier = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -18,14 +19,57 @@ const app = express();
 // bezoeker via https binnenkwam en werken 'secure' cookies zoals bedoeld.
 app.set('trust proxy', 1);
 
+// Vertel de buitenwereld niet waar de app op draait; dat is gratis informatie
+// voor iemand die naar een bekend lek zoekt.
+app.disable('x-powered-by');
+
 app.use(express.json({ limit: '1mb' }));
 app.use(metGebruiker);
 
-// Een paar standaard beveiligingsheaders.
+/**
+ * Beveiligingsheaders.
+ *
+ * De Content-Security-Policy is de laatste verdedigingslinie: mocht er ooit
+ * tóch ergens een gat zitten waardoor vreemde code op de pagina komt, dan mag
+ * de browser die niet uitvoeren.
+ *
+ * `script-src 'self'` is streng: scripts moeten uit een eigen bestand komen.
+ * Daarom staat het script van het inlogscherm in inloggen.js en niet meer in de
+ * pagina zelf.
+ *
+ * Bij stijl staat wél 'unsafe-inline', en dat is een bewuste afweging: de app
+ * zet kleuren rechtstreeks op elementen (statuskleuren, post-itkleuren). Een
+ * style-attribuut kan geen code uitvoeren, dus het risico daarvan is klein —
+ * heel anders dan bij scripts.
+ */
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",     // het icoontje in de tab is een data:-afbeelding
+  "font-src 'self'",
+  "connect-src 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'none'",
+  "object-src 'none'",
+].join('; ');
+
 app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', CSP);
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'same-origin');
   res.setHeader('X-Frame-Options', 'DENY');
+
+  // HSTS: eenmaal via https binnen, dan voortaan altijd https. Alleen sturen als
+  // het verzoek ook echt via https kwam, anders zou je jezelf lokaal buitensluiten.
+  //
+  // Bewust zonder `includeSubDomains`: die geldt dan voor élke naam onder
+  // transafe.info, ook diensten die hier niets mee te maken hebben en misschien
+  // geen https doen. Dat is niet aan deze app om te beslissen.
+  if (req.secure) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+  }
   next();
 });
 
@@ -77,6 +121,7 @@ function herstelBeheerder() {
 
 herstelBeheerder();
 ruimOp();
+ruimLogboekOp();   // gooit inlogregels weg die ouder zijn dan de bewaartermijn
 
 app.listen(PORT, () => {
   console.log(`Taakbeheer draait op http://localhost:${PORT}`);

@@ -2325,7 +2325,19 @@ async function tekenTeam(bericht = null) {
         Je krijgt dan een link die je persoonlijk doorgeeft; je collega kiest daarmee
         zelf een nieuw wachtwoord. Zo weet jij zijn wachtwoord niet.
       </p>` : ''}
-    </div>`;
+    </div>
+
+    ${beheerder ? `
+      <div class="kaartje">
+        <h3>Inlogboek</h3>
+        <p class="hint" style="margin-bottom:12px">
+          Hier zie je wie er is ingelogd en wie het probeerde zonder succes. Zie je een rij
+          mislukte pogingen op een adres staan, dan is dat een reden om het wachtwoord
+          van die collega te laten wijzigen. Regels verdwijnen na 90 dagen vanzelf.
+        </p>
+        <button class="btn btn-secondary btn-sm" id="inlogboekKnop">Inlogboek tonen</button>
+        <div id="inlogboek"></div>
+      </div>` : ''}`;
 
   if (bericht) {
     const melding = el('uitMelding');
@@ -2336,7 +2348,67 @@ async function tekenTeam(bericht = null) {
   koppelTeamKnoppen();
 }
 
+/** De teksten bij de soorten uit het inlogboek. */
+const LOGSOORTEN = {
+  inloggen:    { gelukt: 'Ingelogd',                     mislukt: 'Inloggen mislukt' },
+  geblokkeerd: { gelukt: 'Geblokkeerd',                  mislukt: 'Geblokkeerd door de rem' },
+  wachtwoord:  { gelukt: 'Wachtwoord gewijzigd',         mislukt: 'Wachtwoord wijzigen mislukt' },
+  herstel:     { gelukt: 'Nieuw wachtwoord via herstellink', mislukt: 'Herstellink mislukt' },
+  registreren: { gelukt: 'Account aangemaakt',           mislukt: 'Account aanmaken mislukt' },
+  installatie: { gelukt: 'Eerste beheerder aangemaakt',  mislukt: 'Installatie mislukt' },
+};
+
+/**
+ * Haalt het inlogboek op en zet het onder de knop; nog een klik klapt het weer
+ * dicht. Alleen beheerders zien dit.
+ */
+async function toonInlogboek() {
+  const vak = el('inlogboek');
+  const knop = el('inlogboekKnop');
+
+  if (vak.dataset.open) {
+    vak.innerHTML = '';
+    delete vak.dataset.open;
+    knop.textContent = 'Inlogboek tonen';
+    return;
+  }
+
+  vak.dataset.open = '1';
+  knop.textContent = 'Inlogboek verbergen';
+  vak.textContent = 'Bezig met ophalen…';
+
+  try {
+    const { regels } = await api('/inlogboek?aantal=100');
+
+    if (!regels.length) {
+      vak.innerHTML = '<p class="hint" style="margin-top:12px">Nog niets opgeschreven.</p>';
+      return;
+    }
+
+    vak.innerHTML = `
+      <table class="team-tabel" style="margin-top:14px">
+        <thead><tr><th>Wanneer</th><th>Wat</th><th>Wie</th><th>Vanaf</th></tr></thead>
+        <tbody>${regels.map(r => {
+          const namen = LOGSOORTEN[r.soort] ?? { gelukt: r.soort, mislukt: r.soort };
+          return `
+          <tr>
+            <td>${momentNL(r.moment)}</td>
+            <td>${r.gelukt
+              ? esc(namen.gelukt)
+              : `<span style="color:var(--rood)">${esc(namen.mislukt)}</span>`}</td>
+            <td>${esc(r.naam || r.email || 'onbekend')}</td>
+            <td class="zacht">${esc(r.ip || '')}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+  } catch (fout) {
+    vak.textContent = fout.message;
+  }
+}
+
 function koppelTeamKnoppen() {
+  el('inlogboekKnop')?.addEventListener('click', toonInlogboek);
+
   el('uitnodigKnop')?.addEventListener('click', async () => {
     const melding = el('uitMelding');
     melding.classList.remove('goed');
@@ -2488,7 +2560,9 @@ el('zoek').addEventListener('input', () => { if (staat.weergave !== 'team') teke
 el('filterStatus').addEventListener('change', teken);
 el('filterPrioriteit').addEventListener('change', teken);
 el('filterUitvoerend').addEventListener('change', teken);
-el('teamKnop').addEventListener('click', tekenTeam);
+// Let op de pijl: geef je tekenTeam rechtstreeks mee, dan komt de klik zelf in
+// `bericht` terecht en zet het scherm het woord "undefined" in de melding.
+el('teamKnop').addEventListener('click', () => tekenTeam());
 
 el('nieuwBordKnop').addEventListener('click', async () => {
   const naam = prompt('Naam van het nieuwe bord:');
