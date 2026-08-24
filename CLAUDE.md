@@ -39,11 +39,18 @@ uit een prototype van de eigenaar dat alles in `localStorage` bewaarde.
 
 - **Klein houden.** Liever leesbare code dan slimme code.
 - **Nederlands** in alles: namen van variabelen en functies, commentaar, teksten
-  in de interface, commitberichten en de uitleg aan de eigenaar. Uitzondering
-  zijn de zes statussen en de vier prioriteiten, die staan bewust in het Engels.
+  in de interface, commitberichten en de uitleg aan de eigenaar. Zonder
+  uitzondering — de statussen en prioriteiten stonden vroeger in het Engels,
+  maar zijn dat sinds de tekstronde niet meer.
 - **Huisstijl Transafe** in Taakbeheer: donkerblauw `#002944`, blauwgrijs
-  `#5B869F`, grijs `#B3B3B3`. De zes statussen en hun kleuren liggen vast, net
-  als de vier prioriteiten (Critical, High, Medium, Low) en die van hen.
+  `#5B869F`, grijs `#B3B3B3`. De zes statussen en hun kleuren liggen vast (Niet
+  gestart, Mee bezig, Controleren, Afgerond, Geparkeerd, Vervallen), net als de
+  vier prioriteiten (Kritiek, Hoog, Middel, Laag) en die van hen.
+- **De naam van een status is ook een sleutel.** Hij staat letterlijk bij elke
+  taak in de database, bepaalt de kleurklasse in de opmaak (`s-mee-bezig`) en
+  wordt in `app.js` gebruikt om te bepalen of een taak af is. Hernoemen is dus
+  nooit alleen tekst: het vraagt een verhuizing in `db.js`, aanpassing van
+  `KLEUREN`/`PRIO_KLEUREN`/`AFGEROND` en van de klassen in `stijl.css`.
 
 ## Draaien en testen
 

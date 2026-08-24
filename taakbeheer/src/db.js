@@ -75,7 +75,10 @@ db.exec(`
     bord_id         INTEGER NOT NULL REFERENCES borden(id) ON DELETE CASCADE,
     opdracht        TEXT NOT NULL,
     uitvoerend_id   INTEGER REFERENCES gebruikers(id) ON DELETE SET NULL,
-    status          TEXT NOT NULL DEFAULT 'Not Started',
+    -- Deze standaardwaarde geldt alleen voor een nieuwe database; een bestaande
+    -- houdt de zijne. Dat geeft niets: bij het aanmaken van een taak vult de
+    -- server de status altijd zelf in.
+    status          TEXT NOT NULL DEFAULT 'Niet gestart',
     deadline        TEXT,
     omschrijving    TEXT NOT NULL DEFAULT '',
     positie         REAL NOT NULL DEFAULT 0,
@@ -310,17 +313,68 @@ for (const { id } of db.prepare('SELECT id FROM gebruikers WHERE actief = 1').al
 }
 
 export const STATUSSEN = [
-  'Not Started',
-  'Working on it',
-  'Validating',
-  'Done',
-  'On Hold',
-  'Cancelled',
+  'Niet gestart',
+  'Mee bezig',
+  'Controleren',
+  'Afgerond',
+  'Geparkeerd',
+  'Vervallen',
 ];
 
 // Van dringend naar rustig. Geen prioriteit is ook een geldige keuze; die staat
 // als lege waarde in de database.
-export const PRIORITEITEN = ['Critical', 'High', 'Medium', 'Low'];
+export const PRIORITEITEN = ['Kritiek', 'Hoog', 'Middel', 'Laag'];
+
+/**
+ * De statussen en prioriteiten stonden vroeger in het Engels, en die woorden
+ * staan letterlijk bij elke taak in de database. Deze verhuizing zet ze eenmalig
+ * om. Hij mag zo vaak draaien als hij wil: de oude en de nieuwe namen lijken
+ * nergens op elkaar, dus wat al Nederlands is blijft ongemoeid.
+ *
+ * De historie gaat mee. Anders zou je daar teruglezen dat iemand de status
+ * wijzigde "van Not Started naar Working on it" — woorden die in de app niet
+ * meer bestaan.
+ */
+const OUDE_NAMEN = {
+  status: {
+    'Not Started': 'Niet gestart',
+    'Working on it': 'Mee bezig',
+    'Validating': 'Controleren',
+    'Done': 'Afgerond',
+    'On Hold': 'Geparkeerd',
+    'Cancelled': 'Vervallen',
+  },
+  prioriteit: {
+    'Critical': 'Kritiek',
+    'High': 'Hoog',
+    'Medium': 'Middel',
+    'Low': 'Laag',
+  },
+};
+
+function vernederlandsStatussen() {
+  const zetTaakStatus = db.prepare('UPDATE taken SET status = ? WHERE status = ?');
+  const zetTaakPrio = db.prepare('UPDATE taken SET prioriteit = ? WHERE prioriteit = ?');
+  const zetHistorieOud = db.prepare(
+    'UPDATE historie SET oude_waarde = ? WHERE veld = ? AND oude_waarde = ?');
+  const zetHistorieNieuw = db.prepare(
+    'UPDATE historie SET nieuwe_waarde = ? WHERE veld = ? AND nieuwe_waarde = ?');
+
+  db.transaction(() => {
+    for (const [oud, nieuw] of Object.entries(OUDE_NAMEN.status)) {
+      zetTaakStatus.run(nieuw, oud);
+      zetHistorieOud.run(nieuw, 'status', oud);
+      zetHistorieNieuw.run(nieuw, 'status', oud);
+    }
+    for (const [oud, nieuw] of Object.entries(OUDE_NAMEN.prioriteit)) {
+      zetTaakPrio.run(nieuw, oud);
+      zetHistorieOud.run(nieuw, 'prioriteit', oud);
+      zetHistorieNieuw.run(nieuw, 'prioriteit', oud);
+    }
+  })();
+}
+
+vernederlandsStatussen();
 
 /** Aantal gebruikers — gebruikt om te bepalen of de eerste installatie nog moet. */
 export function aantalGebruikers() {

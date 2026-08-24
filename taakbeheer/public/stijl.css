@@ -74,18 +74,18 @@ body {
 .status-select:hover { opacity: 0.85; }
 
 /* Prioriteiten. Leeg is ook een keuze en blijft bewust onopvallend. */
-.p-critical { background: #C4314B; color: #fff; }
-.p-high     { background: #E2445C; color: #fff; }
-.p-medium   { background: #F2C94C; color: #5a4000; }
-.p-low      { background: #6C9FF5; color: #fff; }
+.p-kritiek  { background: #C4314B; color: #fff; }
+.p-hoog     { background: #E2445C; color: #fff; }
+.p-middel   { background: #F2C94C; color: #5a4000; }
+.p-laag     { background: #6C9FF5; color: #fff; }
 .p-geen     { background: #eceef1; color: #8b8f98; }
 
-.s-not-started    { background: var(--grijs); color: #fff; }
-.s-working-on-it  { background: #F2C94C; color: #5a4000; }
-.s-validating     { background: #9B51E0; color: #fff; }
-.s-done           { background: #27AE60; color: #fff; }
-.s-on-hold        { background: #F2994A; color: #fff; }
-.s-cancelled      { background: var(--rood); color: #fff; }
+.s-niet-gestart   { background: var(--grijs); color: #fff; }
+.s-mee-bezig      { background: #F2C94C; color: #5a4000; }
+.s-controleren    { background: #9B51E0; color: #fff; }
+.s-afgerond       { background: #27AE60; color: #fff; }
+.s-geparkeerd     { background: #F2994A; color: #fff; }
+.s-vervallen      { background: var(--rood); color: #fff; }
 
 /* ── Inlogpagina ── */
 .inlog-scherm {
@@ -303,8 +303,8 @@ tbody tr.komt-eraan td { color: #7a4a06; }
 
 col.k-opdracht   { width: auto; }
 col.k-uitvoerend { width: 150px; }
-col.k-prioriteit { width: 128px; }  /* inclusief het waarschuwingsteken bij Critical */
-col.k-status     { width: 158px; }  /* 'Working on it' past hier net in */
+col.k-prioriteit { width: 128px; }  /* inclusief het waarschuwingsteken bij Kritiek */
+col.k-status     { width: 158px; }  /* 'Controleren' past hier ruim in */
 col.k-deadline   { width: 130px; }  /* "31 dec 2026" past hier op één regel */
 col.k-bijlagen   { width: 95px; }
 col.k-stappen    { width: 100px; }
@@ -344,7 +344,7 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
 }
 .status-kop:hover .status-naam { text-decoration: underline; }
 /* De statuskleuren zijn vol; als tekstkleur op wit is met name het geel van
-   "Working on it" slecht leesbaar. Vandaar een gekleurd bolletje en een balk,
+   "Mee bezig" slecht leesbaar. Vandaar een gekleurd bolletje en een balk,
    met de titel gewoon in het donkerblauw. */
 .status-stip {
   width: 11px; height: 11px; border-radius: 50%; background: var(--status); flex-shrink: 0;

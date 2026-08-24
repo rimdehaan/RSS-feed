@@ -17,7 +17,7 @@ const staat = {
   sortering: null,       // null = eigen volgorde; anders { kolom, richting }
   // Statussen waarvan het blok dicht staat. Afgerond werk begint dicht: dat
   // groeit eindeloos en is zelden waar je naar zoekt.
-  dichtgeklapt: new Set(['Done', 'Cancelled']),
+  dichtgeklapt: new Set(['Afgerond', 'Vervallen']),
   toegestaneUitvoerders: null,   // null = iedereen mag; anders een Set met ids
 
   // Het prikbord: je eigen briefjes, en wat er in de prullenbak ligt.
@@ -33,20 +33,20 @@ const staat = {
 };
 
 const KLEUREN = {
-  'Not Started':   '#B3B3B3',
-  'Working on it': '#F2C94C',
-  'Validating':    '#9B51E0',
-  'Done':          '#27AE60',
-  'On Hold':       '#F2994A',
-  'Cancelled':     '#EB5757',
+  'Niet gestart': '#B3B3B3',
+  'Mee bezig':    '#F2C94C',
+  'Controleren':  '#9B51E0',
+  'Afgerond':     '#27AE60',
+  'Geparkeerd':   '#F2994A',
+  'Vervallen':    '#EB5757',
 };
 
 // Kleuren en klasse voor prioriteit. Leeg = geen prioriteit opgegeven.
 const PRIO_KLEUREN = {
-  Critical: '#C4314B',
-  High: '#E2445C',
-  Medium: '#F2C94C',
-  Low: '#6C9FF5',
+  Kritiek: '#C4314B',
+  Hoog: '#E2445C',
+  Middel: '#F2C94C',
+  Laag: '#6C9FF5',
   '': '#eceef1',
 };
 
@@ -66,7 +66,7 @@ const SLOT = `<svg class="slot" width="12" height="12" fill="none" stroke="curre
 const el = (id) => document.getElementById(id);
 const statusKlasse = (status) => 's-' + status.toLowerCase().replace(/\s+/g, '-');
 const prioKlasse = (prioriteit) => 'p-' + (prioriteit ? prioriteit.toLowerCase() : 'geen');
-const prioTekst = (prioriteit) => prioriteit === 'Critical' ? 'Critical ⚠' : (prioriteit || '—');
+const prioTekst = (prioriteit) => prioriteit === 'Kritiek' ? 'Kritiek ⚠' : (prioriteit || '—');
 
 function esc(waarde) {
   return String(waarde ?? '')
@@ -104,12 +104,12 @@ function morgen() {
 }
 
 // Af of vervallen: dan hoeft een deadline geen aandacht meer te vragen.
-const AFGEROND = ['Done', 'Cancelled'];
+const AFGEROND = ['Afgerond', 'Vervallen'];
 
 /**
  * Te laat: de deadline ligt achter ons en de taak is nog niet afgerond.
  * Of er al aan gewerkt wordt doet er bewust niet toe — te laat is te laat,
- * en dat blijft zo tot de taak op Done of Cancelled staat.
+ * en dat blijft zo tot de taak op Afgerond of Vervallen staat.
  */
 function isTeLaat(taak) {
   if (!taak.deadline || AFGEROND.includes(taak.status)) return false;
@@ -118,13 +118,13 @@ function isTeLaat(taak) {
 
 /**
  * Komt eraan: de deadline is vandaag of morgen terwijl er nog niet aan gewerkt
- * wordt. "Working on it" telt als opgepakt, "Done" en "Cancelled" zijn klaar;
- * de rest — ook On Hold en Validating — vraagt dan om aandacht.
+ * wordt. "Mee bezig" telt als opgepakt, "Afgerond" en "Vervallen" zijn klaar;
+ * de rest — ook Geparkeerd en Controleren — vraagt dan om aandacht.
  * Een taak is nooit tegelijk te laat en komt-eraan.
  */
 function komtEraan(taak) {
   if (!taak.deadline || isTeLaat(taak)) return false;
-  if (taak.status === 'Working on it' || AFGEROND.includes(taak.status)) return false;
+  if (taak.status === 'Mee bezig' || AFGEROND.includes(taak.status)) return false;
   return taak.deadline <= morgen();
 }
 
@@ -431,7 +431,7 @@ function gefilterdeTaken() {
 /**
  * De kolommen waarop je kunt sorteren, met per kolom de waarde waarop
  * vergeleken wordt. Prioriteit wordt vergeleken op zijn plek in de vaste lijst
- * en niet alfabetisch — anders komt Low tussen High en Medium.
+ * en niet alfabetisch — anders komt Hoog achter Middel.
  *
  * Status staat er bewust niet bij: de tabel is al op status gegroepeerd, dus
  * daarop sorteren zou niets doen.
@@ -647,7 +647,7 @@ function koppelStatusKeuzes(wortel) {
 const KLAP_DICHT = `<polyline points="9 18 15 12 9 6"/>`;
 const KLAP_OPEN  = `<polyline points="6 9 12 15 18 9"/>`;
 
-/** Statussen die je hebt dichtgeklapt. Done en Cancelled beginnen dicht. */
+/** Statussen die je hebt dichtgeklapt. Afgerond en Vervallen beginnen dicht. */
 function statusBlokkenHtml(taken) {
   // Helemaal niets? Dan één lege tabel met de melding, niet zes keer.
   if (taken.length === 0) return tabelHtml([]);
@@ -892,7 +892,7 @@ function tekenMuur() {
 }
 
 function leegTekst() {
-  if (el('zoek').value.trim()) return 'Geen briefjes gevonden.';
+  if (el('zoek').value.trim()) return 'Geen notities gevonden.';
   if (staat.prullenbakOpen) return 'De prullenbak is leeg.';
   return 'Nog geen notities. Zet hier neer wat je wilt bewaren: '
        + 'instructies, afspraken met collega’s of nummers die je steeds kwijt bent.';
@@ -1061,7 +1061,7 @@ function openBriefje(id, stand) {
   el('brOpslaan').hidden = Boolean(lezen);
   el('brVerwijder').hidden = !briefje;
   el('brAnnuleer').textContent = lezen ? 'Sluiten' : 'Annuleren';
-  el('briefjeVensterTitel').textContent = briefje ? briefje.titel : 'Nieuw briefje';
+  el('briefjeVensterTitel').textContent = briefje ? briefje.titel : 'Nieuwe notitie';
 
   if (lezen) {
     el('brLeesTekst').innerHTML = briefje.tekst
@@ -1291,7 +1291,7 @@ async function openTaakVenster(id = null) {
 
   el('vOpdracht').value     = taak?.opdracht ?? '';
   el('vUitvoerend').value   = taak?.uitvoerend_id ?? '';
-  el('vStatus').value       = taak?.status ?? 'Not Started';
+  el('vStatus').value       = taak?.status ?? 'Niet gestart';
   el('vPrioriteit').value   = taak?.prioriteit ?? '';
   el('vDeadline').value     = taak?.deadline ?? '';
   el('vOmschrijving').value = taak?.omschrijving ?? '';

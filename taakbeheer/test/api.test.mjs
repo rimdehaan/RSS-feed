@@ -218,20 +218,20 @@ try {
   const taak2 = (await rim(`/borden/${bordId}/taken`, { method: 'POST', body: { opdracht: 'Rapport schrijven' } })).data.id;
   const taak3 = (await rim(`/borden/${bordId}/taken`, { method: 'POST', body: { opdracht: 'Offerte nakijken' } })).data.id;
 
-  check('verzonnen status valt terug op Not Started',
-    (await rim(`/taken/${taak2}`, { method: 'PATCH', body: { status: 'Verzonnen' } })).data.status === 'Not Started');
+  check('verzonnen status valt terug op Niet gestart',
+    (await rim(`/taken/${taak2}`, { method: 'PATCH', body: { status: 'Verzonnen' } })).data.status === 'Niet gestart');
   check('rommelige datum wordt genegeerd',
     (await rim(`/taken/${taak2}`, { method: 'PATCH', body: { deadline: 'morgen' } })).data.deadline === null);
 
   // ── Historie ────────────────────────────────────────────────────────────
   groep('Historie');
   check('Anna mag de status wijzigen',
-    (await anna(`/taken/${taak1}`, { method: 'PATCH', body: { status: 'Working on it' } })).data.status === 'Working on it');
+    (await anna(`/taken/${taak1}`, { method: 'PATCH', body: { status: 'Mee bezig' } })).data.status === 'Mee bezig');
 
   r = await rim('/taken/' + taak1);
   const statusRegel = r.data.historie.find((h) => h.veld === 'status');
   check('wijziging staat in de historie',
-    statusRegel?.oude_waarde === 'Not Started' && statusRegel?.nieuwe_waarde === 'Working on it', JSON.stringify(r.data.historie));
+    statusRegel?.oude_waarde === 'Niet gestart' && statusRegel?.nieuwe_waarde === 'Mee bezig', JSON.stringify(r.data.historie));
   check('met de naam van wie het deed', statusRegel?.gebruiker_naam === 'Anna Jansen');
   check('aanmaken staat er ook in', r.data.historie.some((h) => h.veld === 'aangemaakt'));
 
@@ -258,14 +258,14 @@ try {
   // ── Kanban ──────────────────────────────────────────────────────────────
   groep('Kanban: slepen');
   check('naar Done verplaatst',
-    (await anna(`/taken/${taak2}/verplaats`, { method: 'POST', body: { status: 'Done' } })).data.status === 'Done');
-  await anna(`/taken/${taak3}/verplaats`, { method: 'POST', body: { status: 'Done', vorige_id: taak2 } });
+    (await anna(`/taken/${taak2}/verplaats`, { method: 'POST', body: { status: 'Afgerond' } })).data.status === 'Afgerond');
+  await anna(`/taken/${taak3}/verplaats`, { method: 'POST', body: { status: 'Afgerond', vorige_id: taak2 } });
 
-  let done = (await rim(`/borden/${bordId}/taken`)).data.filter((t) => t.status === 'Done');
+  let done = (await rim(`/borden/${bordId}/taken`)).data.filter((t) => t.status === 'Afgerond');
   check('volgorde in de kolom: 2 dan 3', done[0].id === taak2 && done[1].id === taak3, done.map((t) => t.opdracht).join(', '));
 
-  await anna(`/taken/${taak3}/verplaats`, { method: 'POST', body: { status: 'Done', volgende_id: taak2 } });
-  done = (await rim(`/borden/${bordId}/taken`)).data.filter((t) => t.status === 'Done');
+  await anna(`/taken/${taak3}/verplaats`, { method: 'POST', body: { status: 'Afgerond', volgende_id: taak2 } });
+  done = (await rim(`/borden/${bordId}/taken`)).data.filter((t) => t.status === 'Afgerond');
   check('na slepen: 3 dan 2', done[0].id === taak3 && done[1].id === taak2, done.map((t) => t.opdracht).join(', '));
 
   const posities = (await rim(`/borden/${bordId}/taken`)).data.map((t) => t.positie);
@@ -357,8 +357,8 @@ try {
   const projectA = (await rim('/borden', { method: 'POST', body: { naam: 'Project A' } })).data.id;
   const projectB = (await rim('/borden', { method: 'POST', body: { naam: 'Project B' } })).data.id;
 
-  await rim(`/borden/${projectA}/taken`, { method: 'POST', body: { opdracht: 'A voor Carla', uitvoerend_id: carlaId, status: 'Working on it' } });
-  await rim(`/borden/${projectA}/taken`, { method: 'POST', body: { opdracht: 'A voor Carla, klaar', uitvoerend_id: carlaId, status: 'Done' } });
+  await rim(`/borden/${projectA}/taken`, { method: 'POST', body: { opdracht: 'A voor Carla', uitvoerend_id: carlaId, status: 'Mee bezig' } });
+  await rim(`/borden/${projectA}/taken`, { method: 'POST', body: { opdracht: 'A voor Carla, klaar', uitvoerend_id: carlaId, status: 'Afgerond' } });
   await rim(`/borden/${projectB}/taken`, { method: 'POST', body: { opdracht: 'B voor Carla', uitvoerend_id: carlaId } });
   await rim(`/borden/${projectA}/taken`, { method: 'POST', body: { opdracht: 'A voor niemand' } });
 
@@ -366,7 +366,7 @@ try {
   check('Carla ziet alleen haar eigen taken', mijn.length === 3, mijn.map((t) => t.opdracht).join(', '));
   check('met de projectnaam erbij', mijn.every((t) => t.bord_naam), JSON.stringify(mijn[0]));
   check('uit meerdere projecten', new Set(mijn.map((t) => t.bord_naam)).size === 2);
-  check('inclusief de status om op te groeperen', mijn.some((t) => t.status === 'Done') && mijn.some((t) => t.status === 'Working on it'));
+  check('inclusief de status om op te groeperen', mijn.some((t) => t.status === 'Afgerond') && mijn.some((t) => t.status === 'Mee bezig'));
 
   check('Rim ziet niet Carlas taken op zijn persoonlijke bord',
     (await rim('/mijn-taken')).data.every((t) => t.uitvoerend_naam === 'Rim de Haan'));
@@ -416,13 +416,13 @@ try {
 
   groep('Afgeschermde taken zijn echt dicht');
   check('taak niet op te vragen', (await carla('/taken/' + geheim)).status === 404);
-  check('niet te wijzigen', (await carla(`/taken/${geheim}`, { method: 'PATCH', body: { status: 'Done' } })).status === 404);
-  check('niet te verplaatsen', (await carla(`/taken/${geheim}/verplaats`, { method: 'POST', body: { status: 'Done' } })).status === 404);
+  check('niet te wijzigen', (await carla(`/taken/${geheim}`, { method: 'PATCH', body: { status: 'Afgerond' } })).status === 404);
+  check('niet te verplaatsen', (await carla(`/taken/${geheim}/verplaats`, { method: 'POST', body: { status: 'Afgerond' } })).status === 404);
   check('niet te verwijderen', (await carla('/taken/' + geheim, { method: 'DELETE' })).status === 404);
   check('geen opmerking te plaatsen',
     (await carla(`/taken/${geheim}/opmerkingen`, { method: 'POST', body: { tekst: 'hallo' } })).status === 404);
   check('de taak staat er na die pogingen nog',
-    (await rim('/taken/' + geheim)).data.status === 'Not Started');
+    (await rim('/taken/' + geheim)).data.status === 'Niet gestart');
 
   groep('Wie mag bordinstellingen wijzigen');
   const bordVanCarla = (await carla('/borden', { method: 'POST', body: { naam: 'Bord van Carla' } })).data.id;
@@ -650,7 +650,7 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
   groep('Taak naar een ander project');
 
   const teVerhuizen = (await rim(`/borden/${projectA}/taken`, { method: 'POST', body: {
-    opdracht: 'Overdracht keuring', uitvoerend_id: carlaId, status: 'Working on it' } })).data.id;
+    opdracht: 'Overdracht keuring', uitvoerend_id: carlaId, status: 'Mee bezig' } })).data.id;
   await rim(`/taken/${teVerhuizen}/opmerkingen`, { method: 'POST', body: { tekst: 'Deels gedaan.' } });
   await upload(rim, teVerhuizen, 'tussenrapport.pdf', 'stand van zaken');
 
@@ -667,7 +667,7 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
   r = await rim('/taken/' + teVerhuizen);
   check('de opmerking is meegegaan', r.data.opmerkingen.length === 1);
   check('de bijlage ook', r.data.bijlagen.length === 1 && r.data.bijlagen[0].bestandsnaam === 'tussenrapport.pdf');
-  check('status en uitvoerder blijven staan', r.data.status === 'Working on it' && r.data.uitvoerend_naam === 'Carla Smit');
+  check('status en uitvoerder blijven staan', r.data.status === 'Mee bezig' && r.data.uitvoerend_naam === 'Carla Smit');
 
   const verhuisregel = r.data.historie.find((h) => h.veld === 'project');
   check('de verhuizing staat in de historie',
@@ -703,37 +703,37 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
   check('taak zonder prioriteit mag', r.status === 200 && r.data.prioriteit === null, JSON.stringify(r.data));
   const zonderPrio = r.data.id;
 
-  r = await rim(`/borden/${bordId}/taken`, { method: 'POST', body: { opdracht: 'Spoedklus', prioriteit: 'Critical' } });
-  check('prioriteit bij aanmaken', r.data.prioriteit === 'Critical', JSON.stringify(r.data));
+  r = await rim(`/borden/${bordId}/taken`, { method: 'POST', body: { opdracht: 'Spoedklus', prioriteit: 'Kritiek' } });
+  check('prioriteit bij aanmaken', r.data.prioriteit === 'Kritiek', JSON.stringify(r.data));
   const spoed = r.data.id;
 
   check('verzonnen prioriteit wordt genegeerd',
     (await rim(`/borden/${bordId}/taken`, { method: 'POST', body: { opdracht: 'X', prioriteit: 'Superurgent' } })).data.prioriteit === null);
 
   check('prioriteit los aanpassen',
-    (await rim(`/taken/${zonderPrio}`, { method: 'PATCH', body: { prioriteit: 'Medium' } })).data.prioriteit === 'Medium');
+    (await rim(`/taken/${zonderPrio}`, { method: 'PATCH', body: { prioriteit: 'Middel' } })).data.prioriteit === 'Middel');
   check('en weer weghalen',
     (await rim(`/taken/${zonderPrio}`, { method: 'PATCH', body: { prioriteit: null } })).data.prioriteit === null);
   check('een verzonnen waarde maakt hem leeg, niet kapot',
     (await rim(`/taken/${spoed}`, { method: 'PATCH', body: { prioriteit: 'Onzin' } })).data.prioriteit === null);
 
-  await rim(`/taken/${spoed}`, { method: 'PATCH', body: { prioriteit: 'High' } });
+  await rim(`/taken/${spoed}`, { method: 'PATCH', body: { prioriteit: 'Hoog' } });
   r = await rim('/taken/' + spoed);
-  const prioRegel = r.data.historie.find((h) => h.veld === 'prioriteit' && h.nieuwe_waarde === 'High');
+  const prioRegel = r.data.historie.find((h) => h.veld === 'prioriteit' && h.nieuwe_waarde === 'Hoog');
   check('wijziging staat in de historie', !!prioRegel, JSON.stringify(r.data.historie.slice(0, 3)));
 
   check('alleen de status wijzigen laat de prioriteit staan',
-    (await rim(`/taken/${spoed}`, { method: 'PATCH', body: { status: 'Done' } })).data.prioriteit === 'High');
+    (await rim(`/taken/${spoed}`, { method: 'PATCH', body: { status: 'Afgerond' } })).data.prioriteit === 'Hoog');
 
   check('prioriteit staat in de takenlijst',
-    (await rim(`/borden/${bordId}/taken`)).data.find((t) => t.id === spoed).prioriteit === 'High');
+    (await rim(`/borden/${bordId}/taken`)).data.find((t) => t.id === spoed).prioriteit === 'Hoog');
 
   await rim(`/taken/${spoed}`, { method: 'PATCH', body: { uitvoerend_id: carlaId } });
   check('en op het persoonlijke bord',
-    (await carla('/mijn-taken')).data.find((t) => t.id === spoed)?.prioriteit === 'High');
+    (await carla('/mijn-taken')).data.find((t) => t.id === spoed)?.prioriteit === 'Hoog');
 
   check('prioriteit gaat mee bij verplaatsen naar een ander project',
-    (await rim(`/taken/${spoed}`, { method: 'PATCH', body: { bord_id: projectA } })).data.prioriteit === 'High');
+    (await rim(`/taken/${spoed}`, { method: 'PATCH', body: { bord_id: projectA } })).data.prioriteit === 'Hoog');
 
   // ── Werkprocessen ───────────────────────────────────────────────────────
   groep('Tekst knippen in stappen');
@@ -991,7 +991,7 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
   check('maar op niemands naam, klaar om te verdelen', takenErop[0].uitvoerend_id === null,
     JSON.stringify(takenErop[0]));
   check('en is gewoon te bewerken',
-    (await rim(`/taken/${takenErop[0].id}`, { method: 'PATCH', body: { status: 'Working on it' } })).status === 200);
+    (await rim(`/taken/${takenErop[0].id}`, { method: 'PATCH', body: { status: 'Mee bezig' } })).status === 200);
 
   check('een tweede keer overnemen kan niet',
     (await rim(`/gebruikers/${carlaId}/takenlijst-overnemen`, { method: 'POST' })).status === 404);

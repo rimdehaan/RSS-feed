@@ -5,9 +5,10 @@ een eigen account werken samen aan dezelfde borden: een tabel die per status
 groepeert, opmerkingen per taak en een historie die bijhoudt wie wat wanneer
 wijzigde.
 
-Dit is de servervariant van je oorspronkelijke `Taakbeheer.html`. De opmaak en de
-statussen zijn hetzelfde gebleven; wat veranderde is dat de gegevens niet meer in
-één browser staan maar op een server waar iedereen bij kan.
+Dit is de servervariant van je oorspronkelijke `Taakbeheer.html`. De opmaak is
+hetzelfde gebleven en de zes statussen ook, al heten ze inmiddels in het
+Nederlands; wat veranderde is dat de gegevens niet meer in één browser staan maar
+op een server waar iedereen bij kan.
 
 ---
 
@@ -43,8 +44,8 @@ administratie — zie *Back-ups* verderop.
 | Projecten | Meerdere borden naast elkaar, bijvoorbeeld per project of per klant |
 | Wie ziet wat | Per project in te stellen: iedereen, of alleen gekozen mensen |
 | Tabelweergave | Zoals je prototype: opdracht, uitvoerend, status, deadline, omschrijving |
-| Blokken per status | De tabel valt uiteen in een blok per status, elk met zijn eigen kleur. Verander je de status, dan springt de rij naar het juiste blok. Elk blok kun je dichtklappen; Done en Cancelled beginnen dicht |
-| Prioriteit | Critical, High, Medium of Low — of geen. Klik en kies, net als bij status. Ook te filteren |
+| Blokken per status | De tabel valt uiteen in een blok per status, elk met zijn eigen kleur. Verander je de status, dan springt de rij naar het juiste blok. Elk blok kun je dichtklappen; Afgerond en Vervallen beginnen dicht |
+| Prioriteit | Kritiek, Hoog, Middel of Laag — of geen. Klik en kies, net als bij status. Ook te filteren |
 | Deadline-alarm | Rood als de deadline voorbij is, oranje als hij eraan komt. Met tellers bovenaan om erop te filteren |
 | Werkprocessen | Bibliotheek met vaste werkwijzen. Je maakt er een door een procedure te plakken; de app knipt hem in stappen |
 | Werkproces op een taak | Eén of meer werkprocessen aan een taak hangen, met afvinkbare stappen en voortgang per proces |
@@ -55,8 +56,14 @@ administratie — zie *Back-ups* verderop.
 | Historie | Automatisch: wie veranderde welk veld, van wat naar wat |
 | CSV-export | Exporteert wat er op dat moment gefilterd op je scherm staat |
 
-De zes statussen zijn ongewijzigd: Not Started, Working on it, Validating, Done,
-On Hold, Cancelled.
+De zes statussen: Niet gestart, Mee bezig, Controleren, Afgerond, Geparkeerd,
+Vervallen.
+
+Ze stonden vroeger in het Engels. Bij het opstarten zet de app oude gegevens
+eenmalig om — de taken én de historie — dus je hoeft daar niets voor te doen. Let
+wel: de naam van een status is niet alleen tekst. Hij staat zo in de database en
+bepaalt ook de kleur op het scherm; hernoemen is daarom een verbouwing en geen
+typfout herstellen.
 
 ### Wanneer een taak oplicht
 
@@ -64,16 +71,16 @@ Er zijn twee losse signalen. Een taak krijgt er hoogstens één.
 
 | | Wanneer | Hoe het eruitziet |
 |---|---|---|
-| **Te laat** | De deadline is gisteren of eerder, en de taak is niet *Done* of *Cancelled* | Rode regel met ⚠, en eronder "N dagen te laat" |
+| **Te laat** | De deadline is gisteren of eerder, en de taak is niet *Afgerond* of *Vervallen* | Rode regel met ⚠, en eronder "N dagen te laat" |
 | **Komt eraan** | De deadline is vandaag of morgen, en er wordt nog niet aan gewerkt | Oranje regel met ⏱ |
 
 Het verschil dat het meeste uitmaakt: **te laat blijft te laat, ook als iemand er
-al aan werkt.** Zet je een te late taak op *Working on it*, dan blijft hij rood.
-Pas bij *Done* of *Cancelled* verdwijnt het. Bij "komt eraan" is dat wél anders:
+al aan werkt.** Zet je een te late taak op *Mee bezig*, dan blijft hij rood.
+Pas bij *Afgerond* of *Vervallen* verdwijnt het. Bij "komt eraan" is dat wél anders:
 zodra je hem oppakt is de waarschuwing overbodig en gaat het oranje uit.
 
-Wat telt als "er wordt aan gewerkt": alleen de status **Working on it**. Alle
-andere statussen niet, dus ook *On Hold* en *Validating*: die zijn niet af.
+Wat telt als "er wordt aan gewerkt": alleen de status **Mee bezig**. Alle andere
+statussen niet, dus ook *Geparkeerd* en *Controleren*: die zijn niet af.
 
 Boven het overzicht staan twee tellers, maar alleen als er iets te tellen valt:
 **⚠ 3 taken te laat** en **⏱ 2 taken komen eraan**. Klik erop en je ziet alleen
@@ -83,10 +90,10 @@ is nooit allebei.
 De vergelijking gebruikt de datum van de kijker, niet die van de server. Om
 middernacht in Nederland verspringt het dus ook echt.
 
-Prioriteiten zijn Critical, High, Medium en Low. **Geen prioriteit is ook een
+Prioriteiten zijn Kritiek, Hoog, Middel en Laag. **Geen prioriteit is ook een
 geldige keuze** en blijft bewust onopvallend grijs: anders zou elke taak een
 oordeel moeten krijgen dat niemand heeft gegeven. Status en prioriteit staan los
-van elkaar — een taak kan Done zijn en toch High hebben gehad.
+van elkaar — een taak kan Afgerond zijn en toch Hoog hebben gehad.
 
 ### Mijn takenlijst
 
@@ -226,7 +233,7 @@ Verder:
   procedure voor twee installaties doorloopt.
 - **Afvinken legt vast wie en wanneer.** Dat zie je door de stap aan te wijzen.
 - **De taakstatus verandert niet vanzelf** als alles is afgevinkt. Klaar met het
-  werk is niet hetzelfde als *Done*; daar zit vaak nog controle of facturatie
+  werk is niet hetzelfde als *Afgerond*; daar zit vaak nog controle of facturatie
   tussen. Je ziet alleen `12 van 12 ✓`.
 - **In de tabel** staat de totale voortgang als `☑ 7/12`.
 - **Ontkoppelen wist de voortgang** van dat blok, met een waarschuwing vooraf.

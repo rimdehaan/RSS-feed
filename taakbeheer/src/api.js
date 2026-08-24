@@ -659,7 +659,7 @@ api.post('/borden/:id/taken', vereistLogin, (req, res) => {
   const opdracht = tekst(req.body.opdracht, 200);
   if (!opdracht) return res.status(400).json({ fout: 'Geef de opdracht een naam.' });
 
-  const status = STATUSSEN.includes(req.body.status) ? req.body.status : 'Not Started';
+  const status = STATUSSEN.includes(req.body.status) ? req.body.status : 'Niet gestart';
   const prioriteit = PRIORITEITEN.includes(req.body.prioriteit) ? req.body.prioriteit : null;
   // Op je eigen takenlijst ben jij per definitie de uitvoerder; zo komt de taak
   // ook meteen in het overzicht Mijn taken te staan.
