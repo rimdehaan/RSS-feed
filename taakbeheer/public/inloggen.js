@@ -48,7 +48,7 @@ async function bepaalModus() {
       vraagOmHerhaling();
       el('verstuur').textContent = 'Wachtwoord instellen';
       el('uitleg').textContent =
-        'Kies een nieuw wachtwoord van minstens 10 tekens. Je wordt daarna meteen ingelogd.';
+        'Kies een wachtwoord van minimaal tien tekens. Daarna word je direct ingelogd.';
     } catch (fout) {
       toon(fout.message);
       el('formulier').hidden = true;
@@ -85,8 +85,8 @@ async function bepaalModus() {
     vraagOmHerhaling();
     el('verstuur').textContent = 'Aanmaken en starten';
     el('uitleg').textContent =
-      'Dit scherm verschijnt alleen zolang er nog geen enkel account bestaat. ' +
-      'Daarna nodig je collega’s uit vanuit het Team-scherm.';
+      'Dit scherm verschijnt alleen zolang er geen account bestaat. ' +
+      'Daarna nodig je als beheerder collega’s uit vanuit het scherm Team.';
   }
 }
 
@@ -103,7 +103,7 @@ el('formulier').addEventListener('submit', async (gebeurtenis) => {
     // Je ziet niet wat je typt; twee keer hetzelfde intypen is de enige
     // manier om zeker te weten dat er geen typefout in zit.
     if (!el('herhaalVeld').hidden && wachtwoord !== el('herhaal').value) {
-      toon('De twee wachtwoorden zijn niet gelijk. Typ ze allebei opnieuw.');
+      toon('De wachtwoorden komen niet overeen. Voer beide opnieuw in.');
       el('herhaal').value = '';
       el('verstuur').disabled = false;
       return;

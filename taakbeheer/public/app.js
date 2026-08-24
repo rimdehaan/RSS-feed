@@ -141,8 +141,8 @@ function teLaatTekst(taak) {
 
 function waaromAandacht(taak) {
   if (isTeLaat(taak)) return `Deze taak is ${teLaatTekst(taak)}.`;
-  if (taak.deadline === vandaag()) return 'De deadline is vandaag en er wordt nog niet aan gewerkt.';
-  return 'De deadline is morgen en er wordt nog niet aan gewerkt.';
+  if (taak.deadline === vandaag()) return 'De deadline is vandaag en er wordt nog niet aan deze taak gewerkt.';
+  return 'De deadline is morgen en er wordt nog niet aan deze taak gewerkt.';
 }
 
 // ── Praten met de server ─────────────────────────────────────────────────
@@ -363,14 +363,14 @@ async function kiesBord(id) {
 }
 
 const UITLEG = {
-  mijnTaken: 'Alles wat aan jou is toegewezen, uit alle projecten bij elkaar. '
+  mijnTaken: 'Alle taken die aan jou zijn toegewezen, uit alle projecten. '
     + 'Nieuwe taken maak je aan op een project of op je eigen takenlijst.',
-  mijnTakenlijst: 'Alleen jij ziet deze lijst — je collega’s en beheerders niet. '
-    + 'Ga je uit dienst, dan kan een beheerder hem overnemen zodat lopend werk niet blijft liggen.',
-  prikbord: 'Dingen die je moet onthouden maar niet hoeft te doen — instructies, afspraken, '
-    + 'telefoonnummers. Alleen jij ziet ze. Zoeken doe je met het vak rechtsboven.',
-  prullenbak: 'Weggegooide briefjes blijven hier 30 dagen staan. Daarna ruimt de app ze op. '
-    + 'Zolang ze er staan kun je ze terugzetten.',
+  mijnTakenlijst: 'Alleen jij ziet deze lijst; collega’s en beheerders niet. '
+    + 'Ga je uit dienst, dan kan een beheerder de lijst overnemen zodat lopende taken niet blijven liggen.',
+  prikbord: 'Dingen die je moet onthouden en vroeger opschreef op een post-it: instructies, '
+    + 'afspraken, telefoonnummers. Alleen jij ziet ze. Zoeken doe je via het vak rechtsboven.',
+  prullenbak: 'Weggegooide notities blijven hier 30 dagen staan. Daarna ruimt de app ze op. '
+    + 'Zolang ze hier staan kun je ze nog terugzetten.',
 };
 
 /** Op het persoonlijke bord kun je geen taak aanmaken of instellingen wijzigen. */
@@ -486,14 +486,14 @@ function tekenDeadlineKnoppen() {
   const aantal = (n) => (n === 1 ? 'taak' : 'taken');
 
   tekenTeller('teLaatKnop', 'te-laat', basis.filter(isTeLaat).length,
-    (n) => `⚠ ${n} ${aantal(n)} te laat`, 'de te late taken');
+    (n) => `⚠ ${n} ${aantal(n)} te laat`, 'Alleen verlopen taken tonen');
 
   tekenTeller('komtEraanKnop', 'komt-eraan', basis.filter(komtEraan).length,
     (n) => `⏱ ${n} ${aantal(n)} ${n === 1 ? 'komt' : 'komen'} eraan`,
-    'de taken waarvan de deadline eraan komt');
+    'Alleen taken met een naderende deadline tonen');
 }
 
-function tekenTeller(id, soort, gevonden, tekst, waarover) {
+function tekenTeller(id, soort, gevonden, tekst, filterTitel) {
   const knop = el(id);
 
   // Niets gevonden? Dan ook geen knop, en een eventueel filter gaat uit —
@@ -509,7 +509,7 @@ function tekenTeller(id, soort, gevonden, tekst, waarover) {
   knop.hidden = false;
   knop.textContent = tekst(gevonden);
   knop.classList.toggle('actief', aan);
-  knop.title = aan ? 'Klik om weer alle taken te tonen' : `Klik om alleen ${waarover} te tonen`;
+  knop.title = aan ? 'Klik om alle taken te tonen' : filterTitel;
 }
 
 // ── Tekenen ──────────────────────────────────────────────────────────────
@@ -532,7 +532,7 @@ function tekenMijnTaken() {
   if (taken.length === 0) {
     el('inhoud').innerHTML = `<div class="mijn-leeg">
       ${staat.taken.length === 0
-        ? 'Er staan geen taken op jouw naam. Zodra iemand je een taak toewijst in een project, verschijnt hij hier.'
+        ? 'Er staan geen taken op jouw naam. Zodra iemand je een taak toewijst in een project, verschijnt die hier.'
         : 'Geen taken die aan je filter voldoen.'}
     </div>`;
     return;
@@ -587,7 +587,7 @@ function kopHtml(kolom) {
   const actief = staat.sortering?.kolom === kolom;
   const richting = actief ? staat.sortering.richting : null;
   const titel = richting === 'af'
-    ? 'Klik om weer je eigen volgorde te tonen'
+    ? 'Je eigen volgorde herstellen'
     : `Sorteren op ${kolom.toLowerCase()}`;
 
   return `<th class="sorteerbaar${actief ? ' sorteert' : ''}" data-sorteer="${kolom}" title="${titel}">
@@ -894,8 +894,8 @@ function tekenMuur() {
 function leegTekst() {
   if (el('zoek').value.trim()) return 'Geen briefjes gevonden.';
   if (staat.prullenbakOpen) return 'De prullenbak is leeg.';
-  return 'Nog geen briefjes. Zet hier neer wat je niet mag vergeten: '
-       + 'instructies, afspraken met collega’s, telefoonnummers die je steeds weer opzoekt.';
+  return 'Nog geen notities. Zet hier neer wat je wilt bewaren: '
+       + 'instructies, afspraken met collega’s of nummers die je steeds kwijt bent.';
 }
 
 function briefjeHtml(briefje) {
@@ -1066,7 +1066,7 @@ function openBriefje(id, stand) {
   if (lezen) {
     el('brLeesTekst').innerHTML = briefje.tekst
       ? metLinks(briefje.tekst)
-      : '<span class="zacht">Dit briefje heeft alleen een titel.</span>';
+      : '<span class="zacht">Deze notitie heeft alleen een titel.</span>';
     el('brLeesDatum').textContent = briefje.gewijzigd_op
       ? `Gewijzigd op ${datumNL(briefje.gewijzigd_op)}`
       : `Gemaakt op ${datumNL(briefje.aangemaakt_op)}`;
@@ -1146,8 +1146,8 @@ function tekenCategorieVenster() {
       const aantal = staat.briefjes.filter(b => b.categorie_id === categorie.id).length;
 
       if (aantal > 0 && !confirm(
-        `"${categorie.naam}" weghalen? De ${aantal} ${aantal === 1 ? 'briefje' : 'briefjes'} `
-        + 'erin blijven staan en worden weer geel.')) return;
+        `"${categorie.naam}" weghalen? De ${aantal} ${aantal === 1 ? 'notitie' : 'notities'} `
+        + 'in deze categorie blijven staan en worden weer geel.')) return;
 
       await api(`/briefje-categorieen/${categorie.id}`, { method: 'DELETE' });
       await ververColorenEnTekenen();
@@ -1221,7 +1221,7 @@ el('brOpslaan').addEventListener('click', async () => {
   };
 
   if (!body.titel.trim()) {
-    el('brMelding').textContent = 'Geef het briefje een titel.';
+    el('brMelding').textContent = 'Geef de notitie een titel.';
     return;
   }
 
@@ -1252,7 +1252,7 @@ function koppelTaakKnoppen(wortel) {
   wortel.querySelectorAll('[data-verwijder]').forEach(knop => {
     knop.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!confirm('Deze taak verwijderen? Opmerkingen en historie gaan mee.')) return;
+      if (!confirm('Deze taak verwijderen? Opmerkingen en historie worden ook verwijderd.')) return;
       await api(`/taken/${knop.dataset.verwijder}`, { method: 'DELETE' });
       herlaadTaken();
     });
@@ -1511,7 +1511,7 @@ async function vulProcesVeld(taak) {
 
   el('vProcesKeuze').disabled = leeg;
   el('vProcesToevoegen').disabled = leeg;
-  el('vProcesHint').textContent = leeg ? 'Maak er eerst een via Werkprocessen in de zijbalk.' : '';
+  el('vProcesHint').textContent = leeg ? 'Maak eerst een werkproces aan via Werkprocessen in de zijbalk.' : '';
 
   tekenConceptProcessen();
 }
@@ -1833,7 +1833,7 @@ el('detailBewerk').addEventListener('click', () => {
 });
 
 el('detailVerwijder').addEventListener('click', async () => {
-  if (!confirm('Deze taak verwijderen? Opmerkingen en historie gaan mee.')) return;
+  if (!confirm('Deze taak verwijderen? Opmerkingen en historie worden ook verwijderd.')) return;
   await api('/taken/' + staat.detailId, { method: 'DELETE' });
   sluitVenster('detailVenster');
   herlaadTaken();
@@ -1856,15 +1856,16 @@ async function tekenWerkprocessen() {
   el('inhoud').innerHTML = `
     <div style="max-width:900px">
       <p class="hint" style="margin:0 0 16px">
-        Vaste werkwijzen die je straks aan een taak kunt hangen. Je maakt ze door een
-        bestaande procedure te plakken; de app knipt hem in stappen die je nog kunt bijwerken.
-        ${mag_beheren ? '' : '<br><strong>Je mag ze wel bekijken, maar niet wijzigen.</strong> Vraag een beheerder om dat recht.'}
+        Vaste werkwijzen die je aan een taak kunt koppelen. Klik op “Nieuw werkproces”, plak een
+        bestaande procedure in het tekstvak en de app knipt die in stappen. De stappen kun je
+        daarna nog aanpassen.
+        ${mag_beheren ? '' : '<br><strong>Je mag werkprocessen wel bekijken, maar niet wijzigen.</strong> Vraag een beheerder om dat recht.'}
       </p>
 
       ${mag_beheren ? '<button class="btn btn-primary" id="nieuwProcesKnop" style="margin-bottom:16px">Nieuw werkproces</button>' : ''}
 
       ${werkprocessen.length === 0
-        ? '<div class="mijn-leeg">Er zijn nog geen werkprocessen. Maak er een door je eerste procedure te plakken.</div>'
+        ? '<div class="mijn-leeg">Er zijn nog geen werkprocessen. Maak er een door op de knop “Nieuw werkproces” te klikken.</div>'
         : werkprocessen.map(proces => `
             <div class="proces-kaart">
               <div class="inhoud">
@@ -2115,8 +2116,8 @@ async function openBordVenster() {
     </label>`;
   }).join('');
 
-  el('bHint').textContent = 'Mensen die hier al een taak hebben staan houden altijd toegang, ' +
-    'en beheerders zien elk bord. Zo kan een bord nooit onbereikbaar worden.';
+  el('bHint').textContent = 'Gebruikers met een taak op dit bord houden altijd toegang. ' +
+    'Beheerders zien elk bord. Zo kan een bord nooit onbereikbaar worden.';
 
   el('bVerwijder').hidden = !bord.mag_beheren;
   ledenlijstBijwerken();
@@ -2208,7 +2209,7 @@ el('aWachtwoordKnop').addEventListener('click', async () => {
   // Je ziet niet wat je typt; twee keer hetzelfde is de enige manier om zeker
   // te weten dat er geen typefout in zit.
   if (el('aNieuw').value !== el('aHerhaal').value) {
-    melding.textContent = 'De twee nieuwe wachtwoorden zijn niet gelijk. Typ ze allebei opnieuw.';
+    melding.textContent = 'De nieuwe wachtwoorden komen niet overeen. Voer beide opnieuw in.';
     el('aHerhaal').value = '';
     return;
   }
@@ -2272,7 +2273,7 @@ async function tekenTeam(bericht = null) {
         </div>
         <div class="melding" id="uitMelding" style="margin-top:12px"></div>
         <p style="margin-top:10px;font-size:.8rem;color:var(--grijs)">
-          De app verstuurt zelf geen mail. Je krijgt hieronder een link die je persoonlijk doorstuurt.
+          De app verstuurt zelf geen e-mail. Je krijgt hieronder een link die je persoonlijk doorstuurt.
         </p>
 
         ${uitnodigingen.length ? `
@@ -2321,9 +2322,9 @@ async function tekenTeam(bericht = null) {
           </tr>`).join('')}</tbody>
       </table>
       ${beheerder ? `<p class="hint" style="margin-top:12px">
-        Is iemand zijn wachtwoord kwijt? Klik op <strong>Wachtwoord herstellen</strong>.
-        Je krijgt dan een link die je persoonlijk doorgeeft; je collega kiest daarmee
-        zelf een nieuw wachtwoord. Zo weet jij zijn wachtwoord niet.
+        Is iemand het wachtwoord kwijt? Klik op <strong>Wachtwoord herstellen</strong>.
+        Je krijgt een link die je persoonlijk doorgeeft. Je collega kiest daarmee zelf een
+        nieuw wachtwoord, zodat jij het wachtwoord nooit kent.
       </p>` : ''}
     </div>
 
@@ -2331,9 +2332,9 @@ async function tekenTeam(bericht = null) {
       <div class="kaartje">
         <h3>Inlogboek</h3>
         <p class="hint" style="margin-bottom:12px">
-          Hier zie je wie er is ingelogd en wie het probeerde zonder succes. Zie je een rij
-          mislukte pogingen op een adres staan, dan is dat een reden om het wachtwoord
-          van die collega te laten wijzigen. Regels verdwijnen na 90 dagen vanzelf.
+          Hier zie je wie er is ingelogd en wie dat zonder succes probeerde. Een reeks mislukte
+          pogingen op één adres is reden om het wachtwoord van die collega te laten wijzigen.
+          Regels verdwijnen na 90 dagen automatisch.
         </p>
         <button class="btn btn-secondary btn-sm" id="inlogboekKnop">Inlogboek tonen</button>
         <div id="inlogboek"></div>
@@ -2476,7 +2477,7 @@ function koppelTeamKnoppen() {
         const { token } = await api(`/gebruikers/${knop.dataset.herstel}/herstel`, { method: 'POST' });
         const link = `${location.origin}/inloggen.html?herstel=${token}`;
 
-        melding.innerHTML = `Geef deze link persoonlijk door — hij is twee dagen geldig en werkt één keer:
+        melding.innerHTML = `Geef deze link persoonlijk door. De link is twee dagen geldig en werkt eenmalig:
           <div class="uitnodig-link"><code>${esc(link)}</code></div>`;
         melding.classList.add('goed');
         navigator.clipboard?.writeText(link);
@@ -2503,9 +2504,9 @@ function koppelTeamKnoppen() {
       const wie = knop.dataset.wie;
       if (!confirm(
         `De takenlijst van ${wie} overnemen?\n\n`
-        + 'Hij wordt een gewoon project dat alleen jij ziet, met de naam '
-        + `"Takenlijst van ${wie}". De taken die erop staan komen op niemands naam, `
-        + 'zodat je ze kunt verdelen. Dit kun je niet terugdraaien.')) return;
+        + 'De lijst wordt een gewoon project dat alleen jij ziet, met de naam '
+        + `"Takenlijst van ${wie}". De taken komen op niemands naam, `
+        + 'zodat je ze kunt verdelen. Dit is niet terug te draaien.')) return;
 
       try {
         const bord = await api(`/gebruikers/${knop.dataset.overnemen}/takenlijst-overnemen`,

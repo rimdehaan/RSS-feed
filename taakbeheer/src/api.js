@@ -668,7 +668,7 @@ api.post('/borden/:id/taken', vereistLogin, (req, res) => {
     : (bord.prive_van ? req.gebruiker.id : null);
 
   if (!magToegewezenWorden(bord, uitvoerendId)) {
-    return res.status(400).json({ fout: 'Die persoon kan dit bord niet zien. Geef hem eerst toegang bij de bordinstellingen.' });
+    return res.status(400).json({ fout: 'Die persoon heeft geen toegang tot dit bord. Geef eerst toegang via de bordinstellingen.' });
   }
 
   const onderaan = db.prepare('SELECT COALESCE(MAX(positie), 0) + 1 AS p FROM taken WHERE bord_id = ?').get(bordId).p;
@@ -1509,8 +1509,8 @@ api.post('/briefje-categorieen', vereistLogin, (req, res) => {
     .get(req.gebruiker.id).n;
   if (aantal >= MAX_CATEGORIEEN) {
     return res.status(400).json({
-      fout: `Meer dan ${MAX_CATEGORIEEN} categorieën kan niet: geel is voor briefjes zonder `
-          + `categorie, dus er blijven ${MAX_CATEGORIEEN} post-it-kleuren over.`,
+      fout: `Meer dan ${MAX_CATEGORIEEN} categorieën is niet mogelijk: geel is gereserveerd voor `
+          + `notities zonder categorie, waardoor er ${MAX_CATEGORIEEN} kleuren overblijven.`,
     });
   }
 
@@ -1573,7 +1573,7 @@ api.get('/briefjes', vereistLogin, (req, res) => {
 
 api.post('/briefjes', vereistLogin, (req, res) => {
   const titel = tekst(req.body.titel, 100);
-  if (!titel) return res.status(400).json({ fout: 'Geef het briefje een titel.' });
+  if (!titel) return res.status(400).json({ fout: 'Geef de notitie een titel.' });
 
   // Bovenaan, want dat is waar je een nieuw briefje verwacht.
   const bovenaan = db.prepare(
@@ -1594,7 +1594,7 @@ api.patch('/briefjes/:id', vereistLogin, (req, res) => {
   if (!briefje) return res.status(404).json({ fout: 'Briefje niet gevonden.' });
 
   const titel = req.body.titel === undefined ? briefje.titel : tekst(req.body.titel, 100);
-  if (!titel) return res.status(400).json({ fout: 'Geef het briefje een titel.' });
+  if (!titel) return res.status(400).json({ fout: 'Geef de notitie een titel.' });
 
   const inhoud = req.body.tekst === undefined ? briefje.tekst : tekst(req.body.tekst, 5000);
   const vastgepind = req.body.vastgepind === undefined
