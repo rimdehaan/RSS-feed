@@ -5,6 +5,11 @@
 #   2. Vanaf de hoofdbranch gaat het daarna naar Railway. Werk je op een andere
 #      branch, dan draaien alleen de tests.
 #
+# Er kunnen twee servers uitrollen vanaf dezelfde code: de zakelijke en de
+# privé-versie. Ze delen alles behalve hun database, en de tests zijn voor
+# allebei de poortwachter. De privé-versie slaat hij over zolang de variabele
+# RAILWAY_SERVICE_PRIVE leeg is.
+#
 # Handmatig uitrollen kan ook: tabblad Actions op GitHub, klik links op
 # "Taakbeheer", dan rechts op "Run workflow".
 #
@@ -63,6 +68,9 @@ jobs:
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       SERVICE: ${{ vars.RAILWAY_SERVICE || 'taakbeheer' }}
+      # De privé-server. Laat je hem leeg, dan wordt er alleen zakelijk
+      # uitgerold en verandert er niets aan hoe het hiervoor ging.
+      SERVICE_PRIVE: ${{ vars.RAILWAY_SERVICE_PRIVE }}
 
     steps:
       - name: Kijken of het token er is
@@ -90,17 +98,33 @@ jobs:
       # Bewust zonder --detach: zo wacht deze stap op het bouwen en wordt hij rood
       # als de uitrol mislukt. Met --detach was hij meteen groen, ook als Railway
       # daarna vastliep — en dan denk je dat het goed ging terwijl dat niet zo is.
+      #
+      # De zakelijke server gaat eerst. Struikelt die, dan stopt het hier en
+      # blijft de privé-server op de vorige versie staan — beter dan andersom.
       - name: Uitrollen
         if: steps.controle.outputs.klaar == 'ja'
         working-directory: taakbeheer
-        run: railway up --service "$SERVICE"
+        run: |
+          for dienst in "$SERVICE" "$SERVICE_PRIVE"; do
+            [ -n "$dienst" ] || continue
+            echo "::group::Uitrollen naar $dienst"
+            railway up --service "$dienst"
+            echo "::endgroup::"
+          done
 
       - name: Klaar
         if: steps.controle.outputs.klaar == 'ja'
         run: |
-          echo "### Uitgerold naar Railway :rocket:" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Service: \`$SERVICE\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "Commit: \`${GITHUB_SHA:0:7}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Het bouwen loopt verder op Railway. Volg het daar onder **Deploy Logs**." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Uitgerold naar Railway :rocket:"
+            echo ""
+            echo "Server: \`$SERVICE\`"
+            if [ -n "$SERVICE_PRIVE" ]; then
+              echo "Server: \`$SERVICE_PRIVE\` (privé)"
+            else
+              echo "_De privé-server staat uit: de variabele \`RAILWAY_SERVICE_PRIVE\` is leeg._"
+            fi
+            echo "Commit: \`${GITHUB_SHA:0:7}\`"
+            echo ""
+            echo "Het bouwen loopt verder op Railway. Volg het daar onder **Deploy Logs**."
+          } >> "$GITHUB_STEP_SUMMARY"

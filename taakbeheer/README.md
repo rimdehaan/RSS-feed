@@ -349,7 +349,13 @@ die het platform zelf invult.
 In `.github/workflows/taakbeheer.yml` staat een workflow die bij elke push eerst de
 tests draait en pas daarna uitrolt. Zakt een test, dan komt er niets online.
 
-**Klik-voor-klik uitleg staat in [HOSTING.md](HOSTING.md).**
+Diezelfde workflow kan naar **twee** servers uitrollen: de zakelijke en een
+privé-versie met een eigen database. Eén keer code, twee keer draaien, dezelfde
+tests als poortwachter. Zolang de variabele `RAILWAY_SERVICE_PRIVE` leeg is,
+gebeurt er alleen zakelijk iets.
+
+**Klik-voor-klik uitleg staat in [HOSTING.md](HOSTING.md)** — ook voor die tweede
+server.
 
 ### Back-ups
 

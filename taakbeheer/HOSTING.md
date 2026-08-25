@@ -163,7 +163,8 @@ zoekt staat meestal onderaan.
 |---|---|
 | Tests zakken, geen uitrol | Werkt zoals bedoeld. Lees welke controle faalde en plak die bij Claude |
 | `Geen RAILWAY_TOKEN ingesteld` | Stap 8 nog niet gedaan, of de naam is niet exact `RAILWAY_TOKEN` |
-| `Service not found` | De servicenaam in Railway wijkt af — zie de opmerking bij stap 8 |
+| `Service not found` | De servicenaam in Railway wijkt af — zie de opmerking bij stap 8. Draai je twee servers, kijk dan ook of `RAILWAY_SERVICE_PRIVE` exact klopt |
+| Zakelijk rolde uit, privé niet | Kijk in de uitrolstap onder welk kopje het misging. De privé-server komt pas aan de beurt als de zakelijke geslaagd is |
 | `Project token not found` | Het token is ingetrokken of hoort bij een ander project. Maak een nieuwe (stap 7) |
 | Uitrol slaagt, app doet niets | Kijk in Railway onder **Deploy Logs**. Daar staat wat de server zelf zegt |
 | Blijft hangen op *Taking a snapshot of the code* | Railway is blijven steken. Klik op de drie puntjes bij die uitrol → **Remove**, en start de workflow opnieuw. Je oude versie blijft ondertussen gewoon draaien |
@@ -172,6 +173,46 @@ zoekt staat meestal onderaan.
 
 Plak een foutmelding gerust letterlijk bij Claude — dat is de snelste route naar een
 oplossing.
+
+---
+
+## Een tweede server erbij, voor privé
+
+Je kunt dezelfde app een tweede keer laten draaien met een eigen database — voor
+je eigen dingen, los van het werk. Eén keer code, twee keer draaien. Ze weten
+niets van elkaar: de scheiding zit in het volume.
+
+**In Railway**, binnen hetzelfde project (dan werkt je bestaande token ook voor
+deze server):
+
+1. **Create → Empty Service**. Geef hem een naam, bijvoorbeeld `taakbeheer-prive`.
+   Onthoud die naam precies, hij moet zo dadelijk kloppen.
+2. Regio weer **europe-west4 (Amsterdam)**.
+3. **Een eigen volume**, mount path `/data`. Koppel nooit hetzelfde volume aan
+   twee servers — dan schrijven twee apps in hetzelfde bestand en ben je alles
+   kwijt.
+4. Variables: `DATABASE_PAD=/data/taakbeheer.db` en `NODE_ENV=production`.
+5. **Settings → Networking → Generate Domain**.
+
+**In GitHub**: Settings → Secrets and variables → Actions → tabblad **Variables**
+→ **New repository variable**. Naam `RAILWAY_SERVICE_PRIVE`, waarde de servicenaam
+uit stap 1.
+
+Meer is het niet. De workflow rolt vanaf dan naar allebei uit, en de tests blijven
+voor allebei de poortwachter: zakt een test, dan komt er nergens iets online. De
+zakelijke server gaat eerst; struikelt die, dan stopt het daar en blijft de
+privé-server op zijn vorige versie staan.
+
+Laat je die variabele leeg, dan rolt hij alleen zakelijk uit — precies zoals
+daarvoor.
+
+> **Zodra de link werkt: open hem meteen en maak je account aan.** Een verse app
+> heeft nog geen gebruikers, en dan mag de eerste die de link opent zichzelf
+> beheerder maken. Laat daar geen dagen tussen zitten.
+
+Twee dingen om te weten. Je back-ups zijn nu **twee** volumes, allebei even
+belangrijk. En de privé-server valt buiten het ISO-verhaal van Transafe: houd
+werk en privé gescheiden, in beide richtingen.
 
 ---
 
