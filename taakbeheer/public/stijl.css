@@ -11,6 +11,32 @@
   /* Post-it-geel: de kleur van een briefje zonder categorie. De kleuren van de
      categorieën zelf staan in src/db.js, want de server bewaakt ze. */
   --postit:  #FDF3A7;
+
+  /* De zijbalk als aparte kleuren, zodat de thuisversie hem kan overnemen
+     zonder dat knoppen en koppen elders meeveranderen. */
+  --zijbalk:        var(--donker);
+  --zijbalk-actief: rgba(91, 134, 159, 0.15);   /* achtergrond van het gekozen item */
+  --zijbalk-rand:   var(--blauw);               /* het streepje ervoor */
+  --zijbalk-zacht:  rgba(255, 255, 255, 0.35);  /* kopjes en tellingen */
+  --zijbalk-tekst:  rgba(255, 255, 255, 0.75);  /* de gewone menu-items */
+  --zijbalk-voet:   rgba(255, 255, 255, 0.5);   /* je naam en Uitloggen */
+}
+
+/* De thuisversie. De server zet deze klasse op <body>; zie src/paginas.js.
+
+   Het baksteenrood uit het logo is #A9503A, maar voor een vlak van deze
+   grootte is dat te licht: witte letters halen daarop hooguit 5.4 keer
+   contrast, en dan heb je 87% dekking nodig om leesbaar te zijn. Alles wordt
+   dan even hard en het verschil tussen een kopje en een menu-item verdwijnt.
+   Deze tint is een slag dieper: hetzelfde rood, meer ruimte. De waarden
+   hieronder zijn gemeten, niet gegokt. */
+.thuis {
+  --zijbalk:        #8F4230;
+  --zijbalk-actief: rgba(0, 0, 0, 0.2);
+  --zijbalk-rand:   #C3D8E4;                    /* het glas uit het logo */
+  --zijbalk-zacht:  rgba(255, 255, 255, 0.58);  /* contrast 3.5 */
+  --zijbalk-tekst:  rgba(255, 255, 255, 0.8);   /* contrast 5.1 */
+  --zijbalk-voet:   rgba(255, 255, 255, 0.8);   /* contrast 5.1 */
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -108,7 +134,7 @@ body {
 .app { display: flex; height: 100vh; overflow: hidden; }
 
 .zijbalk {
-  width: 230px; background: var(--donker); color: #fff;
+  width: 230px; background: var(--zijbalk); color: #fff;
   display: flex; flex-direction: column; flex-shrink: 0;
 }
 /* Het logo is een SVG en schaalt mee; hij vult de zijbalk minus de ruimte
@@ -130,7 +156,7 @@ body {
 
 .zijbalk-kop {
   padding: 18px 20px 6px; font-size: 0.7rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.6px; color: rgba(255,255,255,0.35);
+  text-transform: uppercase; letter-spacing: 0.6px; color: var(--zijbalk-zacht);
   display: flex; align-items: center; justify-content: space-between;
 }
 .zijbalk-kop button {
@@ -148,12 +174,12 @@ body {
 
 .zijbalk nav a {
   display: flex; align-items: center; gap: 10px; padding: 9px 20px;
-  color: rgba(255,255,255,0.75); text-decoration: none; font-size: 0.88rem;
+  color: var(--zijbalk-tekst); text-decoration: none; font-size: 0.88rem;
   border-left: 3px solid transparent; cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 .zijbalk nav a:hover, .zijbalk nav a.actief {
-  background: rgba(91,134,159,0.15); color: #fff; border-left-color: var(--blauw);
+  background: var(--zijbalk-actief); color: #fff; border-left-color: var(--zijbalk-rand);
 }
 /* Zonder dit knijpt flexbox de icoontjes plat zodra de naam meer ruimte vraagt
    dan er is: vier vierkantjes worden dan vier smalle streepjes. */
@@ -164,17 +190,17 @@ body {
 .zijbalk nav a .naam {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.zijbalk nav a .telling { font-size: 0.72rem; color: rgba(255,255,255,0.4); }
+.zijbalk nav a .telling { font-size: 0.72rem; color: var(--zijbalk-zacht); }
 .zijbalk nav a .slot { opacity: 0.5; }
 /* `margin-top: auto` duwt de voet naar de onderkant. Dat deden eerst de
    nav-blokken met hun `flex: 1`; die vullen de ruimte niet meer op. */
 .zijbalk-voet {
   margin-top: auto;
-  padding: 14px 20px; font-size: 0.75rem; color: rgba(255,255,255,0.5);
+  padding: 14px 20px; font-size: 0.75rem; color: var(--zijbalk-voet);
   border-top: 1px solid rgba(255,255,255,0.1);
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
-.zijbalk-voet a { color: rgba(255,255,255,0.5); cursor: pointer; text-decoration: none; }
+.zijbalk-voet a { color: var(--zijbalk-voet); cursor: pointer; text-decoration: none; }
 .zijbalk-voet a:hover { color: #fff; }
 
 /* Je eigen naam is een knop naar je account. Iets lichter dan 'Uitloggen',

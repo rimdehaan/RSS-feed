@@ -35,6 +35,8 @@ function merk(waar) {
 
 const VERVANGINGEN = {
   '{{NAAM}}': esc(APP_NAAM),
+  // Waar de opmaak aan ziet om welke omgeving het gaat.
+  '{{OMGEVING_KLASSE}}': THUIS ? 'thuis' : '',
   '{{MERK_ZIJBALK}}': merk('zijbalk'),
   '{{MERK_INLOG}}': merk('inlog'),
   '{{INLOG_UITLEG}}': esc(woorden.inlogUitleg),
