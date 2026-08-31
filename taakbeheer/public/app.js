@@ -6,6 +6,10 @@ import { splitsStappen, MAX_STAPPEN } from './stappen.js';
 const staat = {
   ik: null,
   statussen: [],
+  // De woorden die per omgeving verschillen; komen bij het opstarten van de
+  // server. Leeg beginnen, zodat er niets omvalt voordat ze binnen zijn.
+  woorden: {},
+  bestandsnaam: 'taken',
   gebruikers: [],
   borden: [],
   bordId: null,        // null = het persoonlijke bord
@@ -175,14 +179,22 @@ document.addEventListener('keydown', (e) => {
 
 // ── Opstarten ────────────────────────────────────────────────────────────
 async function start() {
-  const { gebruiker, statussen, prioriteiten, max_bijlage_mb } = await api('/ik');
+  const { gebruiker, statussen, prioriteiten, max_bijlage_mb, woorden, bestandsnaam } =
+    await api('/ik');
   if (!gebruiker) { location.href = '/inloggen.html'; return; }
 
   staat.ik = gebruiker;
   staat.statussen = statussen;
   staat.prioriteiten = prioriteiten ?? [];
   staat.maxBijlageMB = max_bijlage_mb ?? 10;
+  staat.woorden = woorden ?? {};
+  staat.bestandsnaam = bestandsnaam ?? 'taken';
   el('wieBenIk').textContent = gebruiker.naam;
+
+  // De drie vaste teksten in de pagina die per omgeving verschillen.
+  el('mensenMenuTekst').textContent = staat.woorden.mensenMenu;
+  el('bIedereenUitleg').textContent = staat.woorden.bordIedereen;
+  el('aNaamHint').textContent = staat.woorden.naamHint;
 
   vulStatusKeuzes();
   staat.gebruikers = await api('/gebruikers');
@@ -365,8 +377,8 @@ async function kiesBord(id) {
 const UITLEG = {
   mijnTaken: 'Alle taken die aan jou zijn toegewezen, uit alle projecten. '
     + 'Nieuwe taken maak je aan op een project of op je eigen takenlijst.',
-  mijnTakenlijst: 'Alleen jij ziet deze lijst; collega’s en beheerders niet. '
-    + 'Ga je uit dienst, dan kan een beheerder de lijst overnemen zodat lopende taken niet blijven liggen.',
+  // Deze twee staan in omgeving.js, want ze verschillen tussen werk en thuis.
+  get mijnTakenlijst() { return staat.woorden.mijnTakenlijst ?? ''; },
   prikbord: 'Dingen die je moet onthouden en vroeger opschreef op een post-it: instructies, '
     + 'afspraken, telefoonnummers. Alleen jij ziet ze. Zoeken doe je via het vak rechtsboven.',
   prullenbak: 'Weggegooide notities blijven hier 30 dagen staan. Daarna ruimt de app ze op. '
@@ -894,8 +906,7 @@ function tekenMuur() {
 function leegTekst() {
   if (el('zoek').value.trim()) return 'Geen notities gevonden.';
   if (staat.prullenbakOpen) return 'De prullenbak is leeg.';
-  return 'Nog geen notities. Zet hier neer wat je wilt bewaren: '
-       + 'instructies, afspraken met collega’s of nummers die je steeds kwijt bent.';
+  return staat.woorden.prikbordLeeg ?? '';
 }
 
 function briefjeHtml(briefje) {
@@ -2243,7 +2254,7 @@ for (const [id, soort] of [['teLaatKnop', 'te-laat'], ['komtEraanKnop', 'komt-er
 // melding meteen weer verdwijnen doordat we hieronder alles overschrijven.
 async function tekenTeam(bericht = null) {
   staat.weergave = 'team';
-  el('paginaTitel').textContent = 'Team';
+  el('paginaTitel').textContent = staat.woorden.mensenTitel;
   el('werkbalk').hidden = true;
   el('prikbordBalk').hidden = true;
   el('categorieBalk').hidden = true;
@@ -2259,11 +2270,11 @@ async function tekenTeam(bericht = null) {
   el('inhoud').innerHTML = `
     ${beheerder ? `
       <div class="kaartje">
-        <h3>Collega uitnodigen</h3>
+        <h3>${esc(staat.woorden.uitnodigenKop)}</h3>
         <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
           <div class="veld" style="flex:1;min-width:220px">
             <label for="uitEmail">E-mailadres</label>
-            <input type="email" id="uitEmail" placeholder="collega@transafe.nl" />
+            <input type="email" id="uitEmail" placeholder="${esc(staat.woorden.uitnodigenVoorbeeld)}" />
           </div>
           <div class="veld" style="width:150px">
             <label for="uitRol">Rol</label>
@@ -2287,7 +2298,7 @@ async function tekenTeam(bericht = null) {
       </div>` : ''}
 
     <div class="kaartje">
-      <h3>Teamleden</h3>
+      <h3>${esc(staat.woorden.mensenKop)}</h3>
       <div class="melding" id="herstelMelding" style="margin-bottom:12px"></div>
       <table class="team-tabel">
         <thead><tr><th>Naam</th><th>E-mail</th><th>Rol</th><th>Werkprocessen</th><th>Status</th>${beheerder ? '<th></th>' : ''}</tr></thead>
@@ -2323,19 +2334,14 @@ async function tekenTeam(bericht = null) {
       </table>
       ${beheerder ? `<p class="hint" style="margin-top:12px">
         Is iemand het wachtwoord kwijt? Klik op <strong>Wachtwoord herstellen</strong>.
-        Je krijgt een link die je persoonlijk doorgeeft. Je collega kiest daarmee zelf een
-        nieuw wachtwoord, zodat jij het wachtwoord nooit kent.
+        ${esc(staat.woorden.herstelUitleg)}
       </p>` : ''}
     </div>
 
     ${beheerder ? `
       <div class="kaartje">
         <h3>Inlogboek</h3>
-        <p class="hint" style="margin-bottom:12px">
-          Hier zie je wie er is ingelogd en wie dat zonder succes probeerde. Een reeks mislukte
-          pogingen op één adres is reden om het wachtwoord van die collega te laten wijzigen.
-          Regels verdwijnen na 90 dagen automatisch.
-        </p>
+        <p class="hint" style="margin-bottom:12px">${esc(staat.woorden.inlogboekUitleg)}</p>
         <button class="btn btn-secondary btn-sm" id="inlogboekKnop">Inlogboek tonen</button>
         <div id="inlogboek"></div>
       </div>` : ''}`;
@@ -2425,7 +2431,7 @@ function koppelTeamKnoppen() {
       // De melding gaat mee het opnieuw tekenen in, anders wist hij zichzelf.
       tekenTeam({
         goed: true,
-        tekst: `Uitnodiging voor ${adres} aangemaakt. Stuur de link hieronder naar je collega.`,
+        tekst: `Uitnodiging voor ${adres} aangemaakt. ${staat.woorden.uitnodigingGemaakt}`,
       });
     } catch (fout) {
       melding.textContent = fout.message;
@@ -2599,7 +2605,7 @@ el('exportKnop').addEventListener('click', () => {
 
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = 'transafe_taken.csv';
+  link.download = `${staat.bestandsnaam}_taken.csv`;
   link.click();
   URL.revokeObjectURL(link.href);
 });

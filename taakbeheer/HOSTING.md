@@ -191,7 +191,10 @@ deze server):
 3. **Een eigen volume**, mount path `/data`. Koppel nooit hetzelfde volume aan
    twee servers — dan schrijven twee apps in hetzelfde bestand en ben je alles
    kwijt.
-4. Variables: `DATABASE_PAD=/data/taakbeheer.db` en `NODE_ENV=production`.
+4. Variables: `DATABASE_PAD=/data/taakbeheer.db` en `NODE_ENV=production`. Wil je
+   dat het een eigen naam en een huislogo krijgt, zet er dan ook
+   `APP_NAAM=Takenplanner Thuis` en `OMGEVING=thuis` bij. Laat je die weg, dan
+   heet en oogt hij als de zakelijke app.
 5. **Settings → Networking → Generate Domain**.
 
 **In GitHub**: Settings → Secrets and variables → Actions → tabblad **Variables**

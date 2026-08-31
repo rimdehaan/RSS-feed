@@ -16,6 +16,7 @@ import {
 } from './auth.js';
 import { GRENZEN, wachtNog, telFout, vergeet, teVeelMelding } from './rem.js';
 import { noteer, laatsteRegels, LOG_DAGEN } from './logboek.js';
+import { APP_NAAM, woorden, naamAlsBestandsnaam } from './omgeving.js';
 
 const api = Router();
 
@@ -105,6 +106,15 @@ api.get('/setup-nodig', (req, res) => {
   res.json({ nodig: aantalGebruikers() === 0 });
 });
 
+/**
+ * Wat voor omgeving is dit: welke naam, en welke woorden. Bewust zonder
+ * inloggen, want het inlogscherm heeft ze al nodig voordat je binnen bent.
+ * Er staat niets gevoeligs in.
+ */
+api.get('/omgeving', (req, res) => {
+  res.json({ naam: APP_NAAM, woorden, bestandsnaam: naamAlsBestandsnaam() });
+});
+
 api.post('/setup', (req, res) => {
   if (aantalGebruikers() > 0) {
     return res.status(403).json({ fout: 'De installatie is al gedaan.' });
@@ -192,6 +202,9 @@ api.get('/ik', (req, res) => {
     prioriteiten: PRIORITEITEN,
     mag_werkprocessen: req.gebruiker ? magWerkprocessenBeheren(req.gebruiker) : false,
     max_bijlage_mb: Math.round(MAX_BIJLAGE / 1024 / 1024),
+    naam: APP_NAAM,
+    woorden,
+    bestandsnaam: naamAlsBestandsnaam(),
   });
 });
 

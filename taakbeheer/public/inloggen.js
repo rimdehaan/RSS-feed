@@ -84,9 +84,10 @@ async function bepaalModus() {
     el('naamVeld').hidden = false;
     vraagOmHerhaling();
     el('verstuur').textContent = 'Aanmaken en starten';
-    el('uitleg').textContent =
-      'Dit scherm verschijnt alleen zolang er geen account bestaat. ' +
-      'Daarna nodig je als beheerder collega’s uit vanuit het scherm Team.';
+
+    // Deze zin verschilt tussen het werk en thuis, dus hij komt van de server.
+    const { woorden } = await fetch('/api/omgeving').then(r => r.json());
+    el('uitleg').textContent = woorden.setupUitleg;
   }
 }
 

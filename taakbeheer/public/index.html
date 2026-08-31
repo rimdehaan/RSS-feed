@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Transafe Taakbeheer</title>
+  <title>{{NAAM}}</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23002944'/%3E%3Cg fill='%235B869F'%3E%3Crect x='7' y='7' width='7' height='7' rx='1.5'/%3E%3Crect x='18' y='7' width='7' height='7' rx='1.5'/%3E%3Crect x='7' y='18' width='7' height='7' rx='1.5'/%3E%3Crect x='18' y='18' width='7' height='7' rx='1.5' fill='%23fff'/%3E%3C/g%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/stijl.css" />
 </head>
@@ -12,7 +12,7 @@
 <div class="app">
   <!-- ── ZIJBALK ── -->
   <aside class="zijbalk">
-    <div class="zijbalk-logo"><img src="/logo-wit.svg" alt="Transafe" /></div>
+    <div class="zijbalk-logo">{{MERK_ZIJBALK}}</div>
 
     <nav id="persoonlijkLijst"></nav>
 
@@ -30,7 +30,7 @@
       </a>
       <a id="teamKnop">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
-        <span>Team</span>
+        <span id="mensenMenuTekst">Team</span>
       </a>
     </nav>
 
@@ -245,7 +245,7 @@
       <div class="blok-kop">Wie kan dit bord zien</div>
       <label class="keuze">
         <input type="radio" name="zichtbaar" value="iedereen" id="bIedereen" />
-        <span><strong>Iedereen</strong><br><small>Alle teamleden zien dit bord. Dit is de standaard.</small></span>
+        <span><strong>Iedereen</strong><br><small id="bIedereenUitleg"></small></span>
       </label>
       <label class="keuze">
         <input type="radio" name="zichtbaar" value="gekozen" id="bGekozen" />
@@ -277,7 +277,7 @@
         <label for="aNaam">Naam</label>
         <input type="text" id="aNaam" maxlength="80" autocomplete="name" />
       </div>
-      <p class="hint">Zo wordt je naam weergegeven bij taken, opmerkingen en in het team.</p>
+      <p class="hint" id="aNaamHint"></p>
       <div style="display:flex;justify-content:flex-end;margin:10px 0 6px">
         <button class="btn btn-primary" id="aNaamKnop">Naam opslaan</button>
       </div>

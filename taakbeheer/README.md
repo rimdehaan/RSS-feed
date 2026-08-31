@@ -528,6 +528,8 @@ taakbeheer/
 ├── server.js            de server: koppelt alles aan elkaar
 ├── src/
 │   ├── db.js            de database en alle tabellen
+│   ├── omgeving.js      de naam en de woorden: werk of thuis
+│   ├── paginas.js       zet de naam en het logo in de twee HTML-pagina's
 │   ├── auth.js          wachtwoorden versleutelen, sessies bijhouden
 │   ├── rem.js           de rem op het raden van wachtwoorden
 │   ├── logboek.js       het inlogboek: wie kwam er binnen, wie niet
@@ -536,6 +538,7 @@ taakbeheer/
     ├── inloggen.html    inloggen, registreren, wachtwoord herstellen
     ├── inloggen.js      het script daarbij (apart bestand vanwege de CSP)
     ├── index.html       de app zelf
+    ├── huis-*.svg       het huislogo van de thuisversie
     ├── app.js           alles wat er in de browser gebeurt
     └── stijl.css        de opmaak
 ```
@@ -555,6 +558,8 @@ Twee pakketten van buiten, verder niets:
 | `MAX_BIJLAGE_MB` | Grootste bestand dat je mag uploaden | `10` |
 | `SCRYPT_N` | Hoe zwaar wachtwoorden versleuteld worden (macht van twee) | `65536` |
 | `HERSTEL_BEHEERDER` | Noodluik: e-mailadres dat bij het opstarten beheerder wordt | leeg |
+| `APP_NAAM` | De naam in het tabblad, de zijbalk en op het inlogscherm | `Transafe Taakbeheer` |
+| `OMGEVING` | `thuis` zet de huishoudwoorden en het huislogo aan | leeg (= het werk) |
 
 ---
 

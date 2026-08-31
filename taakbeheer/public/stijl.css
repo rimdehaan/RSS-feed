@@ -120,6 +120,14 @@ body {
 }
 .zijbalk-logo img { display: block; width: 100%; }
 
+/* Thuis staat er geen logobestand maar een huis met de naam ernaast. De naam
+   komt uit een instelling, dus die kan niet in het plaatje zitten. */
+.merk { display: flex; align-items: center; gap: 11px; }
+.merk img { flex-shrink: 0; width: auto; }
+.merk-naam { font-weight: 700; line-height: 1.15; letter-spacing: -.01em; }
+.zijbalk-logo .merk-naam { font-size: .95rem; color: #fff; }
+.inlog-logo .merk-naam { font-size: 1.15rem; color: var(--donker); }
+
 .zijbalk-kop {
   padding: 18px 20px 6px; font-size: 0.7rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.6px; color: rgba(255,255,255,0.35);

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="Huis">
+  <!-- Dezelfde vorm als huis-kleur.svg, in één kleur voor de donkere zijbalk.
+
+       Let op de kieren. In de kleurversie steekt het donkere dak af tegen het
+       lichte glas; hier is allebei wit, en dan versmelt het tot één vlek die
+       op een tent lijkt. Daarom liggen de daklijn en de grondlijn los, met de
+       zijbalk zichtbaar in de kier ertussen. Datzelfde geldt voor de naad
+       tussen glas en metselwerk. -->
+
+  <!-- Metselwerk, rechts. Duidelijk vlakker dan het glas. -->
+  <path d="M28.4 40.2 V18.6 L43 20.8 V40.2 Z" fill="#fff" fill-opacity=".38"/>
+
+  <!-- Glazen voorbouw, helt naar buiten -->
+  <path d="M12.4 40.2 L6 15.1 L27 17 V40.2 Z" fill="#fff" fill-opacity=".9"/>
+
+  <!-- Roeden, in het donker van de zijbalk -->
+  <g stroke="#002944" stroke-width="1.7" stroke-linecap="round" stroke-opacity=".6">
+    <path d="M9 28.4 H27"/>
+    <path d="M16.6 16.2 L18.8 40.2"/>
+  </g>
+
+  <!-- Daklijn en grondlijn: los, met een kier -->
+  <g fill="none" stroke="#fff" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.2 12.4 L27 14.6 L44 19.1"/>
+    <path d="M5.4 43 H44"/>
+  </g>
+</svg>

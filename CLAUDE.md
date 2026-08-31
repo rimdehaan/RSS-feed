@@ -29,6 +29,12 @@ uit een prototype van de eigenaar dat alles in `localStorage` bewaarde.
 - `server.js` — koppelt alles aan elkaar
 - `src/db.js` — database en tabellen · `src/auth.js` — wachtwoorden en sessies ·
   `src/api.js` — alle API-routes
+- **Twee omgevingen, één codebase.** Dezelfde code draait zakelijk én als
+  privé-versie thuis; ze verschillen alleen in naam, logo en een handvol woorden.
+  Die woorden staan allemaal in `src/omgeving.js` — nergens anders in de app hoort
+  "als het thuis is, dan…" te staan. Schrijf je een tekst die thuis niet klopt
+  (collega, team, uit dienst), zet hem dan daar neer en vraag hem op via
+  `staat.woorden` in de browser of `woorden` op de server.
 - `public/` — inloggen, de app, opmaak
 - `public/stappen.js` — knipt geplakte tekst in stappen. Staat in `public/` omdat
   de browser hem nodig heeft voor de voorvertoning, maar de server importeert

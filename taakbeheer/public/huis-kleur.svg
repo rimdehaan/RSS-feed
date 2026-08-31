@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="Huis">
+  <!-- Naar het huis op de foto. Het kenmerkende is de glazen voorbouw die naar
+       buiten helt: onder smal, boven breed. Die schuinte is hier aangezet, want
+       zonder overdrijving zie je hem niet meer op een klein formaat.
+
+       De maten zijn gelijk aan huis-wit.svg, zodat beide versies hetzelfde huis
+       zijn. Alleen de kleuren verschillen. -->
+
+  <!-- Metselwerk, rechts -->
+  <path d="M28.4 40.2 V18.6 L43 20.8 V40.2 Z" fill="#A9503A"/>
+  <path d="M33 40.2 V31 h5.2 v9.2 Z" fill="#25333C"/>
+
+  <!-- Glazen voorbouw -->
+  <path d="M12.4 40.2 L6 15.1 L27 17 V40.2 Z" fill="#C3D8E4"/>
+
+  <!-- Roeden: de verticale helt mee met de gevel -->
+  <g stroke="#F4F8FA" stroke-width="1.7" stroke-linecap="round">
+    <path d="M9 28.4 H27"/>
+    <path d="M16.6 16.2 L18.8 40.2"/>
+  </g>
+
+  <!-- Daklijn en grondlijn -->
+  <g fill="none" stroke="#25333C" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.2 12.4 L27 14.6 L44 19.1"/>
+    <path d="M5.4 43 H44"/>
+  </g>
+</svg>

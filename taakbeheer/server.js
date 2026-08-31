@@ -9,6 +9,8 @@ import api from './src/api.js';
 import { metGebruiker, ruimOp } from './src/auth.js';
 import { db, aantalGebruikers } from './src/db.js';
 import { ruimLogboekOp } from './src/logboek.js';
+import { metNaamErin } from './src/paginas.js';
+import { APP_NAAM } from './src/omgeving.js';
 
 const hier = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -83,6 +85,11 @@ app.get('/', (req, res, next) => {
   next();
 });
 
+// De naam en het logo zitten al in deze twee pagina's; ze moeten dus vóór de
+// gewone bestanden komen, anders krijg je het bestand van schijf met de
+// plaatshouders er nog in.
+app.use(metNaamErin);
+
 app.use(express.static(join(hier, 'public'), { extensions: ['html'] }));
 
 // Onbekend adres.
@@ -124,7 +131,7 @@ ruimOp();
 ruimLogboekOp();   // gooit inlogregels weg die ouder zijn dan de bewaartermijn
 
 app.listen(PORT, () => {
-  console.log(`Taakbeheer draait op http://localhost:${PORT}`);
+  console.log(`${APP_NAAM} draait op http://localhost:${PORT}`);
   if (aantalGebruikers() === 0) {
     console.log('Nog geen gebruikers: open die link om de eerste beheerder aan te maken.');
   }
