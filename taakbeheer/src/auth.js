@@ -5,8 +5,11 @@
 // willekeurige "salt", zodat twee mensen met hetzelfde wachtwoord toch een
 // verschillende versleutelde waarde in de database hebben staan.
 
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import { db } from './db.js';
+
+const scryptAsync = promisify(scrypt);
 
 const COOKIE = 'sessie';
 const SESSIE_DAGEN = 30;
@@ -33,15 +36,35 @@ function geldigeN(waarde, standaard) {
   return Number.isInteger(n) && n >= 16384 && (n & (n - 1)) === 0 ? n : standaard;
 }
 
+/**
+ * Het rekenen zelf. Twee dingen zijn hier bewust zo:
+ *
+ * - Het gebeurt naast de server, niet erin. Anders staat de hele app een
+ *   fractie van een seconde stil zodra iemand inlogt, en dat merken alle
+ *   anderen die op dat moment iets aanklikken.
+ * - Eén tegelijk, via een wachtrij. Elke berekening vraagt 64 MB geheugen;
+ *   twintig tegelijk past niet in een kleine hostingcontainer.
+ */
+let wachtrij = Promise.resolve();
+
 function reken(wachtwoord, salt, kosten) {
-  return scryptSync(wachtwoord, salt, 64, { ...kosten, maxmem: MAXMEM });
+  const beurt = wachtrij.then(() => scryptAsync(wachtwoord, salt, 64, { ...kosten, maxmem: MAXMEM }));
+  wachtrij = beurt.catch(() => {});   // een fout bij de een houdt de rij niet op
+  return beurt;
 }
 
-export function hashWachtwoord(wachtwoord) {
+export async function hashWachtwoord(wachtwoord) {
   const salt = randomBytes(16).toString('hex');
-  const hash = reken(wachtwoord, salt, KOSTEN).toString('hex');
+  const hash = (await reken(wachtwoord, salt, KOSTEN)).toString('hex');
   return `scrypt$${KOSTEN.N}$${KOSTEN.r}$${KOSTEN.p}$${salt}$${hash}`;
 }
+
+/**
+ * Een opgeslagen waarde die bij geen enkel wachtwoord hoort. Bestaat het
+ * account niet, dan rekenen we hiermee: dat duurt even lang als bij een echt
+ * account. Zonder dit zie je aan de reactietijd welke adressen bestaan.
+ */
+const NEP = `scrypt$${KOSTEN.N}$${KOSTEN.r}$${KOSTEN.p}$${'0'.repeat(32)}$${'0'.repeat(128)}`;
 
 /**
  * Leest een opgeslagen wachtwoord uit. Twee vormen:
@@ -64,11 +87,12 @@ function leesOpgeslagen(opgeslagen) {
   return null;
 }
 
-export function wachtwoordKlopt(wachtwoord, opgeslagen) {
-  const gelezen = leesOpgeslagen(opgeslagen);
+/** Zonder opgeslagen waarde (geen account) rekenen we toch, met NEP. */
+export async function wachtwoordKlopt(wachtwoord, opgeslagen) {
+  const gelezen = leesOpgeslagen(opgeslagen ?? NEP);
   if (!gelezen) return false;
 
-  const ingevoerd = reken(wachtwoord, gelezen.salt, gelezen.kosten);
+  const ingevoerd = await reken(wachtwoord, gelezen.salt, gelezen.kosten);
   const bekend = Buffer.from(gelezen.hash, 'hex');
 
   // timingSafeEqual vergelijkt altijd even lang, zodat je uit de reactietijd
@@ -86,10 +110,14 @@ export function moetZwaarder(opgeslagen) {
   return !gelezen || gelezen.kosten.N < KOSTEN.N;
 }
 
-/** Slaat het wachtwoord opnieuw op met de huidige instelling. */
-export function verzwaar(gebruikerId, wachtwoord) {
-  db.prepare('UPDATE gebruikers SET wachtwoord_hash = ? WHERE id = ?')
-    .run(hashWachtwoord(wachtwoord), gebruikerId);
+/**
+ * Slaat het wachtwoord opnieuw op met de huidige instelling. Alleen als het
+ * oude er nog staat: is het intussen gewijzigd, dan blijft het nieuwe staan.
+ */
+export async function verzwaar(gebruikerId, wachtwoord, oudeWaarde) {
+  const nieuw = await hashWachtwoord(wachtwoord);
+  db.prepare('UPDATE gebruikers SET wachtwoord_hash = ? WHERE id = ? AND wachtwoord_hash = ?')
+    .run(nieuw, gebruikerId, oudeWaarde);
 }
 
 // ── Sessies ──────────────────────────────────────────────────────────────
@@ -122,7 +150,12 @@ function leesCookie(req, naam) {
   for (const deel of (req.headers.cookie || '').split(';')) {
     const isGelijk = deel.indexOf('=');
     if (isGelijk > 0 && deel.slice(0, isGelijk).trim() === naam) {
-      return decodeURIComponent(deel.slice(isGelijk + 1).trim());
+      // Een kapotte cookie is gewoon geen sessie, geen reden voor een serverfout.
+      try {
+        return decodeURIComponent(deel.slice(isGelijk + 1).trim());
+      } catch {
+        return null;
+      }
     }
   }
   return null;

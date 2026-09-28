@@ -1252,6 +1252,56 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
   check('en het oude wachtwoord werkt niet meer',
     (await client()('/inloggen', { method: 'POST', body: { email: 'carla@transafe.nl', wachtwoord: 'CarlaHaarWachtwoord' } })).status === 401);
 
+  groep('De reactietijd verraadt niets');
+  // Elk een eigen (nagebootst) IP-adres, zodat de rem van de tests hierboven
+  // niet meespeelt. De server vertrouwt één proxy, dus dit veld telt.
+  const vanafIp = (ip) => ({ 'x-forwarded-for': ip });
+  const probeerTijd = async (email) => {
+    const begin = performance.now();
+    await client()('/inloggen', {
+      method: 'POST', headers: vanafIp('10.0.0.1'), body: { email, wachtwoord: 'nietHetGoede' },
+    });
+    return performance.now() - begin;
+  };
+  const tijdBekend = await probeerTijd('rim@transafe.nl');
+  const tijdOnbekend = await probeerTijd('bestaat-niet@transafe.nl');
+  check('een onbekend adres duurt even lang als een bekend',
+    tijdOnbekend > tijdBekend * 0.6, `${tijdOnbekend.toFixed(0)} tegen ${tijdBekend.toFixed(0)} ms`);
+
+  groep('Gelijktijdige verzoeken');
+  const tegelijk = await Promise.all(Array.from({ length: 12 }, () => client()('/inloggen', {
+    method: 'POST', headers: vanafIp('10.0.0.2'), body: { email: 'doelwit@transafe.nl', wachtwoord: 'raden' },
+  })));
+  const langsDeRem = tegelijk.filter((r) => r.status === 401).length;
+  check('twaalf pogingen tegelijk: hooguit vijf komen langs de rem', langsDeRem <= 5, String(langsDeRem));
+
+  const dubbelToken = (await rim('/uitnodigingen', { method: 'POST', body: { email: 'dubbel@transafe.nl' } })).data.token;
+  const dubbel = await Promise.all([1, 2].map((n) => client()('/registreren', {
+    method: 'POST', body: { token: dubbelToken, naam: `Dubbel ${n}`, wachtwoord: 'DubbelWachtwoord' },
+  })));
+  check('één uitnodiging, twee keer tegelijk gebruikt: één account',
+    dubbel.filter((r) => r.status === 200).length === 1, dubbel.map((r) => r.status).join(','));
+  check('de ander krijgt een nette melding', dubbel.every((r) => r.status < 500), dubbel.map((r) => r.status).join(','));
+
+  groep('Rommel in een verzoek is geen serverfout');
+  let rommel = await fetch(BASIS + '/ik', { headers: { cookie: 'sessie=%E0%A4%A' } });
+  check('kapotte cookie', rommel.status === 200, String(rommel.status));
+
+  rommel = await fetch(BASIS + '/inloggen', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: '{kapot',
+  });
+  check('kapotte JSON geeft 400', rommel.status === 400, String(rommel.status));
+
+  rommel = await fetch(BASIS + '/inloggen', { method: 'POST', headers: vanafIp('10.0.0.3') });
+  check('verzoek zonder inhoud', rommel.status === 401, String(rommel.status));
+
+  const rommelBord = (await rim('/borden')).data.find((b) => !b.prive_van);
+  const rommelTaak = (await rim(`/borden/${rommelBord.id}/taken`, { method: 'POST', body: { opdracht: 'Rommel' } })).data;
+  rommel = await rim(`/taken/${rommelTaak.id}/bijlagen`, {
+    method: 'POST', headers: { 'x-bestandsnaam': '%E0%A4%A.txt' }, rauw: 'hallo',
+  });
+  check('bestandsnaam met kapotte codering', rommel.status === 200, JSON.stringify(rommel.data));
+
   groep('Uitloggen');
   await rim('/uitloggen', { method: 'POST' });
   check('na uitloggen geen toegang', (await rim('/borden')).status === 401);

@@ -14,7 +14,7 @@ import {
   hashWachtwoord, wachtwoordKlopt, maakSessie, verwijderSessie,
   vereistLogin, vereistBeheerder, moetZwaarder, verzwaar,
 } from './auth.js';
-import { GRENZEN, wachtNog, telFout, vergeet, teVeelMelding } from './rem.js';
+import { GRENZEN, wachtNog, telFout, telTerug, vergeet, teVeelMelding } from './rem.js';
 import { noteer, laatsteRegels, LOG_DAGEN } from './logboek.js';
 import { APP_NAAM, woorden, naamAlsBestandsnaam } from './omgeving.js';
 
@@ -115,9 +115,11 @@ api.get('/omgeving', (req, res) => {
   res.json({ naam: APP_NAAM, woorden, bestandsnaam: naamAlsBestandsnaam() });
 });
 
-api.post('/setup', (req, res) => {
+const AL_GEINSTALLEERD = 'De installatie is al gedaan.';
+
+api.post('/setup', async (req, res) => {
   if (aantalGebruikers() > 0) {
-    return res.status(403).json({ fout: 'De installatie is al gedaan.' });
+    return res.status(403).json({ fout: AL_GEINSTALLEERD });
   }
 
   const naam = tekst(req.body.naam, 80);
@@ -130,26 +132,35 @@ api.post('/setup', (req, res) => {
     return res.status(400).json({ fout: 'Kies een wachtwoord van minstens 10 tekens.' });
   }
 
-  const resultaat = db.prepare(
-    `INSERT INTO gebruikers (email, naam, wachtwoord_hash, rol) VALUES (?, ?, ?, 'beheerder')`
-  ).run(email, naam, hashWachtwoord(wachtwoord));
+  const hash = await hashWachtwoord(wachtwoord);
 
-  // Een leeg bord om mee te beginnen, en je eigen takenlijst.
-  db.prepare('INSERT INTO borden (naam) VALUES (?)').run('Takenbord');
-  zorgVoorPriveLijst(resultaat.lastInsertRowid);
+  // Het rekenen hierboven duurt even. Nog een keer kijken, in één stap met het
+  // aanmaken: anders kunnen twee mensen die tegelijk op de knop drukken allebei
+  // de eerste beheerder worden.
+  const nieuweId = db.transaction(() => {
+    if (aantalGebruikers() > 0) return null;
 
-  noteer({
-    soort: 'installatie', gelukt: true, email,
-    gebruikerId: resultaat.lastInsertRowid, ip: req.ip,
-  });
+    const r = db.prepare(
+      `INSERT INTO gebruikers (email, naam, wachtwoord_hash, rol) VALUES (?, ?, ?, 'beheerder')`
+    ).run(email, naam, hash);
 
-  maakSessie(res, resultaat.lastInsertRowid);
+    // Een leeg bord om mee te beginnen, en je eigen takenlijst.
+    db.prepare('INSERT INTO borden (naam) VALUES (?)').run('Takenbord');
+    zorgVoorPriveLijst(r.lastInsertRowid);
+    return r.lastInsertRowid;
+  })();
+
+  if (!nieuweId) return res.status(403).json({ fout: AL_GEINSTALLEERD });
+
+  noteer({ soort: 'installatie', gelukt: true, email, gebruikerId: nieuweId, ip: req.ip });
+
+  maakSessie(res, nieuweId);
   res.json({ ok: true });
 });
 
 // ── Inloggen en uitloggen ────────────────────────────────────────────────
 
-api.post('/inloggen', (req, res) => {
+api.post('/inloggen', async (req, res) => {
   const email = tekst(req.body.email, 160).toLowerCase();
   const wachtwoord = String(req.body.wachtwoord ?? '');
 
@@ -166,25 +177,34 @@ api.post('/inloggen', (req, res) => {
     return res.status(429).json({ fout: teVeelMelding(wacht) });
   }
 
+  // Deze poging telt nu al mee, niet pas na het controleren. Klopt het
+  // wachtwoord, dan strepen we hem hieronder weer weg (zie telTerug in rem.js).
+  telFout(perAdres);
+  telFout(perIp);
+
   const gebruiker = db.prepare('SELECT * FROM gebruikers WHERE email = ?').get(email);
 
   // Bewust dezelfde melding voor "onbekend adres" en "verkeerd wachtwoord":
-  // anders kan iemand uitvissen welke adressen bestaan. Om diezelfde reden telt
-  // een onbekend adres gewoon mee in de teller.
-  if (!gebruiker || !gebruiker.actief || !wachtwoordKlopt(wachtwoord, gebruiker.wachtwoord_hash)) {
-    telFout(perAdres);
-    telFout(perIp);
+  // anders kan iemand uitvissen welke adressen bestaan. Om diezelfde reden
+  // rekenen we ook zonder account, en voor een uitgeschakeld account: dan duurt
+  // het antwoord altijd even lang.
+  const klopt = await wachtwoordKlopt(wachtwoord, gebruiker?.wachtwoord_hash);
+
+  if (!gebruiker || !gebruiker.actief || !klopt) {
     noteer({ soort: 'inloggen', email, gebruikerId: gebruiker?.id, ip: req.ip });
     return res.status(401).json({ fout: 'E-mailadres of wachtwoord klopt niet.' });
   }
 
   vergeet(perAdres);
+  telTerug(perIp);
   noteer({ soort: 'inloggen', gelukt: true, email, gebruikerId: gebruiker.id, ip: req.ip });
 
   // Is dit wachtwoord nog met de oude, lichtere instelling opgeslagen? Dan nu
   // opnieuw wegschrijven: dit is het enige moment waarop we het wachtwoord in
   // handen hebben. Zo groeit iedereen vanzelf mee zonder iets te merken.
-  if (moetZwaarder(gebruiker.wachtwoord_hash)) verzwaar(gebruiker.id, wachtwoord);
+  if (moetZwaarder(gebruiker.wachtwoord_hash)) {
+    await verzwaar(gebruiker.id, wachtwoord, gebruiker.wachtwoord_hash);
+  }
 
   maakSessie(res, gebruiker.id);
   res.json({ ok: true });
@@ -225,14 +245,16 @@ api.get('/uitnodiging/:token', (req, res) => {
   res.json({ email: uitnodiging.email });
 });
 
-api.post('/registreren', (req, res) => {
+const UITNODIGING_ONGELDIG = 'Deze uitnodiging is niet meer geldig.';
+
+api.post('/registreren', async (req, res) => {
   const token = tekst(req.body.token, 100);
   const naam = tekst(req.body.naam, 80);
   const wachtwoord = String(req.body.wachtwoord ?? '');
 
   const uitnodiging = db.prepare('SELECT * FROM uitnodigingen WHERE token = ?').get(token);
   if (!uitnodiging || uitnodiging.gebruikt_op || new Date(uitnodiging.verloopt_op) < new Date()) {
-    return res.status(404).json({ fout: 'Deze uitnodiging is niet meer geldig.' });
+    return res.status(404).json({ fout: UITNODIGING_ONGELDIG });
   }
   if (!naam) return res.status(400).json({ fout: 'Vul je naam in.' });
   if (wachtwoord.length < 10) {
@@ -242,17 +264,28 @@ api.post('/registreren', (req, res) => {
     return res.status(409).json({ fout: 'Er bestaat al een account met dit e-mailadres.' });
   }
 
-  const maakAan = db.transaction(() => {
+  const hash = await hashWachtwoord(wachtwoord);
+
+  // Tijdens het rekenen kan dezelfde link al een tweede keer zijn gebruikt.
+  // Daarom de link hier pas echt innemen, in één stap met het aanmaken: lukt
+  // dat innemen niet meer, dan was iemand anders net eerder.
+  const nieuweId = db.transaction(() => {
+    const ingenomen = db.prepare(
+      "UPDATE uitnodigingen SET gebruikt_op = datetime('now') WHERE token = ? AND gebruikt_op IS NULL"
+    ).run(token).changes;
+    if (!ingenomen || db.prepare('SELECT 1 FROM gebruikers WHERE email = ?').get(uitnodiging.email)) {
+      return null;
+    }
+
     const r = db.prepare(
       'INSERT INTO gebruikers (email, naam, wachtwoord_hash, rol) VALUES (?, ?, ?, ?)'
-    ).run(uitnodiging.email, naam, hashWachtwoord(wachtwoord), uitnodiging.rol);
+    ).run(uitnodiging.email, naam, hash, uitnodiging.rol);
 
-    db.prepare("UPDATE uitnodigingen SET gebruikt_op = datetime('now') WHERE token = ?").run(token);
     zorgVoorPriveLijst(r.lastInsertRowid);   // iedereen begint met een eigen lijst
     return r.lastInsertRowid;
-  });
+  })();
 
-  const nieuweId = maakAan();
+  if (!nieuweId) return res.status(404).json({ fout: UITNODIGING_ONGELDIG });
   noteer({
     soort: 'registreren', gelukt: true,
     email: uitnodiging.email, gebruikerId: nieuweId, ip: req.ip,
@@ -405,25 +438,37 @@ api.get('/herstel/:token', (req, res) => {
   res.json({ naam: rij.naam, email: rij.email });
 });
 
-api.post('/herstel', (req, res) => {
+const HERSTEL_ONGELDIG = 'Deze herstellink is niet meer geldig.';
+
+api.post('/herstel', async (req, res) => {
   const token = tekst(req.body.token, 100);
   const wachtwoord = String(req.body.wachtwoord ?? '');
 
   const rij = db.prepare('SELECT * FROM herstel WHERE token = ?').get(token);
   if (!rij || rij.gebruikt_op || new Date(rij.verloopt_op) < new Date()) {
-    return res.status(404).json({ fout: 'Deze herstellink is niet meer geldig.' });
+    return res.status(404).json({ fout: HERSTEL_ONGELDIG });
   }
   if (wachtwoord.length < 10) {
     return res.status(400).json({ fout: 'Kies een wachtwoord van minstens 10 tekens.' });
   }
 
-  db.transaction(() => {
-    db.prepare('UPDATE gebruikers SET wachtwoord_hash = ? WHERE id = ?')
-      .run(hashWachtwoord(wachtwoord), rij.gebruiker_id);
-    db.prepare("UPDATE herstel SET gebruikt_op = datetime('now') WHERE token = ?").run(token);
+  const hash = await hashWachtwoord(wachtwoord);
+
+  // Net als bij een uitnodiging: de link pas hier echt innemen, zodat hij ook
+  // bij twee gelijktijdige pogingen maar één keer werkt.
+  const gelukt = db.transaction(() => {
+    const ingenomen = db.prepare(
+      "UPDATE herstel SET gebruikt_op = datetime('now') WHERE token = ? AND gebruikt_op IS NULL"
+    ).run(token).changes;
+    if (!ingenomen) return false;
+
+    db.prepare('UPDATE gebruikers SET wachtwoord_hash = ? WHERE id = ?').run(hash, rij.gebruiker_id);
     // Oude sessies ongeldig maken: wie nog ingelogd was, moet opnieuw inloggen.
     db.prepare('DELETE FROM sessies WHERE gebruiker_id = ?').run(rij.gebruiker_id);
+    return true;
   })();
+
+  if (!gelukt) return res.status(404).json({ fout: HERSTEL_ONGELDIG });
 
   // Met een herstellink neemt iemand een bestaand account over. Juist dat wil je
   // later kunnen terugzien.
@@ -447,31 +492,34 @@ api.patch('/mij', vereistLogin, (req, res) => {
   res.json({ naam });
 });
 
-api.post('/wachtwoord', vereistLogin, (req, res) => {
+api.post('/wachtwoord', vereistLogin, async (req, res) => {
   const huidig = String(req.body.huidig ?? '');
   const nieuw = String(req.body.nieuw ?? '');
 
+  if (nieuw.length < 10) {
+    return res.status(400).json({ fout: 'Kies een wachtwoord van minstens 10 tekens.' });
+  }
+
   // Ook hier een rem: dit is de tweede plek waar je een wachtwoord kunt raden.
+  // En net als bij inloggen telt de poging vooraf mee.
   const sleutel = `wachtwoord:${req.gebruiker.id}`;
   const wacht = wachtNog(sleutel, GRENZEN.inloggenPerAdres);
   if (wacht !== null) {
     noteer({ soort: 'geblokkeerd', email: req.gebruiker.email, gebruikerId: req.gebruiker.id, ip: req.ip });
     return res.status(429).json({ fout: teVeelMelding(wacht) });
   }
+  telFout(sleutel);
 
   const gebruiker = db.prepare('SELECT * FROM gebruikers WHERE id = ?').get(req.gebruiker.id);
-  if (!wachtwoordKlopt(huidig, gebruiker.wachtwoord_hash)) {
-    telFout(sleutel);
+  if (!(await wachtwoordKlopt(huidig, gebruiker.wachtwoord_hash))) {
     noteer({ soort: 'wachtwoord', email: gebruiker.email, gebruikerId: gebruiker.id, ip: req.ip });
     return res.status(403).json({ fout: 'Je huidige wachtwoord klopt niet.' });
   }
-  if (nieuw.length < 10) {
-    return res.status(400).json({ fout: 'Kies een wachtwoord van minstens 10 tekens.' });
-  }
+
+  const hash = await hashWachtwoord(nieuw);
 
   db.transaction(() => {
-    db.prepare('UPDATE gebruikers SET wachtwoord_hash = ? WHERE id = ?')
-      .run(hashWachtwoord(nieuw), gebruiker.id);
+    db.prepare('UPDATE gebruikers SET wachtwoord_hash = ? WHERE id = ?').run(hash, gebruiker.id);
 
     // Alle sessies eruit, ook die van jezelf: verander je je wachtwoord omdat je
     // vermoedt dat iemand meekijkt, dan moet die meekijker er meteen uit en niet
@@ -987,6 +1035,19 @@ api.patch('/taak-stappen/:id', vereistLogin, (req, res) => {
 const MAX_BIJLAGE = Number(process.env.MAX_BIJLAGE_MB || 10) * 1024 * 1024;
 const MAX_PER_TAAK = 20;
 
+/**
+ * De browser codeert de naam, zodat é en spaties heelhuids in een header
+ * passen. Klopt die codering niet, dan nemen we de naam zoals hij binnenkwam
+ * in plaats van een serverfout te geven.
+ */
+function leesKopNaam(ruw) {
+  try {
+    return decodeURIComponent(ruw || '');
+  } catch {
+    return ruw;
+  }
+}
+
 function schoneBestandsnaam(ruw) {
   return String(ruw ?? '')
     .replace(/[\u0000-\u001f\u007f]/g, '')   // stuurtekens
@@ -1011,7 +1072,7 @@ api.post('/taken/:id/bijlagen', vereistLogin, (req, res) => {
   const taak = zichtbareTaak(req.gebruiker, req.params.id);
   if (!taak) return res.status(404).json({ fout: 'Taak niet gevonden.' });
 
-  const bestandsnaam = schoneBestandsnaam(decodeURIComponent(req.get('x-bestandsnaam') || ''));
+  const bestandsnaam = schoneBestandsnaam(leesKopNaam(req.get('x-bestandsnaam')));
   if (!bestandsnaam) return res.status(400).json({ fout: 'De naam van het bestand ontbreekt.' });
 
   const aantal = db.prepare('SELECT COUNT(*) AS n FROM bijlagen WHERE taak_id = ?').get(taak.id).n;

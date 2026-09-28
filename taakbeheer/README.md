@@ -380,7 +380,9 @@ Wat de app zelf doet:
 - **Uploads** krijgen een willekeurige naam op schijf en worden altijd als
   bijlage teruggegeven, nooit als pagina. Een geüpload html- of svg-bestand kan
   dus niet als onderdeel van deze site draaien.
-- **Inloggen verraadt niet** of een e-mailadres bestaat.
+- **Inloggen verraadt niet** of een e-mailadres bestaat: niet in de melding, en
+  ook niet in de tijd die het antwoord kost. Bij een onbekend adres rekent de
+  server net zo lang als bij een bekend adres.
 - **De browser krijgt strenge instructies mee** over wat er op de pagina mag —
   zie "Wat de browser wel en niet mag" hieronder.
 
@@ -403,6 +405,13 @@ en worden bij je eerstvolgende inlog stilletjes opnieuw en zwaarder weggeschreve
 er niets van.
 
 Wil je later hoger: zet `SCRYPT_N` op de hostingomgeving op een macht van twee.
+
+Het rekenen gebeurt **naast** de server en niet erin, en **één tegelijk**. Naast
+de server: anders staat de hele app even stil zodra iemand inlogt, en merken
+collega's dat als een hapering. Eén tegelijk: elke berekening vraagt 64 MB
+geheugen, en twintig gelijktijdige pogingen passen niet in een kleine container.
+Komen er toch veel tegelijk, dan wachten ze op hun beurt; de rest van de app
+merkt daar niets van.
 
 ### Wat de browser wel en niet mag
 
@@ -439,6 +448,10 @@ of herstellink is beperkt tot twintig mislukte pogingen per IP.
 
 De keerzijde: iemand kan een collega een kwartier buitensluiten door expres fout
 te gokken. Dat is de prijs voor een rem die werkt.
+
+Een poging telt mee op het moment dat hij binnenkomt, niet pas als het
+wachtwoord is gecontroleerd. Anders zou iemand die twintig pogingen tegelijk
+stuurt er twintig kunnen doen: geen van allen was al geteld toen de rem keek.
 
 De tellers staan in het geheugen van de server. Bij een herstart zijn ze leeg;
 dat is geen opening, want een aanvaller kan geen herstart afdwingen.

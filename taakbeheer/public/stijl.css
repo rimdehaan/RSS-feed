@@ -813,9 +813,32 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
   font-family: ui-monospace, Menlo, Consolas, monospace;
 }
 
+/* ── Telefoon ──
+   Eerst werd de zijbalk hier een smalle strook met alleen icoontjes. Maar elk
+   project heeft hetzelfde icoontje, en uitloggen zat in het weggelaten deel:
+   je zag niet welk project welk was. Nu schuift de zijbalk mét namen in beeld
+   via de menuknop linksboven. */
+.menu-knop, .zijbalk-scherm { display: none; }
+
 @media (max-width: 760px) {
-  .zijbalk { width: 62px; }
-  .zijbalk-logo, .zijbalk nav a span, .zijbalk-kop, .zijbalk-voet { display: none; }
+  .menu-knop {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 38px; height: 38px; margin-left: -6px;
+    background: none; border: none; border-radius: 6px; color: var(--donker); cursor: pointer;
+  }
+  .menu-knop:hover { background: var(--achtergrond); }
+
+  .zijbalk {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 900;
+    width: min(280px, 85vw);
+    transform: translateX(-100%); transition: transform 0.2s;
+  }
+  .zijbalk.open { transform: none; box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
+  .zijbalk-scherm.open {
+    display: block; position: fixed; inset: 0; z-index: 899; background: rgba(0,41,68,0.45);
+  }
+
+  .zoekbalk { width: auto; flex: 0 1 160px; min-width: 0; }
   .raster { grid-template-columns: 1fr; }
   .kop, .balk, .inhoud { padding-left: 14px; padding-right: 14px; }
 }

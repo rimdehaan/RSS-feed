@@ -67,6 +67,17 @@ export function telFout(sleutel) {
   teller.aantal += 1;
 }
 
+/**
+ * Een poging die vooraf is meegeteld maar gelukt bleek, weer wegstrepen.
+ * Vooraf tellen is nodig omdat het controleren van een wachtwoord even duurt:
+ * wie in die tijd twintig pogingen tegelijk stuurt, zou anders langs de rem
+ * glippen omdat geen van die twintig al was geteld.
+ */
+export function telTerug(sleutel) {
+  const teller = tellers.get(sleutel);
+  if (teller && teller.aantal > 0) teller.aantal -= 1;
+}
+
 /** Gelukt: de teller mag schoon. */
 export function vergeet(sleutel) {
   tellers.delete(sleutel);

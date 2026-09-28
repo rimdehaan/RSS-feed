@@ -45,6 +45,13 @@ const KLEUREN = {
   'Vervallen':    '#EB5757',
 };
 
+/**
+ * Een status die de app niet kent, bijvoorbeeld uit oude gegevens. Die krijgt
+ * het blauwgrijs uit de huisstijl, zodat hij zichtbaar blijft en opvalt.
+ */
+const kleurVanStatus = (status) => KLEUREN[status] ?? '#5B869F';
+const isBekendeStatus = (status) => staat.statussen.includes(status);
+
 // Kleuren en klasse voor prioriteit. Leeg = geen prioriteit opgegeven.
 const PRIO_KLEUREN = {
   Kritiek: '#C4314B',
@@ -177,6 +184,22 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(o => o.classList.remove('open'));
 });
 
+// ── Menu op de telefoon ──────────────────────────────────────────────────
+// Op een smal scherm staat de zijbalk verstopt; de menuknop schuift hem in
+// beeld. Kies je iets, dan gaat hij weer dicht zodat je ziet wat je koos.
+const zijbalk = document.querySelector('.zijbalk');
+
+function zetMenu(open) {
+  zijbalk.classList.toggle('open', open);
+  el('zijbalkScherm').classList.toggle('open', open);
+}
+
+el('menuKnop').addEventListener('click', () => zetMenu(true));
+el('zijbalkScherm').addEventListener('click', () => zetMenu(false));
+zijbalk.addEventListener('click', (e) => {
+  if (e.target.closest('a, button')) zetMenu(false);
+});
+
 // ── Opstarten ────────────────────────────────────────────────────────────
 async function start() {
   const { gebruiker, statussen, prioriteiten, max_bijlage_mb, woorden, bestandsnaam } =
@@ -212,7 +235,7 @@ async function start() {
 
 function vulStatusKeuzes() {
   const opties = staat.statussen
-    .map(s => `<option value="${esc(s)}" style="${optieStijl(KLEUREN[s])}">${esc(s)}</option>`).join('');
+    .map(s => `<option value="${esc(s)}" style="${optieStijl(kleurVanStatus(s))}">${esc(s)}</option>`).join('');
   el('vStatus').innerHTML = opties;
   el('filterStatus').innerHTML = '<option value="">Alle statussen</option>' + opties;
 
@@ -348,27 +371,45 @@ function tekenZijbalk() {
 async function kiesBord(id) {
   staat.bordId = id;
   staat.weergave = 'tabel';
+  el('prikbordBalk').hidden = true;
+  el('categorieBalk').hidden = true;
 
-  if (isPersoonlijk()) {
-    staat.taken = await api('/mijn-taken');
-    staat.toegestaneUitvoerders = null;
-    el('paginaTitel').textContent = 'Mijn taken';
-  } else {
-    staat.taken = await api(`/borden/${id}/taken`);
-    const bord = staat.borden.find(b => b.id === id);
-    el('paginaTitel').textContent = bord?.naam ?? 'Project';
+  try {
+    // De projecten elke keer vers ophalen. Geeft iemand je toegang terwijl je
+    // scherm openstaat, of word je beheerder, dan zie je dat bij je volgende
+    // klik — en niet pas als je op het idee komt de pagina te herladen.
+    staat.borden = await api('/borden');
 
-    staat.toegestaneUitvoerders = bord?.zichtbaar_voor_iedereen
-      ? null
-      : new Set((await api(`/borden/${id}/instellingen`)).leden);
+    if (isPersoonlijk()) {
+      staat.taken = await api('/mijn-taken');
+      staat.toegestaneUitvoerders = null;
+      el('paginaTitel').textContent = 'Mijn taken';
+    } else {
+      staat.taken = await api(`/borden/${id}/taken`);
+      const bord = staat.borden.find(b => b.id === id);
+      el('paginaTitel').textContent = bord?.naam ?? 'Project';
+
+      staat.toegestaneUitvoerders = bord?.zichtbaar_voor_iedereen
+        ? null
+        : new Set((await api(`/borden/${id}/instellingen`)).leden);
+    }
+  } catch {
+    // Meestal: het project is intussen verwijderd, of je toegang is ingetrokken.
+    staat.taken = [];
+    el('paginaTitel').textContent = 'Project niet beschikbaar';
+    el('werkbalk').hidden = true;
+    el('lijstUitleg').hidden = true;
+    el('inhoud').innerHTML = `<div class="mijn-leeg">Dit project kan niet worden geopend.
+      Misschien is het verwijderd, of heb je er geen toegang meer toe.
+      Kies een ander project.</div>`;
+    tekenZijbalk();
+    return;
   }
 
   // Bij een ander project begin je met alles in beeld.
   staat.deadlineFilter = null;
 
   el('werkbalk').hidden = false;
-  el('prikbordBalk').hidden = true;
-  el('categorieBalk').hidden = true;
   werkbalkBijwerken();
   tekenZijbalk();
   teken();
@@ -545,6 +586,10 @@ function tekenMijnTaken() {
     el('inhoud').innerHTML = `<div class="mijn-leeg">
       ${staat.taken.length === 0
         ? 'Er staan geen taken op jouw naam. Zodra iemand je een taak toewijst in een project, verschijnt die hier.'
+          // Wie vooral meekijkt, zoals een leidinggevende, begint hier op een
+          // leeg scherm. Zonder deze zin lijkt dat op "geen toegang".
+          + '<br><br>Alle taken van een project, ook die van anderen, zie je door het project '
+          + 'te openen onder <strong>Projecten</strong>.'
         : 'Geen taken die aan je filter voldoen.'}
     </div>`;
     return;
@@ -664,14 +709,19 @@ function statusBlokkenHtml(taken) {
   // Helemaal niets? Dan één lege tabel met de melding, niet zes keer.
   if (taken.length === 0) return tabelHtml([]);
 
-  return staat.statussen.map(status => {
+  // Eerst de vaste statussen, daarna elke status die de app niet kent. Zonder
+  // dat laatste zou zo'n taak stilletjes van het scherm vallen, terwijl hij in
+  // de telling in de zijbalk wel meetelt.
+  const onbekend = [...new Set(taken.map(t => t.status).filter(s => !isBekendeStatus(s)))];
+
+  return [...staat.statussen, ...onbekend].map(status => {
     const erin = taken.filter(t => t.status === status);
     if (erin.length === 0) return '';   // lege statussen laten we weg
 
     const dicht = staat.dichtgeklapt.has(status);
     return `
       <section class="status-blok${dicht ? ' dicht' : ''}" data-blok="${esc(status)}"
-               style="--status:${KLEUREN[status]}">
+               style="--status:${kleurVanStatus(status)}">
         <button type="button" class="status-kop" data-klap="${esc(status)}"
                 title="${dicht ? 'Openklappen' : 'Dichtklappen'}">
           <svg class="klap-pijl" width="13" height="13" fill="none" stroke="currentColor"
@@ -679,6 +729,7 @@ function statusBlokkenHtml(taken) {
           <span class="status-stip"></span>
           <span class="status-naam">${esc(status)}</span>
           <span class="telling">${erin.length} ${erin.length === 1 ? 'taak' : 'taken'}</span>
+          ${isBekendeStatus(status) ? '' : '<span class="telling">· geen vaste status, kies er een bij de taak</span>'}
         </button>
         ${dicht ? '' : tabelHtml(erin)}
       </section>`;
@@ -706,9 +757,13 @@ function tekenTabel() {
 }
 
 function rijHtml(taak) {
-  const opties = staat.statussen
-    .map(s => `<option value="${esc(s)}" ${s === taak.status ? 'selected' : ''}
-                       style="${optieStijl(KLEUREN[s])}">${esc(s)}</option>`).join('');
+  // Een onbekende status staat bovenaan de keuzelijst, zodat je ziet wat er
+  // nu staat. Terugkiezen kan niet: je kiest er een van de vaste voor in de plaats.
+  const opties = (isBekendeStatus(taak.status) ? ''
+      : `<option value="${esc(taak.status)}" selected disabled>${esc(taak.status)}</option>`) +
+    staat.statussen
+      .map(s => `<option value="${esc(s)}" ${s === taak.status ? 'selected' : ''}
+                         style="${optieStijl(kleurVanStatus(s))}">${esc(s)}</option>`).join('');
 
   const prioOpties =
     `<option value="" ${!taak.prioriteit ? 'selected' : ''} style="${optieStijl(PRIO_KLEUREN[''])}">—</option>` +
@@ -738,7 +793,7 @@ function rijHtml(taak) {
       </td>
       <td>
         <select class="status-select ${statusKlasse(taak.status)}" data-taak="${taak.id}"
-                style="background:${KLEUREN[taak.status]}">${opties}</select>
+                style="background:${kleurVanStatus(taak.status)}">${opties}</select>
       </td>
       <td>${deadline}</td>
       <td class="c-teller">${taak.aantal_bijlagen
@@ -1361,7 +1416,7 @@ async function openDetail(id) {
   el('detailMeta').innerHTML = `
     <div><span class="naam">Uitvoerend</span><span class="waarde">${esc(taak.uitvoerend_naam || '—')}</span></div>
     <div><span class="naam">Status</span><span class="waarde">
-      <span class="status-select ${statusKlasse(taak.status)}" style="background:${KLEUREN[taak.status]};display:inline-block;cursor:default">${esc(taak.status)}</span>
+      <span class="status-select ${statusKlasse(taak.status)}" style="background:${kleurVanStatus(taak.status)};display:inline-block;cursor:default">${esc(taak.status)}</span>
     </span></div>
     <div><span class="naam">Prioriteit</span><span class="waarde">
       <span class="status-select ${prioKlasse(taak.prioriteit)}" style="background:${PRIO_KLEUREN[taak.prioriteit ?? '']};display:inline-block;cursor:default;min-width:auto">${esc(prioTekst(taak.prioriteit))}</span>
@@ -1393,6 +1448,12 @@ async function openDetail(id) {
         }
         if (regel.veld === 'bijlage verwijderd') {
           return `<li><b>${wie}</b> verwijderde de bijlage <b>${esc(regel.oude_waarde)}</b> — ${wanneer}</li>`;
+        }
+        if (regel.veld === 'link toegevoegd') {
+          return `<li><b>${wie}</b> voegde de link <b>${esc(regel.nieuwe_waarde)}</b> toe — ${wanneer}</li>`;
+        }
+        if (regel.veld === 'link verwijderd') {
+          return `<li><b>${wie}</b> verwijderde de link <b>${esc(regel.oude_waarde)}</b> — ${wanneer}</li>`;
         }
         if (regel.veld === 'werkproces gekoppeld') {
           return `<li><b>${wie}</b> koppelde het werkproces <b>${esc(regel.nieuwe_waarde)}</b> — ${wanneer}</li>`;
@@ -2105,6 +2166,10 @@ async function openBordVenster() {
   const bord = await api(`/borden/${staat.bordId}/instellingen`);
   const taken = staat.taken;
 
+  // Vers ophalen: wie sinds het openen van de pagina een account heeft
+  // gemaakt, moet je hier meteen toegang kunnen geven.
+  staat.gebruikers = await api('/gebruikers');
+
   el('bNaam').value = bord.naam;
   el('bIedereen').checked = bord.zichtbaar_voor_iedereen;
   el('bGekozen').checked = !bord.zichtbaar_voor_iedereen;
@@ -2264,6 +2329,9 @@ async function tekenTeam(bericht = null) {
   staat.gebruikers = await api('/gebruikers');
   vulGebruikerKeuzes();
 
+  // Je eigen rol kan veranderd zijn sinds je de pagina opende; die bepaalt
+  // wat je hier mag.
+  staat.ik = (await api('/ik')).gebruiker ?? staat.ik;
   const beheerder = staat.ik.rol === 'beheerder';
   const uitnodigingen = beheerder ? await api('/uitnodigingen') : [];
 

@@ -26,6 +26,14 @@ app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
 app.use(express.json({ limit: '1mb' }));
+
+// Zonder inhoud laat Express het veld leeg (undefined). Dan zou elke route die
+// req.body.iets leest omvallen; een leeg object betekent gewoon "niets ingevuld".
+app.use((req, res, next) => {
+  req.body ??= {};
+  next();
+});
+
 app.use(metGebruiker);
 
 /**
@@ -100,6 +108,14 @@ app.use((req, res) => {
 
 // Vangnet: laat de server niet omvallen op één fout, maar log hem wel.
 app.use((err, req, res, next) => {
+  // Kapotte of te grote inhoud is een fout van de afzender, niet van de server.
+  // Die krijgt een eigen code en hoort niet tussen de echte fouten in het log.
+  if (err.status >= 400 && err.status < 500) {
+    return res.status(err.status).json({
+      fout: err.status === 413 ? 'Dit verzoek is te groot.' : 'Dit verzoek kon niet worden gelezen.',
+    });
+  }
+
   console.error(err);
   res.status(500).json({ fout: 'Er ging iets mis op de server.' });
 });
