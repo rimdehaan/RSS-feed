@@ -8,6 +8,7 @@
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { db } from './db.js';
+import { noteer } from './logboek.js';
 
 const scryptAsync = promisify(scrypt);
 
@@ -125,11 +126,14 @@ export async function verzwaar(gebruikerId, wachtwoord, oudeWaarde) {
 // cookie én in de database. Bij elk verzoek zoeken we hem daar op.
 
 export function maakSessie(res, gebruikerId) {
-  const token = randomBytes(32).toString('hex');
-  const verloopt = new Date(Date.now() + SESSIE_DAGEN * 864e5);
+  schrijfSessie(res, gebruikerId, null, new Date(Date.now() + SESSIE_DAGEN * 864e5));
+}
 
-  db.prepare('INSERT INTO sessies (token, gebruiker_id, verloopt_op) VALUES (?, ?, ?)')
-    .run(token, gebruikerId, verloopt.toISOString());
+function schrijfSessie(res, gebruikerId, meekijkerId, verloopt) {
+  const token = randomBytes(32).toString('hex');
+
+  db.prepare('INSERT INTO sessies (token, gebruiker_id, meekijker_id, verloopt_op) VALUES (?, ?, ?, ?)')
+    .run(token, gebruikerId, meekijkerId, verloopt.toISOString());
 
   res.cookie(COOKIE, token, {
     httpOnly: true,               // JavaScript op de pagina kan er niet bij
@@ -161,28 +165,89 @@ function leesCookie(req, naam) {
   return null;
 }
 
+/** Een actieve gebruiker in de vorm die aan req.gebruiker hangt, of null. */
+function actieveGebruiker(id) {
+  const g = db.prepare(
+    'SELECT id, email, naam, rol, mag_werkprocessen FROM gebruikers WHERE id = ? AND actief = 1'
+  ).get(id);
+  return g ? { ...g, mag_werkprocessen: Boolean(g.mag_werkprocessen) } : null;
+}
+
+// ── Meekijken ────────────────────────────────────────────────────────────
+// Een beheerder ziet de app zoals een collega hem ziet. Technisch is dat een
+// sessie van de collega waarin staat wie er meekijkt. De eigen sessie van de
+// beheerder verdwijnt zolang; bij het stoppen komt er een nieuwe.
+
+export const MEEKIJK_MINUTEN = 30;
+
+export function startMeekijken(req, res, collega) {
+  const token = leesCookie(req, COOKIE);
+  if (token) db.prepare('DELETE FROM sessies WHERE token = ?').run(token);
+
+  schrijfSessie(res, collega.id, req.gebruiker.id, new Date(Date.now() + MEEKIJK_MINUTEN * 60e3));
+
+  // De collega ziet het bij het volgende bezoek; het inlogboek bewaart het.
+  db.prepare('INSERT INTO meekijk_meldingen (gebruiker_id, meekijker_id) VALUES (?, ?)')
+    .run(collega.id, req.gebruiker.id);
+  noteer({ soort: 'meekijken', gelukt: true, email: collega.email, gebruikerId: req.gebruiker.id, ip: req.ip });
+}
+
+/**
+ * Stopt het meekijken, met de knop of omdat de tijd om is. De beheerder is
+ * daarna weer zichzelf. Geeft die gebruiker terug, of null als die intussen
+ * geen beheerder meer is — dan volgt gewoon uitloggen.
+ */
+export function stopMeekijken(req, res) {
+  const token = leesCookie(req, COOKIE);
+  const sessie = token && db.prepare(
+    `SELECT s.meekijker_id, g.email FROM sessies s JOIN gebruikers g ON g.id = s.gebruiker_id
+      WHERE s.token = ? AND s.meekijker_id IS NOT NULL`
+  ).get(token);
+  if (!sessie) return null;
+
+  db.prepare('DELETE FROM sessies WHERE token = ?').run(token);
+  noteer({ soort: 'meekijken-gestopt', gelukt: true, email: sessie.email, gebruikerId: sessie.meekijker_id, ip: req.ip });
+
+  const beheerder = actieveGebruiker(sessie.meekijker_id);
+  if (beheerder?.rol !== 'beheerder') {
+    res.clearCookie(COOKIE, { path: '/' });
+    return null;
+  }
+  maakSessie(res, beheerder.id);
+  return beheerder;
+}
+
 /** Zoekt bij elk verzoek op wie er is ingelogd en hangt dat aan req.gebruiker. */
 export function metGebruiker(req, res, next) {
   req.gebruiker = null;
   const token = leesCookie(req, COOKIE);
+  const rij = token && db.prepare(
+    'SELECT gebruiker_id, meekijker_id, verloopt_op FROM sessies WHERE token = ?'
+  ).get(token);
+  if (!rij) return next();
 
-  if (token) {
-    const rij = db.prepare(
-      `SELECT g.id, g.email, g.naam, g.rol, g.mag_werkprocessen, s.verloopt_op
-         FROM sessies s
-         JOIN gebruikers g ON g.id = s.gebruiker_id
-        WHERE s.token = ? AND g.actief = 1`
-    ).get(token);
+  const verlopen = new Date(rij.verloopt_op) <= new Date();
 
-    if (rij && new Date(rij.verloopt_op) > new Date()) {
-      req.gebruiker = {
-        id: rij.id, email: rij.email, naam: rij.naam, rol: rij.rol,
-        mag_werkprocessen: Boolean(rij.mag_werkprocessen),
-      };
-    } else if (rij) {
-      db.prepare('DELETE FROM sessies WHERE token = ?').run(token);
-    }
+  if (!rij.meekijker_id) {
+    if (verlopen) db.prepare('DELETE FROM sessies WHERE token = ?').run(token);
+    else req.gebruiker = actieveGebruiker(rij.gebruiker_id);
+    return next();
   }
+
+  // Een meekijksessie. Tijd om, of de collega intussen uitgeschakeld? Dan is de
+  // beheerder weer zichzelf. En wie geen beheerder meer is, kijkt niet meer mee.
+  const collega = actieveGebruiker(rij.gebruiker_id);
+  const meekijker = actieveGebruiker(rij.meekijker_id);
+
+  if (verlopen || !collega || meekijker?.rol !== 'beheerder') {
+    req.gebruiker = stopMeekijken(req, res);
+    return next();
+  }
+
+  req.gebruiker = {
+    ...collega,
+    meekijker: { id: meekijker.id, naam: meekijker.naam, tot: rij.verloopt_op },
+  };
   next();
 }
 

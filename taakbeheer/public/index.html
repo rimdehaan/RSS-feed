@@ -44,6 +44,16 @@
 
   <!-- ── HOOFD ── -->
   <div class="hoofd">
+    <!-- Staat er zolang een beheerder meekijkt als iemand anders. -->
+    <div class="meekijk-balk" id="meekijkBalk" hidden>
+      <span id="meekijkTekst"></span>
+      <button type="button" class="btn btn-sm" id="meekijkStop">Stoppen</button>
+    </div>
+    <!-- Eén keer, voor wie er is meegekeken. -->
+    <div class="meegekeken-balk" id="meegekekenBalk" hidden>
+      <span id="meegekekenTekst"></span>
+      <button type="button" class="sluit" id="meegekekenSluit" title="Sluiten" aria-label="Sluiten">×</button>
+    </div>
     <header class="kop">
       <button type="button" class="menu-knop" id="menuKnop" title="Menu" aria-label="Menu openen">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>

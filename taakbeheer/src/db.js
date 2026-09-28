@@ -204,6 +204,24 @@ voegKolomToe('bijlagen', 'url', 'TEXT');
  */
 voegKolomToe('borden', 'prive_van', 'INTEGER REFERENCES gebruikers(id)');
 
+/**
+ * Meekijken: een beheerder ziet de app zoals een collega hem ziet. Zo'n sessie
+ * is van de collega, maar onthoudt wie er meekijkt. Leeg = een gewone sessie.
+ */
+voegKolomToe('sessies', 'meekijker_id', 'INTEGER REFERENCES gebruikers(id) ON DELETE CASCADE');
+
+// Wie is er met jou meegekeken? Dat krijg je bij je volgende bezoek één keer te
+// zien. Daarna blijft de regel staan als naslag naast het inlogboek.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS meekijk_meldingen (
+    id            INTEGER PRIMARY KEY,
+    gebruiker_id  INTEGER NOT NULL REFERENCES gebruikers(id) ON DELETE CASCADE,
+    meekijker_id  INTEGER REFERENCES gebruikers(id) ON DELETE SET NULL,
+    moment        TEXT NOT NULL DEFAULT (datetime('now')),
+    gezien        INTEGER NOT NULL DEFAULT 0
+  );
+`);
+
 export const PRIVELIJST_NAAM = 'Mijn takenlijst';
 
 /** Maakt de persoonlijke lijst voor wie er nog geen heeft. */

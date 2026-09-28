@@ -13,12 +13,32 @@ import { splitsStappen, MAX_STAPPEN, MAX_STAP_TEKENS } from '../public/stappen.j
 import {
   hashWachtwoord, wachtwoordKlopt, maakSessie, verwijderSessie,
   vereistLogin, vereistBeheerder, moetZwaarder, verzwaar,
+  startMeekijken, stopMeekijken,
 } from './auth.js';
 import { GRENZEN, wachtNog, telFout, telTerug, vergeet, teVeelMelding } from './rem.js';
 import { noteer, laatsteRegels, LOG_DAGEN } from './logboek.js';
 import { APP_NAAM, woorden, naamAlsBestandsnaam } from './omgeving.js';
 
 const api = Router();
+
+// ── Meekijken: alleen kijken ─────────────────────────────────────────────
+// Kijkt een beheerder mee als een collega, dan mag er niets veranderen: in de
+// historie zou anders de naam van de collega staan bij iets wat de beheerder
+// deed. En het prikbord blijft dicht, want daarvan belooft de app dat alleen
+// de eigenaar het ziet. Dit staat hier vooraan, zodat geen enkele route eraan
+// ontsnapt.
+const ALLEEN_KIJKEN = 'Tijdens meekijken kun je niets wijzigen.';
+
+api.use((req, res, next) => {
+  if (!req.gebruiker?.meekijker) return next();
+
+  if (req.path.startsWith('/briefje')) {
+    return res.status(403).json({ fout: 'Het prikbord is niet zichtbaar tijdens meekijken.' });
+  }
+  const magWel = req.method === 'GET' || req.path === '/meekijken/stop' || req.path === '/uitloggen';
+  if (!magWel) return res.status(403).json({ fout: ALLEEN_KIJKEN });
+  next();
+});
 
 // ── Hulpjes ──────────────────────────────────────────────────────────────
 
@@ -56,8 +76,9 @@ function zichtbaarBord(gebruiker, bordId) {
   if (!bord) return null;
 
   // Let op de volgorde: deze regel moet vóór de beheerderscontrole staan.
-  // Een persoonlijke takenlijst is van één iemand, en van niemand anders.
-  if (bord.prive_van) return bord.prive_van === gebruiker.id ? bord : null;
+  // Een persoonlijke takenlijst is van één iemand, en van niemand anders — ook
+  // niet van een beheerder die met die iemand meekijkt.
+  if (bord.prive_van) return bord.prive_van === gebruiker.id && !gebruiker.meekijker ? bord : null;
 
   if (gebruiker.rol === 'beheerder' || bord.zichtbaar_voor_iedereen) return bord;
 
@@ -211,13 +232,39 @@ api.post('/inloggen', async (req, res) => {
 });
 
 api.post('/uitloggen', (req, res) => {
+  // Uitloggen tijdens meekijken: eerst netjes stoppen, zodat het inlogboek
+  // klopt. Daarna gaat ook de beheerder zelf eruit, zoals gevraagd.
+  if (req.gebruiker?.meekijker) stopMeekijken(req, res);
   verwijderSessie(req, res);
   res.json({ ok: true });
 });
 
+/**
+ * Wie heeft er met jou meegekeken sinds je vorige bezoek? Die lijst krijg je één
+ * keer; daarna staat hij op gezien. Tijdens meekijken zelf niet: die melding
+ * is voor de collega, niet voor de beheerder die meekijkt.
+ */
+function nieuweMeekijkMeldingen(gebruiker) {
+  if (!gebruiker || gebruiker.meekijker) return [];
+
+  const meldingen = db.prepare(
+    `SELECT m.moment, g.naam FROM meekijk_meldingen m
+       LEFT JOIN gebruikers g ON g.id = m.meekijker_id
+      WHERE m.gebruiker_id = ? AND m.gezien = 0 ORDER BY m.moment`
+  ).all(gebruiker.id);
+
+  if (meldingen.length) {
+    db.prepare('UPDATE meekijk_meldingen SET gezien = 1 WHERE gebruiker_id = ?').run(gebruiker.id);
+  }
+  return meldingen;
+}
+
 api.get('/ik', (req, res) => {
   res.json({
     gebruiker: req.gebruiker,
+    // Alleen bij het opstarten van de pagina, anders raakt een tussentijdse
+    // vraag naar /ik de melding kwijt voordat hij op het scherm stond.
+    meegekeken: req.query.start ? nieuweMeekijkMeldingen(req.gebruiker) : [],
     statussen: STATUSSEN,
     prioriteiten: PRIORITEITEN,
     mag_werkprocessen: req.gebruiker ? magWerkprocessenBeheren(req.gebruiker) : false,
@@ -405,6 +452,28 @@ api.patch('/gebruikers/:id', vereistBeheerder, (req, res) => {
   res.json({ ok: true });
 });
 
+// Meekijken als een collega, om op afstand te zien wat er misgaat. De stopknop
+// staat bewust vóór de route met :id, anders leest Express "stop" als een id.
+api.post('/meekijken/stop', (req, res) => {
+  if (!req.gebruiker?.meekijker) return res.status(400).json({ fout: 'Je kijkt nu niet mee.' });
+  const beheerder = stopMeekijken(req, res);
+  res.json({ ok: true, ingelogd: Boolean(beheerder) });
+});
+
+api.post('/meekijken/:id', vereistBeheerder, (req, res) => {
+  const id = Number(req.params.id);
+  if (id === req.gebruiker.id) return res.status(400).json({ fout: 'Met jezelf meekijken kan niet.' });
+
+  const collega = db.prepare('SELECT id, email, naam, actief FROM gebruikers WHERE id = ?').get(id);
+  if (!collega) return res.status(404).json({ fout: 'Gebruiker niet gevonden.' });
+  if (!collega.actief) {
+    return res.status(400).json({ fout: 'Meekijken kan alleen bij een account dat aan staat.' });
+  }
+
+  startMeekijken(req, res, collega);
+  res.json({ ok: true, naam: collega.naam });
+});
+
 // Wachtwoord vergeten: een beheerder maakt een herstellink aan en geeft die
 // persoonlijk door. Juist deze link mailen we niet — hij geeft toegang tot een
 // bestaand account.
@@ -559,7 +628,12 @@ api.get('/borden', vereistLogin, (req, res) => {
       ORDER BY b.gearchiveerd, b.positie, b.id`
   ).all(req.gebruiker.id, req.gebruiker.rol === 'beheerder' ? 1 : 0, req.gebruiker.id);
 
-  res.json(borden.map((bord) => ({ ...bord, mag_beheren: magBeheren(req.gebruiker, bord) })));
+  res.json(borden.map((bord) => ({
+    ...bord,
+    // Tijdens meekijken zegt zelfs het aantal taken op de eigen lijst te veel.
+    aantal_taken: bord.prive_van && req.gebruiker.meekijker ? null : bord.aantal_taken,
+    mag_beheren: magBeheren(req.gebruiker, bord),
+  })));
 });
 
 api.post('/borden', vereistLogin, (req, res) => {
@@ -708,8 +782,9 @@ api.get('/mijn-taken', vereistLogin, (req, res) => {
        JOIN borden b ON b.id = t.bord_id
        LEFT JOIN gebruikers g ON g.id = t.uitvoerend_id
       WHERE t.uitvoerend_id = ?
+        AND (? = 0 OR b.prive_van IS NULL)   -- meekijken: de eigen lijst blijft dicht
       ORDER BY b.gearchiveerd, b.positie, b.id, t.positie, t.id`
-  ).all(req.gebruiker.id));
+  ).all(req.gebruiker.id, req.gebruiker.meekijker ? 1 : 0));
 });
 
 api.post('/borden/:id/taken', vereistLogin, (req, res) => {

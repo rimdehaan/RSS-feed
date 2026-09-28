@@ -5,6 +5,8 @@ import { splitsStappen, MAX_STAPPEN } from './stappen.js';
 // ── Gedeelde toestand ────────────────────────────────────────────────────
 const staat = {
   ik: null,
+  // Kijkt een beheerder mee als iemand anders? Dan { id, naam, tot }, anders null.
+  meekijken: null,
   statussen: [],
   // De woorden die per omgeving verschillen; komen bij het opstarten van de
   // server. Leeg beginnen, zodat er niets omvalt voordat ze binnen zijn.
@@ -157,7 +159,17 @@ function waaromAandacht(taak) {
 }
 
 // ── Praten met de server ─────────────────────────────────────────────────
+const ALLEEN_KIJKEN = 'Tijdens meekijken kun je niets wijzigen.';
+
 async function api(pad, opties = {}) {
+  // Tijdens meekijken wijzigt er niets. De server weigert het ook, maar zo zie
+  // je meteen waarom: de oranje balk licht op.
+  const wijzigt = opties.method && opties.method !== 'GET';
+  if (staat.meekijken && wijzigt && pad !== '/meekijken/stop' && pad !== '/uitloggen') {
+    knipperMeekijkBalk();
+    throw new Error(ALLEEN_KIJKEN);
+  }
+
   const antwoord = await fetch('/api' + pad, {
     ...opties,
     headers: opties.body ? { 'content-type': 'application/json' } : {},
@@ -195,6 +207,68 @@ function zetMenu(open) {
 }
 
 el('menuKnop').addEventListener('click', () => zetMenu(true));
+
+// ── Meekijken ────────────────────────────────────────────────────────────
+// Een beheerder ziet de app zoals een collega hem ziet, zonder iets te kunnen
+// wijzigen. De balk bovenaan staat er zolang dat duurt.
+
+function toonMeekijkBalk() {
+  const m = staat.meekijken;
+  el('meekijkBalk').hidden = !m;
+  if (!m) return;
+
+  const tot = new Date(m.tot);
+  el('meekijkTekst').textContent = meekijkZin();
+
+  // Is de tijd om, dan ben je weer jezelf. De server regelt dat bij het
+  // volgende verzoek; opnieuw laden laat het meteen zien.
+  setTimeout(() => { location.href = '/'; }, Math.max(0, tot - Date.now()) + 1000);
+}
+
+function meekijkZin() {
+  const tijd = new Date(staat.meekijken.tot)
+    .toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+  return `Je kijkt mee als ${staat.ik.naam} — alleen kijken. Stopt vanzelf om ${tijd}.`;
+}
+
+function knipperMeekijkBalk() {
+  const balk = el('meekijkBalk');
+  el('meekijkTekst').textContent = `${ALLEEN_KIJKEN} Je kijkt mee als ${staat.ik.naam}.`;
+  balk.classList.remove('knipper');
+  void balk.offsetWidth;   // zodat het oplichten ook een tweede keer afgaat
+  balk.classList.add('knipper');
+
+  clearTimeout(knipperMeekijkBalk.terug);
+  knipperMeekijkBalk.terug = setTimeout(() => { el('meekijkTekst').textContent = meekijkZin(); }, 4000);
+}
+
+el('meekijkStop').addEventListener('click', async () => {
+  await api('/meekijken/stop', { method: 'POST' });
+  location.href = '/';
+});
+
+/** Is er met jou meegekeken sinds je vorige bezoek? Dat zie je één keer. */
+function toonMeegekeken(meldingen) {
+  if (!meldingen.length) return;
+  el('meegekekenTekst').textContent = meldingen
+    .map(m => `${m.naam ?? 'Een beheerder'} heeft op ${momentNL(m.moment)} met je meegekeken (alleen kijken).`)
+    .join(' ');
+  el('meegekekenBalk').hidden = false;
+}
+
+el('meegekekenSluit').addEventListener('click', () => { el('meegekekenBalk').hidden = true; });
+
+/** Wat je ziet op de plekken die tijdens meekijken dicht blijven. */
+function nietTijdensMeekijken(titel, wat) {
+  el('paginaTitel').textContent = titel;
+  el('werkbalk').hidden = true;
+  el('prikbordBalk').hidden = true;
+  el('categorieBalk').hidden = true;
+  el('lijstUitleg').hidden = true;
+  el('inhoud').innerHTML = `<div class="mijn-leeg">Niet zichtbaar tijdens meekijken.
+    ${esc(wat)} is alleen voor ${esc(staat.ik.naam)}; ook een beheerder kijkt daar niet in.</div>`;
+  tekenZijbalk();
+}
 el('zijbalkScherm').addEventListener('click', () => zetMenu(false));
 zijbalk.addEventListener('click', (e) => {
   if (e.target.closest('a, button')) zetMenu(false);
@@ -202,11 +276,14 @@ zijbalk.addEventListener('click', (e) => {
 
 // ── Opstarten ────────────────────────────────────────────────────────────
 async function start() {
-  const { gebruiker, statussen, prioriteiten, max_bijlage_mb, woorden, bestandsnaam } =
-    await api('/ik');
+  const { gebruiker, statussen, prioriteiten, max_bijlage_mb, woorden, bestandsnaam, meegekeken } =
+    await api('/ik?start=1');
   if (!gebruiker) { location.href = '/inloggen.html'; return; }
 
   staat.ik = gebruiker;
+  staat.meekijken = gebruiker.meekijker ?? null;
+  toonMeekijkBalk();
+  toonMeegekeken(meegekeken ?? []);
   staat.statussen = statussen;
   staat.prioriteiten = prioriteiten ?? [];
   staat.maxBijlageMB = max_bijlage_mb ?? 10;
@@ -224,7 +301,7 @@ async function start() {
   vulGebruikerKeuzes();
 
   staat.borden = await api('/borden');
-  if (staat.borden.length === 0 && gebruiker.rol === 'beheerder') {
+  if (staat.borden.length === 0 && gebruiker.rol === 'beheerder' && !staat.meekijken) {
     await api('/borden', { method: 'POST', body: { naam: 'Takenbord' } });
     staat.borden = await api('/borden');
   }
@@ -333,7 +410,7 @@ function tekenZijbalk() {
       <a data-bord="${lijst.id}" title="${esc(lijst.naam)}" class="${lijst.id === staat.bordId && opTaken ? 'actief' : ''}">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></svg>
         <span class="naam">${esc(lijst.naam)}</span>
-        <span class="telling">${lijst.aantal_taken}</span>
+        <span class="telling">${lijst.aantal_taken ?? ''}</span>
       </a>` : ''}`;
 
   // Via de zijbalk kom je op het prikbord zelf, niet in de prullenbak — ook
@@ -371,6 +448,10 @@ function tekenZijbalk() {
 async function kiesBord(id) {
   staat.bordId = id;
   staat.weergave = 'tabel';
+
+  if (staat.meekijken && id !== null && id === mijnTakenlijst()?.id) {
+    return nietTijdensMeekijken(mijnTakenlijst().naam, 'De eigen takenlijst');
+  }
   el('prikbordBalk').hidden = true;
   el('categorieBalk').hidden = true;
 
@@ -683,14 +764,18 @@ function koppelSorteren(wortel) {
 function koppelStatusKeuzes(wortel) {
   wortel.querySelectorAll('.status-select[data-taak]').forEach(keuze => {
     keuze.addEventListener('change', async () => {
-      await api(`/taken/${keuze.dataset.taak}`, { method: 'PATCH', body: { status: keuze.value } });
+      // Lukt het niet, dan toch opnieuw tekenen: anders blijft de keuzelijst
+      // iets tonen wat niet is opgeslagen.
+      await api(`/taken/${keuze.dataset.taak}`, { method: 'PATCH', body: { status: keuze.value } })
+        .catch(() => {});
       herlaadTaken();
     });
   });
 
   wortel.querySelectorAll('.status-select[data-prio]').forEach(keuze => {
     keuze.addEventListener('change', async () => {
-      await api(`/taken/${keuze.dataset.prio}`, { method: 'PATCH', body: { prioriteit: keuze.value || null } });
+      await api(`/taken/${keuze.dataset.prio}`, { method: 'PATCH', body: { prioriteit: keuze.value || null } })
+        .catch(() => {});
       herlaadTaken();
     });
   });
@@ -908,6 +993,7 @@ function dagenTeGaan(briefje) {
 
 async function tekenPrikbord() {
   staat.weergave = 'prikbord';
+  if (staat.meekijken) return nietTijdensMeekijken('Mijn prikbord', 'Het prikbord');
   el('paginaTitel').textContent = 'Mijn prikbord';
   el('werkbalk').hidden = true;
   el('prikbordBalk').hidden = false;
@@ -2389,6 +2475,9 @@ async function tekenTeam(bericht = null) {
                 </button>`}
               <button class="btn btn-secondary btn-sm" data-naam="${g.id}">Naam wijzigen</button>
               <button class="btn btn-secondary btn-sm" data-herstel="${g.id}">Wachtwoord herstellen</button>
+              ${g.id !== staat.ik.id && g.actief && !staat.meekijken ? `
+                <button class="btn btn-secondary btn-sm" data-meekijken="${g.id}" data-wie="${esc(g.naam)}"
+                        title="De app bekijken zoals ${esc(g.naam)} hem ziet">Meekijken</button>` : ''}
               ${g.id === staat.ik.id ? '' : `
                 <button class="btn ${g.actief ? 'btn-danger' : 'btn-secondary'} btn-sm" data-actief="${g.id}" data-waarde="${g.actief ? 0 : 1}">
                   ${g.actief ? 'Uitschakelen' : 'Inschakelen'}
@@ -2431,6 +2520,8 @@ const LOGSOORTEN = {
   herstel:     { gelukt: 'Nieuw wachtwoord via herstellink', mislukt: 'Herstellink mislukt' },
   registreren: { gelukt: 'Account aangemaakt',           mislukt: 'Account aanmaken mislukt' },
   installatie: { gelukt: 'Eerste beheerder aangemaakt',  mislukt: 'Installatie mislukt' },
+  meekijken:   { gelukt: 'Meekijken begonnen',           mislukt: 'Meekijken mislukt' },
+  'meekijken-gestopt': { gelukt: 'Meekijken gestopt',    mislukt: 'Meekijken gestopt' },
 };
 
 /**
@@ -2471,7 +2562,9 @@ async function toonInlogboek() {
             <td>${r.gelukt
               ? esc(namen.gelukt)
               : `<span style="color:var(--rood)">${esc(namen.mislukt)}</span>`}</td>
-            <td>${esc(r.naam || r.email || 'onbekend')}</td>
+            <td>${r.soort.startsWith('meekijken')
+              ? `${esc(r.naam || 'onbekend')} <span class="zacht">met</span> ${esc(r.email || 'onbekend')}`
+              : esc(r.naam || r.email || 'onbekend')}</td>
             <td class="zacht">${esc(r.ip || '')}</td>
           </tr>`;
         }).join('')}</tbody>
@@ -2483,6 +2576,22 @@ async function toonInlogboek() {
 
 function koppelTeamKnoppen() {
   el('inlogboekKnop')?.addEventListener('click', toonInlogboek);
+
+  el('inhoud').querySelectorAll('[data-meekijken]').forEach(knop => {
+    knop.addEventListener('click', async () => {
+      const wie = knop.dataset.wie;
+      if (!confirm(
+        `Meekijken als ${wie}?\n\n`
+        + `Je ziet de app zoals ${wie} hem ziet, maar je kunt niets wijzigen. `
+        + `De eigen takenlijst en het prikbord blijven dicht. Na 30 minuten stopt het vanzelf.\n\n`
+        + `${wie} ziet bij het volgende bezoek dat je hebt meegekeken, en het komt in het inlogboek.`)) return;
+
+      try {
+        await api(`/meekijken/${knop.dataset.meekijken}`, { method: 'POST' });
+        location.href = '/';
+      } catch (fout) { alert(fout.message); }
+    });
+  });
 
   el('uitnodigKnop')?.addEventListener('click', async () => {
     const melding = el('uitMelding');

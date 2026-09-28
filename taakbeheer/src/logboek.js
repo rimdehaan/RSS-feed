@@ -40,6 +40,10 @@ export const SOORTEN = {
   herstel:     'Herstellink gebruikt',
   registreren: 'Account aangemaakt via uitnodiging',
   installatie: 'Eerste beheerder aangemaakt',
+  // Bij deze twee is de gebruiker de beheerder die meekeek, en het adres dat
+  // van de collega met wie werd meegekeken.
+  meekijken: 'Meekijken begonnen',
+  'meekijken-gestopt': 'Meekijken gestopt',
 };
 
 /**

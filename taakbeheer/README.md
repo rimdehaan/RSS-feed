@@ -38,6 +38,8 @@ administratie — zie *Back-ups* verderop.
 | Uitnodigen | Alleen een beheerder voegt mensen toe. Je krijgt een link die je zelf doorstuurt |
 | Rollen | *Beheerder* mag uitnodigen en accounts beheren, *lid* werkt gewoon mee. Je eigen rol kun je niet wijzigen — dat doet een collega-beheerder |
 | Wachtwoord kwijt | Een beheerder maakt een eenmalige herstellink, twee dagen geldig |
+| Meekijken | Een beheerder ziet de app zoals een collega hem ziet, om op afstand mee te zoeken. Alleen kijken, hooguit 30 minuten, in het inlogboek, en de collega krijgt er een melding van |
+| Op de telefoon | De zijbalk zit achter de menuknop linksboven |
 | Mijn account | Klik linksonder op je naam om je eigen naam en wachtwoord te wijzigen |
 | Mijn taken | Overzicht: alles wat aan jou is toegewezen, uit alle projecten, gegroepeerd per project en daarbinnen per status |
 | Mijn takenlijst | Je eigen lijst, die je collega's en beheerders niet zien. Iedereen krijgt er automatisch een |
@@ -484,6 +486,32 @@ Twee dingen om te weten:
   bij naam, met die bewaartermijn erbij.
 - **Wachtwoorden staan er niet in**, ook niet de fout ingetypte. Alleen dát het
   misging.
+
+### Meekijken als een collega
+
+Loopt een collega ergens tegenaan, dan kan een beheerder onder **Team** op
+*Meekijken* klikken. Je ziet de app dan zoals die collega hem ziet: dezelfde
+projecten, dezelfde taken, dezelfde rechten. Bovenaan staat een oranje balk met
+een knop *Stoppen*; daarmee ben je weer jezelf, zonder opnieuw in te loggen.
+
+De spelregels, en waarom:
+
+- **Alleen kijken.** Opslaan, verwijderen en afvinken worden geweigerd. Anders
+  staat er in de historie "Bart wijzigde…" terwijl jij het deed, en kun je niet
+  meer aantonen wie wat heeft gedaan.
+- **De eigen takenlijst en het prikbord blijven dicht.** Daarvan belooft de app
+  op het scherm dat alleen de eigenaar ze ziet. Die belofte blijft staan.
+- **Na 30 minuten stopt het vanzelf.** Je bent daarna weer jezelf.
+- **Het staat in het inlogboek**, begin en einde, met wie er met wie meekeek.
+- **De collega ziet het.** Bij het volgende bezoek staat er één keer bovenin:
+  "Rim heeft op … met je meegekeken (alleen kijken)." Voor ISO 27001 is dat de
+  eerlijke variant: niemand wordt ongemerkt bekeken.
+
+Alleen beheerders kunnen meekijken, en alleen bij een account dat aan staat.
+
+Let op wat meekijken níet laat zien: hoe de app er op het toestel van de ander
+uitziet. Je ziet wat die persoon mag zien, niet hoe zijn of haar telefoon het
+toont.
 
 ### Wat de app níet oplost
 

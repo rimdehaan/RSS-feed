@@ -813,6 +813,31 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
   font-family: ui-monospace, Menlo, Consolas, monospace;
 }
 
+/* ── Meekijken ──
+   Oranje en altijd bovenaan: wie meekijkt moet nooit kunnen vergeten dat het
+   scherm niet het eigen scherm is. */
+.meekijk-balk {
+  display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap;
+  padding: 10px 28px; background: #F2994A; color: #2b1400;
+  font-size: 0.88rem; font-weight: 600;
+}
+.meekijk-balk[hidden], .meegekeken-balk[hidden] { display: none; }
+.meekijk-balk span { flex: 1; min-width: 0; }
+.meekijk-balk .btn { background: #fff; color: #2b1400; }
+/* Even oplichten als je iets probeert te wijzigen dat niet mag. */
+.meekijk-balk.knipper { animation: knipper 0.9s; }
+@keyframes knipper { 30% { background: #c0392b; color: #fff; } }
+
+.meegekeken-balk {
+  display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  padding: 10px 28px; background: #fdf0e3; border-bottom: 1px solid #f2c9a1;
+  color: var(--donker); font-size: 0.86rem;
+}
+.meegekeken-balk span { flex: 1; }
+.meegekeken-balk .sluit {
+  background: none; border: none; font-size: 1.3rem; line-height: 1; cursor: pointer; color: var(--donker);
+}
+
 /* ── Telefoon ──
    Eerst werd de zijbalk hier een smalle strook met alleen icoontjes. Maar elk
    project heeft hetzelfde icoontje, en uitloggen zat in het weggelaten deel:
@@ -840,7 +865,7 @@ td.c-teller .klaar { color: #27AE60; font-weight: 600; }
 
   .zoekbalk { width: auto; flex: 0 1 160px; min-width: 0; }
   .raster { grid-template-columns: 1fr; }
-  .kop, .balk, .inhoud { padding-left: 14px; padding-right: 14px; }
+  .kop, .balk, .inhoud, .meekijk-balk, .meegekeken-balk { padding-left: 14px; padding-right: 14px; }
 }
 
 /* Uitleg boven je eigen takenlijst: wie kijkt er mee, en wat gebeurt er als je

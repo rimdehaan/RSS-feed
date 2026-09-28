@@ -1302,6 +1302,61 @@ with zipfile.ZipFile(${JSON.stringify(zipMetLinks)}) as z:
   });
   check('bestandsnaam met kapotte codering', rommel.status === 200, JSON.stringify(rommel.data));
 
+  groep('Meekijken als een collega');
+  // Een eigen collega, want Mees is hierboven al uitgeschakeld geweest.
+  const meesToken = (await rim('/uitnodigingen', { method: 'POST', body: { email: 'mees@transafe.nl' } })).data.token;
+  const mees = client();
+  await mees('/registreren', { method: 'POST', body: { token: meesToken, naam: 'Mees', wachtwoord: 'MeesZijnWachtwoord' } });
+  const meesId = (await mees('/ik')).data.gebruiker.id;
+  const meesLijst = (await mees('/borden')).data.find((b) => b.prive_van);
+  await mees(`/borden/${meesLijst.id}/taken`, { method: 'POST', body: { opdracht: 'Geheim voor Mees' } });
+
+  check('een lid kan niet meekijken', (await mees(`/meekijken/${rimId}`, { method: 'POST' })).status === 403);
+  check('met jezelf meekijken kan niet', (await rim(`/meekijken/${rimId}`, { method: 'POST' })).status === 400);
+  check('een beheerder begint met meekijken', (await rim(`/meekijken/${meesId}`, { method: 'POST' })).status === 200);
+
+  const alsMees = (await rim('/ik')).data.gebruiker;
+  check('je bent nu Mees', alsMees.id === meesId, JSON.stringify(alsMees));
+  check('en de app weet wie er meekijkt', alsMees.meekijker?.naam === 'Rim de Haan', JSON.stringify(alsMees.meekijker));
+
+  const bordenMees = (await mees('/borden')).data.map((b) => b.id).join(',');
+  const bordenMeekijk = (await rim('/borden')).data.map((b) => b.id).join(',');
+  check('je ziet precies de projecten van Mees', bordenMeekijk === bordenMees, `${bordenMeekijk} tegen ${bordenMees}`);
+
+  const eenProject = (await rim('/borden')).data.find((b) => !b.prive_van);
+  const nieuwTijdens = await rim(`/borden/${eenProject.id}/taken`, { method: 'POST', body: { opdracht: 'Mag niet' } });
+  check('een taak maken wordt geweigerd', nieuwTijdens.status === 403, JSON.stringify(nieuwTijdens.data));
+  check('met een duidelijke melding', /niets wijzigen/.test(nieuwTijdens.data.fout ?? ''), nieuwTijdens.data.fout);
+  const eenTaak = (await rim(`/borden/${eenProject.id}/taken`)).data[0];
+  check('een taak wijzigen ook',
+    (await rim(`/taken/${eenTaak.id}`, { method: 'PATCH', body: { status: 'Afgerond' } })).status === 403);
+  check('een beheerdersactie ook',
+    (await rim(`/gebruikers/${meesId}/herstel`, { method: 'POST' })).status === 403);
+
+  check('het prikbord blijft dicht', (await rim('/briefjes')).status === 403);
+  check('de eigen takenlijst blijft dicht', (await rim(`/borden/${meesLijst.id}/taken`)).status === 404);
+  check('ook het aantal taken erop', (await rim('/borden')).data.find((b) => b.prive_van).aantal_taken === null);
+  check('en in Mijn taken staat hij niet',
+    !(await rim('/mijn-taken')).data.some((t) => t.opdracht === 'Geheim voor Mees'));
+  check('terwijl Mees hem zelf wel ziet',
+    (await mees('/mijn-taken')).data.some((t) => t.opdracht === 'Geheim voor Mees'));
+
+  check('stoppen lukt', (await rim('/meekijken/stop', { method: 'POST' })).status === 200);
+  const weerRim = (await rim('/ik')).data.gebruiker;
+  check('en je bent weer jezelf', weerRim.id === rimId && !weerRim.meekijker, JSON.stringify(weerRim));
+  check('dan kun je weer wijzigen',
+    (await rim(`/borden/${eenProject.id}/taken`, { method: 'POST', body: { opdracht: 'Mag weer' } })).status === 200);
+
+  const boek = (await rim('/inlogboek')).data.regels;
+  check('het begin staat in het inlogboek',
+    boek.some((r) => r.soort === 'meekijken' && r.naam === 'Rim de Haan' && r.email === 'mees@transafe.nl'));
+  check('het einde ook', boek.some((r) => r.soort === 'meekijken-gestopt' && r.email === 'mees@transafe.nl'));
+
+  const eersteBezoek = (await mees('/ik?start=1')).data.meegekeken;
+  check('Mees ziet bij het volgende bezoek wie er meekeek',
+    eersteBezoek.length === 1 && eersteBezoek[0].naam === 'Rim de Haan', JSON.stringify(eersteBezoek));
+  check('maar maar één keer', (await mees('/ik?start=1')).data.meegekeken.length === 0);
+
   groep('Uitloggen');
   await rim('/uitloggen', { method: 'POST' });
   check('na uitloggen geen toegang', (await rim('/borden')).status === 401);
