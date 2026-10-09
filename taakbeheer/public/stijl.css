@@ -81,6 +81,8 @@ body {
   border-color: var(--blauw); background: #fff;
 }
 .veld textarea { resize: vertical; min-height: 110px; }
+/* Wel te zien (en voor de wachtwoordbeheerder van de browser te lezen), niet te wijzigen. */
+.veld input[readonly] { color: #6b7280; background: #eef0f3; cursor: default; }
 
 .melding {
   padding: 10px 14px; border-radius: 6px; font-size: 0.85rem;

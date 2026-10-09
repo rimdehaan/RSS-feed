@@ -129,7 +129,11 @@ export function maakSessie(res, gebruikerId) {
   schrijfSessie(res, gebruikerId, null, new Date(Date.now() + SESSIE_DAGEN * 864e5));
 }
 
-function schrijfSessie(res, gebruikerId, meekijkerId, verloopt) {
+/**
+ * `cookieTot` is hoe lang de browser de cookie bewaart. Meestal hetzelfde als
+ * het verlopen van de sessie, maar bij meekijken niet: zie startMeekijken.
+ */
+function schrijfSessie(res, gebruikerId, meekijkerId, verloopt, cookieTot = verloopt) {
   const token = randomBytes(32).toString('hex');
 
   db.prepare('INSERT INTO sessies (token, gebruiker_id, meekijker_id, verloopt_op) VALUES (?, ?, ?, ?)')
@@ -139,7 +143,7 @@ function schrijfSessie(res, gebruikerId, meekijkerId, verloopt) {
     httpOnly: true,               // JavaScript op de pagina kan er niet bij
     sameSite: 'lax',              // beschermt tegen verzoeken vanaf andere sites
     secure: PRODUCTIE,            // alleen via https zodra je live staat
-    expires: verloopt,
+    expires: cookieTot,
     path: '/',
   });
 }
@@ -184,7 +188,13 @@ export function startMeekijken(req, res, collega) {
   const token = leesCookie(req, COOKIE);
   if (token) db.prepare('DELETE FROM sessies WHERE token = ?').run(token);
 
-  schrijfSessie(res, collega.id, req.gebruiker.id, new Date(Date.now() + MEEKIJK_MINUTEN * 60e3));
+  // De meekijksessie loopt na 30 minuten af, maar de cookie moet langer blijven
+  // bestaan. Gooit de browser hem tegelijk weg, dan komt het volgende verzoek
+  // zonder cookie binnen en weet de server niet meer wie er meekeek: dan moet
+  // de beheerder opnieuw inloggen in plaats van vanzelf zichzelf te worden.
+  schrijfSessie(res, collega.id, req.gebruiker.id,
+    new Date(Date.now() + MEEKIJK_MINUTEN * 60e3),
+    new Date(Date.now() + SESSIE_DAGEN * 864e5));
 
   // De collega ziet het bij het volgende bezoek; het inlogboek bewaart het.
   db.prepare('INSERT INTO meekijk_meldingen (gebruiker_id, meekijker_id) VALUES (?, ?)')

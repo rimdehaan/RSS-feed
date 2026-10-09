@@ -282,6 +282,11 @@ async function start() {
 
   staat.ik = gebruiker;
   staat.meekijken = gebruiker.meekijker ?? null;
+
+  // Een browser kan bij het laden zelf iets in het zoekvak zetten (een
+  // onthouden e-mailadres, of wat er de vorige keer stond). Dan verdwijnen
+  // alle taken zonder dat je ziet waarom. Daarom beginnen we altijd leeg.
+  el('zoek').value = '';
   toonMeekijkBalk();
   toonMeegekeken(meegekeken ?? []);
   staat.statussen = statussen;
@@ -657,21 +662,61 @@ function teken() {
 }
 
 /**
+ * Er zijn wel taken, maar het zoekvak of een filter verbergt ze allemaal. Dan
+ * zeggen we dat met zoveel woorden, met een knop om alles weer te tonen.
+ * Zonder dit lijkt een vergeten zoekterm precies op "dit project is leeg".
+ */
+function allesVerborgenHtml() {
+  const oorzaken = [];
+  const zoek = el('zoek').value.trim();
+  if (zoek) oorzaken.push(`de zoekterm <strong>“${esc(zoek)}”</strong>`);
+
+  for (const [id, naam] of [['filterStatus', 'Status'], ['filterPrioriteit', 'Prioriteit'],
+                            ['filterUitvoerend', 'Uitvoerend']]) {
+    const keuze = el(id);
+    if (keuze.value) oorzaken.push(`het filter ${naam}: <strong>${esc(keuze.selectedOptions[0]?.text ?? keuze.value)}</strong>`);
+  }
+
+  if (oorzaken.length === 0) oorzaken.push('een filter');
+
+  const n = staat.taken.length;
+  const waar = isPersoonlijk() ? 'op jouw naam' : 'in dit project';
+  return `<div class="mijn-leeg">
+    Er ${n === 1 ? 'staat 1 taak' : `staan ${n} taken`} ${waar}, maar
+    ${oorzaken.join(' en ')} ${oorzaken.length === 1 ? 'verbergt' : 'verbergen'} ze allemaal.
+    <div style="margin-top:16px"><button type="button" class="btn btn-primary" data-alles-tonen>Alles weer tonen</button></div>
+  </div>`;
+}
+
+function koppelAllesTonen() {
+  el('inhoud').querySelector('[data-alles-tonen]')?.addEventListener('click', () => {
+    el('zoek').value = '';
+    for (const id of ['filterStatus', 'filterPrioriteit', 'filterUitvoerend']) el(id).value = '';
+    staat.deadlineFilter = null;
+    teken();
+  });
+}
+
+/**
  * Het persoonlijke bord. Eerst per project, daarbinnen per status — zodat je
  * per project ziet waar je nog niet aan begonnen bent en wat al klaar is.
  */
 function tekenMijnTaken() {
   const taken = gefilterdeTaken();
 
+  if (taken.length === 0 && staat.taken.length > 0) {
+    el('inhoud').innerHTML = allesVerborgenHtml();
+    koppelAllesTonen();
+    return;
+  }
+
   if (taken.length === 0) {
+    // Wie vooral meekijkt, zoals een leidinggevende, begint hier op een leeg
+    // scherm. Zonder de tweede zin lijkt dat op "geen toegang".
     el('inhoud').innerHTML = `<div class="mijn-leeg">
-      ${staat.taken.length === 0
-        ? 'Er staan geen taken op jouw naam. Zodra iemand je een taak toewijst in een project, verschijnt die hier.'
-          // Wie vooral meekijkt, zoals een leidinggevende, begint hier op een
-          // leeg scherm. Zonder deze zin lijkt dat op "geen toegang".
-          + '<br><br>Alle taken van een project, ook die van anderen, zie je door het project '
-          + 'te openen onder <strong>Projecten</strong>.'
-        : 'Geen taken die aan je filter voldoen.'}
+      Er staan geen taken op jouw naam. Zodra iemand je een taak toewijst in een project, verschijnt die hier.
+      <br><br>Alle taken van een project, ook die van anderen, zie je door het project
+      te openen onder <strong>Projecten</strong>.
     </div>`;
     return;
   }
@@ -834,7 +879,14 @@ function koppelStatusBlokken(wortel) {
 }
 
 function tekenTabel() {
-  el('inhoud').innerHTML = statusBlokkenHtml(gefilterdeTaken());
+  const taken = gefilterdeTaken();
+  if (taken.length === 0 && staat.taken.length > 0) {
+    el('inhoud').innerHTML = allesVerborgenHtml();
+    koppelAllesTonen();
+    return;
+  }
+
+  el('inhoud').innerHTML = statusBlokkenHtml(taken);
   koppelStatusKeuzes(el('inhoud'));
   koppelTaakKnoppen(el('inhoud'));
   koppelSorteren(el('inhoud'));
@@ -2364,7 +2416,10 @@ el('aNaamKnop').addEventListener('click', async () => {
   }
 });
 
-el('aWachtwoordKnop').addEventListener('click', async () => {
+// Een formulier, zodat ook Enter werkt en de browser het wachtwoord netjes bij
+// het juiste adres bewaart. Verzenden doen we zelf; de pagina blijft staan.
+el('wachtwoordFormulier').addEventListener('submit', async (e) => {
+  e.preventDefault();
   const melding = el('aWachtwoordMelding');
   melding.classList.remove('goed');
 

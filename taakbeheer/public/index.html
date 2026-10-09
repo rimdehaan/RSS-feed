@@ -61,7 +61,8 @@
       <h1 id="paginaTitel">Takenbord</h1>
       <div class="zoekbalk">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="zoek" placeholder="Zoeken..." />
+        <!-- autocomplete uit: de browser hoort hier niets zelf in te vullen. -->
+        <input type="search" id="zoek" name="zoeken" placeholder="Zoeken..." autocomplete="off" />
       </div>
     </header>
 
@@ -298,9 +299,13 @@
       </div>
       <div class="melding" id="aNaamMelding" style="margin-bottom:20px"></div>
 
+      <!-- Een echt formulier met adres en wachtwoord bij elkaar. Zonder dat zoekt
+           de wachtwoordbeheerder van de browser zelf een veld voor je
+           e-mailadres, en kan hij het in het zoekvak zetten. -->
+      <form id="wachtwoordFormulier">
       <div class="veld" style="margin-bottom:6px">
         <label for="aEmail">E-mailadres</label>
-        <input type="text" id="aEmail" disabled />
+        <input type="email" id="aEmail" readonly autocomplete="username" />
       </div>
       <p class="hint" style="margin-bottom:20px">
         Hiermee log je in. Dit kan niet gewijzigd worden.
@@ -321,8 +326,9 @@
       </div>
       <p class="hint">Minstens 10 tekens.</p>
       <div style="display:flex;justify-content:flex-end;margin:10px 0 6px">
-        <button class="btn btn-primary" id="aWachtwoordKnop">Wachtwoord wijzigen</button>
+        <button type="submit" class="btn btn-primary" id="aWachtwoordKnop">Wachtwoord wijzigen</button>
       </div>
+      </form>
       <div class="melding" id="aWachtwoordMelding"></div>
     </div>
     <div class="venster-voet">
