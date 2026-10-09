@@ -612,7 +612,7 @@ Twee pakketten van buiten, verder niets:
 | Je komt niet meer binnen | Vraag een andere beheerder om een herstellink |
 | Je bent geen beheerder meer | Vraag een andere beheerder om je terug te zetten. Is die er niet, gebruik dan het noodluik hieronder |
 | Alles is leeg na een nieuwe versie online | Dan staat het volume niet goed — zie *Hosting*, punt 1 |
-| Iemand ziet in een project geen taken, jij wel | Kijk naar het zoekvak rechtsboven en de filters. De app zegt het nu zelf als die alles verbergen, met een knop *Alles weer tonen*. Meekijken helpt om rechten uit te sluiten: zie jij als die persoon wél de taken, dan zit het verschil in de browser, niet in de rechten |
+| Iemand ziet in een project geen taken, jij wel | Meekijken sluit de rechten uit: zie jij als die persoon wél taken, dan zit het verschil in de browser. Het scherm zegt dan zelf wat er speelt: een zoekterm of filter (met een knop *Alles weer tonen*), taken die onderweg zijn tegengehouden (bijvoorbeeld door een extensie), of een rode balk met een fout in de browser. Vraag om een schermafbeelding van die melding |
 | `Cannot find module` | `npm install` vergeten |
 
 ### Noodluik: jezelf weer beheerder maken

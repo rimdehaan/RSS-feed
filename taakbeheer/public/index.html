@@ -44,6 +44,12 @@
 
   <!-- ── HOOFD ── -->
   <div class="hoofd">
+    <!-- Als er in de browser iets misgaat. Zonder deze balk blijft het oude
+         scherm stilletjes staan en lijkt het alsof er niets is. -->
+    <div class="fout-balk" id="foutBalk" role="alert" hidden>
+      <span id="foutTekst"></span>
+      <button type="button" class="sluit" id="foutSluit" title="Sluiten" aria-label="Sluiten">×</button>
+    </div>
     <!-- Staat er zolang een beheerder meekijkt als iemand anders. -->
     <div class="meekijk-balk" id="meekijkBalk" hidden>
       <span id="meekijkTekst"></span>

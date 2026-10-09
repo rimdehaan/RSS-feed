@@ -196,6 +196,26 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(o => o.classList.remove('open'));
 });
 
+// ── Als er in de browser iets misgaat ────────────────────────────────────
+// Loopt het tekenen ergens vast, dan bleef eerst het vorige scherm stilletjes
+// staan, en leek een project leeg terwijl het dat niet was. Nu komt er een
+// rode balk met de fout erin. Zo'n melding kan iemand aan een beheerder laten
+// zien; zonder melding blijft het gissen.
+function toonFout(fout) {
+  const tekst = String(fout?.message ?? fout ?? 'onbekende fout');
+  // Deze twee zijn al afgehandeld: inloggen gaat vanzelf, meekijken heeft zijn eigen balk.
+  if (tekst === 'Niet ingelogd' || tekst === ALLEEN_KIJKEN) return;
+
+  el('foutTekst').textContent = `Er ging iets mis op dit scherm: ${tekst} `
+    + 'Wat je nu ziet klopt misschien niet. Herlaad de pagina (F5). Komt deze melding terug, '
+    + 'maak er dan een schermafbeelding van voor een beheerder.';
+  el('foutBalk').hidden = false;
+}
+
+window.addEventListener('error', (e) => toonFout(e.error ?? e.message));
+window.addEventListener('unhandledrejection', (e) => toonFout(e.reason));
+el('foutSluit').addEventListener('click', () => { el('foutBalk').hidden = true; });
+
 // ── Menu op de telefoon ──────────────────────────────────────────────────
 // Op een smal scherm staat de zijbalk verstopt; de menuknop schuift hem in
 // beeld. Kies je iets, dan gaat hij weer dicht zodat je ziet wat je koos.
@@ -883,6 +903,20 @@ function tekenTabel() {
   if (taken.length === 0 && staat.taken.length > 0) {
     el('inhoud').innerHTML = allesVerborgenHtml();
     koppelAllesTonen();
+    return;
+  }
+
+  // De zijbalk en de takenlijst komen in twee aparte antwoorden van de server.
+  // Zegt de zijbalk dat er taken zijn, maar kwam er geen enkele binnen, dan
+  // houdt iets onderweg ze tegen. Dat zeggen we, in plaats van "geen taken".
+  const verwacht = staat.borden.find(b => b.id === staat.bordId)?.aantal_taken ?? 0;
+  if (staat.taken.length === 0 && verwacht > 0) {
+    el('inhoud').innerHTML = `<div class="mijn-leeg">
+      Volgens de server ${verwacht === 1 ? 'staat er 1 taak' : `staan er ${verwacht} taken`} in dit
+      project, maar er is er geen enkele in je browser aangekomen.<br><br>
+      Herlaad de pagina (F5). Blijft dit zo, dan houdt iets tussen de server en dit scherm de taken
+      tegen, zoals een browserextensie of beveiligingssoftware. Probeer het dan in een incognitovenster
+      of in een andere browser, en laat een beheerder deze melding zien.</div>`;
     return;
   }
 
